@@ -4,7 +4,7 @@
 
 ## 工程能做什么
 1. 批量读取 mp4 输入。
-2. 调用 Qwen2.5-VL（AutoPrompt）生成三步式 prompt（默认复用缓存，命中后跳过重新读取视频）。
+2. 调用 Qwen2.5-VL / Qwen3-VL（AutoPrompt）生成三步式 prompt（默认复用缓存，命中后跳过重新读取视频）。
 3. 生成 depth 控制信号（缓存命中优先；edge/blur/seg/combo 接口预留）。
 4. 生成对应的 json spec。
 5. 调用 Cosmos-Transfer2.5 输出替换视频，并在控制台透传扩散式进度条。
@@ -80,6 +80,7 @@ python scripts/run_batch.py \
 - `--autoprompt_root`：prompt 脚本所在目录（默认 `/mnt/data/ganrunhe/AutoPrompt`，可设为当前仓库）。
 - `--transfer_root`：Cosmos-Transfer2.5 路径（默认 `/mnt/data/ganrunhe/cosmos-transfer2.5`）。
 - `--hf_cache`：HuggingFace 缓存目录。
+- `--prompt_model_family`：选择 prompt 所用模型族（`qwen25vl` 或 `qwen3vl`）。
 - `--no_reuse_prompt`：强制重算 prompt，即使缓存命中。
 - `--no_cache_control` / `--force_regen_control`：控制 depth 缓存开关。
 - `--keep_prompt` / `--keep_json` / `--keep_control_dir` / `--cleanup_logs`：控制成功后的清理策略。
@@ -93,3 +94,4 @@ python scripts/run_batch.py --help
 - 2025-12-19：指纹级 prompt/深度缓存、每步耗时记录、推理扩散进度条透传、README 说明更新。
 - 2025-12-19：prompt 缓存增加并发锁避免多卡重复生成；多卡数量不超过待处理视频数；队列分配优先覆盖不同视频指纹。
 - 2025-12-19：多卡调度与日志增强（GPU 等待/开始日志、prompt 锁等待提示）。将 GPU 数量大于视频数时的冗余等待显示清楚，方便排查。
+- 2025-12-19：新增 CLI 开关 `--prompt_model_family`，可在 Qwen2.5-VL 与 Qwen3-VL 之间切换（依赖 `robot_video_to_prompt.py` 对应支持）。

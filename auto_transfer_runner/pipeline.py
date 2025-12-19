@@ -52,6 +52,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             fps=cfg.prompt.fps,
             size=cfg.prompt.size,
             variant=cfg.prompt.variant,
+            model_family=cfg.prompt.model_family,
             env=env,
             log_path=paths.log_path,
             reuse_if_exists=cfg.prompt.reuse_if_exists,
