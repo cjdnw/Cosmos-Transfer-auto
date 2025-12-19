@@ -54,10 +54,10 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
 
     prompt = PromptConfig(
         conda_env=args.qwen_env,
+        model_family=args.prompt_model_family,
         fps=args.prompt_fps,
         size=args.prompt_size,
         variant=args.prompt_variant,
-        model_family=args.prompt_model_family,
         reuse_if_exists=args.reuse_prompt,
     )
 
@@ -104,7 +104,6 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig, total_videos: int, 
     """One GPU == one worker process. Each worker runs Step2->Step5 for jobs it pulls."""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    env["ATR_GPU_ID"] = str(gpu_id)
 
     console_print(f"[GPU {gpu_id}] worker online | videos={total_videos} | jobs={total_jobs}")
 
@@ -172,15 +171,17 @@ def main(argv: List[str] | None = None) -> None:
 
     # Step2 (prompt)
     ap.add_argument("--qwen_env", type=str, default="qwen25vl", help="Conda env for Step2 (AutoPrompt)")
+    ap.add_argument(
+        "--prompt_model_family",
+        type=str,
+        default="qwen25vl",
+        choices=["qwen25vl", "qwen3vl"],
+        help="Model family passed to AutoPrompt/robot_video_to_prompt.py",
+    )
     ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
     ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
     ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
-    ap.add_argument("--prompt_model_family", type=str, default="qwen25vl", choices=["qwen25vl", "qwen3vl"],
-                    help="Select Qwen model family for prompt generation (qwen25vl or qwen3vl)")
-    ap.add_argument("--reuse_prompt", dest="reuse_prompt", action="store_true", default=True,
-                    help="Reuse cached prompt by fingerprint (default: enabled)")
-    ap.add_argument("--no_reuse_prompt", dest="reuse_prompt", action="store_false",
-                    help="Force regenerate prompt even if cache exists")
+    ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
 
     # Step3 (depth)
     ap.add_argument("--depth_env", type=str, default="depthanything", help="Conda env for Step3 (Depth Anything)")
@@ -236,9 +237,9 @@ def main(argv: List[str] | None = None) -> None:
     q: mp.Queue = mp.Queue()
     batch_tag = now_tag()
 
-    for v in range(args.variants_per_video):
-        for idx, vp in enumerate(videos):
-            base_hash = short_hash(str(vp.resolve()), 8)
+    for idx, vp in enumerate(videos):
+        base_hash = short_hash(str(vp.resolve()), 8)
+        for v in range(args.variants_per_video):
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
             q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
 
@@ -249,9 +250,9 @@ def main(argv: List[str] | None = None) -> None:
     )
 
     # Start one worker per GPU
+    procs: List[mp.Process] = []
     gpus = cfg.run.gpus or ["0"]
     worker_count = min(len(gpus), len(videos)) if videos else 0
-    procs: List[mp.Process] = []
     for g in gpus[:worker_count]:
         p = mp.Process(target=worker_loop, args=(g, q, cfg, len(videos), total_jobs), daemon=False)
         p.start()
