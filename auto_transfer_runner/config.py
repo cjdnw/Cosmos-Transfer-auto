@@ -22,7 +22,7 @@ class PromptConfig:
     fps: float = 4.0
     size: str = "7B"
     variant: str = "instruct"
-    reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
+    reuse_if_exists: bool = True  # 默认命中缓存：同视频直接跳过 Step1 读取
 
 
 @dataclass(frozen=True)
