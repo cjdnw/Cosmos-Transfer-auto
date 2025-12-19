@@ -44,6 +44,17 @@ python scripts/run_batch.py \
   --console
 ```
 
+使用 Qwen3-VL-8B 生成 prompt 的示例（单卡）：
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --prompt_model_family qwen3vl \
+  --prompt_size 8B \
+  --console
+```
+
 对每个视频生成 K 个不同版本（Step2 与 Step5 重新跑，depth 继续复用缓存）：
 ```bash
 python scripts/run_batch.py \
