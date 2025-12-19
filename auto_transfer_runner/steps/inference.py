@@ -48,12 +48,4 @@ def run_transfer_inference(
         "-o",
         str(output_dir),
     ]
-    run_cmd(
-        cmd,
-        cwd=transfer_root,
-        env=env,
-        log_path=log_path,
-        title="STEP5: Transfer2.5 inference",
-        stream_to_console=True,
-        force_console=True,  # 需要实时查看扩散进度条
-    )
+    run_cmd(cmd, cwd=transfer_root, env=env, log_path=log_path, title="STEP5: Transfer2.5 inference")
