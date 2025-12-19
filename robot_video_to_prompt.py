@@ -9,7 +9,6 @@ import torch
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 
-
 # =======================
 # 1) Prompts
 # =======================
@@ -42,7 +41,6 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # Now generate the paragraph for the given video.
 """
 
-
 BRACKET_PROMPT_TEMPLATE = """You are a prompt editor.
 Wrap every word or short phrase that describes color, material, texture, finish, or surface appearance in Chinese brackets 【】.
 Keep all other words, punctuation, and the paragraph structure unchanged.
@@ -67,15 +65,22 @@ DESCRIPTORS:
 {descriptor_block}
 """
 
-
 # =======================
-# 2) Model Options (Qwen2.5-VL only)
+# 2) Model Options (Qwen3 and Qwen2.5)
 # =======================
 QWEN25_VL_MODELS = {
-    "3B":  {"instruct": "Qwen/Qwen2.5-VL-3B-Instruct",  "awq": "Qwen/Qwen2.5-VL-3B-Instruct-AWQ"},
-    "7B":  {"instruct": "Qwen/Qwen2.5-VL-7B-Instruct",  "awq": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"},
+    "3B": {"instruct": "Qwen/Qwen2.5-VL-3B-Instruct", "awq": "Qwen/Qwen2.5-VL-3B-Instruct-AWQ"},
+    "7B": {"instruct": "Qwen/Qwen2.5-VL-7B-Instruct", "awq": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"},
     "32B": {"instruct": "Qwen/Qwen2.5-VL-32B-Instruct", "awq": "Qwen/Qwen2.5-VL-32B-Instruct-AWQ"},
     "72B": {"instruct": "Qwen/Qwen2.5-VL-72B-Instruct", "awq": "Qwen/Qwen2.5-VL-72B-Instruct-AWQ"},
+}
+
+QWEN3_VL_MODELS = {
+    "2B": {"instruct": "Qwen/Qwen3-VL-2B-Instruct", "awq": "Qwen/Qwen3-VL-2B-Instruct-AWQ"},
+    "4B": {"instruct": "Qwen/Qwen3-VL-4B-Instruct", "awq": "Qwen/Qwen3-VL-4B-Instruct-AWQ"},
+    "8B": {"instruct": "Qwen/Qwen3-VL-8B-Instruct", "awq": "Qwen/Qwen3-VL-8B-Instruct-AWQ"},
+    "32B": {"instruct": "Qwen/Qwen3-VL-32B-Instruct", "awq": "Qwen/Qwen3-VL-32B-Instruct-AWQ"},
+    # MoE 型号如 30B‑A3B / 235B‑A22B 都也可以进一步加进去
 }
 
 
@@ -89,23 +94,31 @@ def add_suffix(path: str, suffix: str) -> str:
     return root + suffix + ext
 
 
-def pick_model_id(size: str, variant: str) -> str:
+def pick_model_id(size: str, variant: str, model_type: str = "Qwen2.5") -> str:
     size = size.upper()
     variant = variant.lower()
-    if size not in QWEN25_VL_MODELS:
-        raise ValueError(f"Unsupported --size {size}. Choose from: 3B/7B/32B/72B.")
-    if variant not in QWEN25_VL_MODELS[size]:
+
+    # Check for Qwen3 or Qwen2.5
+    if model_type == "Qwen3":
+        model_dict = QWEN3_VL_MODELS
+    elif model_type == "Qwen2.5":
+        model_dict = QWEN25_VL_MODELS
+    else:
+        raise ValueError("Unsupported model type. Choose from: Qwen3, Qwen2.5.")
+
+    if size not in model_dict:
+        raise ValueError(f"Unsupported --size {size}. Choose from: 2B/4B/8B/32B.")
+    if variant not in model_dict[size]:
         raise ValueError(f"Unsupported --variant {variant}. Choose from: instruct/awq.")
-    return QWEN25_VL_MODELS[size][variant]
+
+    return model_dict[size][variant]
 
 
 def safe_parse_json(text: str) -> Dict[str, Any]:
-    # 1) direct parse
     try:
         return json.loads(text)
     except Exception:
         pass
-    # 2) extract first JSON object block
     m = re.search(r"\{.*\}", text, flags=re.DOTALL)
     if m:
         try:
@@ -134,13 +147,11 @@ def apply_random_replacements(bracketed_prompt: str, replacements: Dict[str, Lis
         src = match.group(1).strip()
         alts = replacements.get(src, [])
         if not alts:
-            return src  # no replacement candidate -> keep original
+            return src
         choice = rng.choice(alts).strip()
         return choice if choice else src
 
-    # replace bracket segments and implicitly remove brackets
     out = re.sub(r"【(.*?)】", repl_fn, bracketed_prompt)
-    # safety cleanup
     out = out.replace("【", "").replace("】", "")
     return out.strip()
 
@@ -149,8 +160,6 @@ def apply_random_replacements(bracketed_prompt: str, replacements: Dict[str, Lis
 def run_generation(model, processor, messages, max_new_tokens: int,
                    do_sample: bool, temperature: float, top_p: float) -> str:
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
-    # process_vision_info should return (image_inputs, video_inputs)
     image_inputs, video_inputs = process_vision_info(messages)
 
     kwargs = dict(
@@ -179,38 +188,23 @@ def run_generation(model, processor, messages, max_new_tokens: int,
     return result
 
 
-# =======================
-# 4) Main
-# =======================
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--video", required=True, help="Input video path")
     parser.add_argument("--out", required=True, help="Output path for FINAL prompt (.txt recommended)")
-    parser.add_argument("--size", default="7B", choices=["3B", "7B", "32B", "72B"], help="Qwen2.5-VL model size")
+    parser.add_argument("--size", default="4B", choices=["2B", "4B", "8B", "32B"], help="Model size")
     parser.add_argument("--variant", default="instruct", choices=["instruct", "awq"], help="Model variant")
+    parser.add_argument("--model_type", default="Qwen3", choices=["Qwen2.5", "Qwen3"],
+                        help="Model type (Qwen3 or Qwen2.5)")
+
     parser.add_argument("--fps", type=float, default=4.0, help="Video sampling FPS")
-
     parser.add_argument("--seed", type=int, default=None, help="Random seed for step-3 replacement (omit for random).")
-
-    parser.add_argument("--max_new_tokens_step1", type=int, default=500)
-    parser.add_argument("--max_new_tokens_step2", type=int, default=700)
-    parser.add_argument("--max_new_tokens_step3", type=int, default=800)
-
-    # step3 sampling controls (used only when generating replacement candidates)
-    parser.add_argument("--temperature_step3", type=float, default=0.9)
-    parser.add_argument("--top_p_step3", type=float, default=0.95)
 
     args = parser.parse_args()
     if args.seed is None:
-        args.seed = int.from_bytes(os.urandom(4), "big")  # 0~2^32-1
+        args.seed = int.from_bytes(os.urandom(4), "big")
 
-    # reproducibility (best-effort)
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-
-    model_id = pick_model_id(args.size, args.variant)
+    model_id = pick_model_id(args.size, args.variant, model_type=args.model_type)
     print(f"[INFO] Using model: {model_id}")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -225,9 +219,6 @@ def main():
     )
     model.eval()
 
-    # -----------------------
-    # Step 1: video -> base prompt
-    # -----------------------
     messages_step1 = [{
         "role": "user",
         "content": [
@@ -238,15 +229,12 @@ def main():
 
     base_prompt = run_generation(
         model, processor, messages_step1,
-        max_new_tokens=args.max_new_tokens_step1,
+        max_new_tokens=500,
         do_sample=False, temperature=1.0, top_p=1.0
     )
     print("\n===== STEP 1: BASE PROMPT =====\n")
     print(base_prompt)
 
-    # -----------------------
-    # Step 2: bracket descriptors inside paragraph
-    # -----------------------
     step2_text = BRACKET_PROMPT_TEMPLATE.format(base_prompt=base_prompt)
     messages_step2 = [{
         "role": "user",
@@ -255,7 +243,7 @@ def main():
 
     bracketed_prompt = run_generation(
         model, processor, messages_step2,
-        max_new_tokens=args.max_new_tokens_step2,
+        max_new_tokens=700,
         do_sample=False, temperature=1.0, top_p=1.0
     )
     print("\n===== STEP 2: BRACKETED PROMPT =====\n")
@@ -263,9 +251,6 @@ def main():
 
     terms = extract_bracket_terms(bracketed_prompt)
 
-    # -----------------------
-    # Step 3: generate replacement candidates (JSON) -> random replace -> remove brackets
-    # -----------------------
     replacements: Dict[str, List[str]] = {}
     if terms:
         descriptor_block = "\n".join([f"- {t}" for t in terms])
@@ -277,10 +262,10 @@ def main():
 
         raw_json = run_generation(
             model, processor, messages_step3,
-            max_new_tokens=args.max_new_tokens_step3,
-            do_sample=True,  # diversity
-            temperature=args.temperature_step3,
-            top_p=args.top_p_step3
+            max_new_tokens=800,
+            do_sample=True,
+            temperature=0.9,
+            top_p=0.95
         )
 
         parsed = safe_parse_json(raw_json)
@@ -290,15 +275,11 @@ def main():
     if replacements:
         final_prompt = apply_random_replacements(bracketed_prompt, replacements, seed=args.seed)
     else:
-        # fallback: no replacements available -> just remove brackets
         final_prompt = bracketed_prompt.replace("【", "").replace("】", "").strip()
 
     print("\n===== STEP 3: FINAL PROMPT =====\n")
     print(final_prompt)
 
-    # -----------------------
-    # Save outputs
-    # -----------------------
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
     out_base = add_suffix(args.out, "_base")
