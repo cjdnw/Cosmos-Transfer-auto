@@ -166,7 +166,10 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
     ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
     ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
-    ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
+    ap.add_argument("--reuse_prompt", dest="reuse_prompt", action="store_true", default=True,
+                    help="Reuse cached prompt by fingerprint (default: enabled)")
+    ap.add_argument("--no_reuse_prompt", dest="reuse_prompt", action="store_false",
+                    help="Force regenerate prompt even if cache exists")
 
     # Step3 (depth)
     ap.add_argument("--depth_env", type=str, default="depthanything", help="Conda env for Step3 (Depth Anything)")
