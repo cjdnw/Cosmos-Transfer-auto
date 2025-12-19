@@ -77,6 +77,8 @@ def generate_prompt(
         if reuse_if_exists and copy_cached_if_ready():
             return
 
+        model_type = {"qwen25vl": "Qwen2.5", "qwen3vl": "Qwen3"}.get(model_family, model_family)
+
         cmd = conda_run(
             conda_env,
             [
@@ -86,8 +88,8 @@ def generate_prompt(
                 str(video_path),
                 "--out",
                 str(cached_prompt),
-                "--model_family",
-                str(model_family),
+                "--model_type",
+                str(model_type),
                 "--size",
                 str(size),
                 "--variant",

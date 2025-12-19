@@ -91,7 +91,7 @@ python scripts/run_batch.py \
 - `--autoprompt_root`：prompt 脚本所在目录（默认 `/mnt/data/ganrunhe/AutoPrompt`，可设为当前仓库）。
 - `--transfer_root`：Cosmos-Transfer2.5 路径（默认 `/mnt/data/ganrunhe/cosmos-transfer2.5`）。
 - `--hf_cache`：HuggingFace 缓存目录。
-- `--prompt_model_family`：选择 prompt 所用模型族（`qwen25vl` 或 `qwen3vl`）。
+- `--prompt_model_family`：选择 prompt 所用模型族（`qwen25vl` 或 `qwen3vl`），内部会映射为 AutoPrompt 脚本支持的 `--model_type`（`Qwen2.5` 或 `Qwen3`）。
 - `--no_reuse_prompt`：强制重算 prompt，即使缓存命中。
 - `--no_cache_control` / `--force_regen_control`：控制 depth 缓存开关。
 - `--keep_prompt` / `--keep_json` / `--keep_control_dir` / `--cleanup_logs`：控制成功后的清理策略。
