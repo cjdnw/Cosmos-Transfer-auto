@@ -166,7 +166,10 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
     ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
     ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
-    ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
+    ap.add_argument("--reuse_prompt", dest="reuse_prompt", action="store_true", default=True,
+                    help="Reuse cached prompt by fingerprint (default: enabled)")
+    ap.add_argument("--no_reuse_prompt", dest="reuse_prompt", action="store_false",
+                    help="Force regenerate prompt even if cache exists")
 
     # Step3 (depth)
     ap.add_argument("--depth_env", type=str, default="depthanything", help="Conda env for Step3 (Depth Anything)")
@@ -222,15 +225,17 @@ def main(argv: List[str] | None = None) -> None:
     q: mp.Queue = mp.Queue()
     batch_tag = now_tag()
 
-    for idx, vp in enumerate(videos):
-        base_hash = short_hash(str(vp.resolve()), 8)
-        for v in range(args.variants_per_video):
+    for v in range(args.variants_per_video):
+        for idx, vp in enumerate(videos):
+            base_hash = short_hash(str(vp.resolve()), 8)
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
             q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
 
     # Start one worker per GPU
+    gpus = cfg.run.gpus or ["0"]
+    worker_count = min(len(gpus), len(videos)) if videos else 0
     procs: List[mp.Process] = []
-    for g in (cfg.run.gpus or ["0"]):
+    for g in gpus[:worker_count]:
         p = mp.Process(target=worker_loop, args=(g, q, cfg), daemon=False)
         p.start()
         procs.append(p)

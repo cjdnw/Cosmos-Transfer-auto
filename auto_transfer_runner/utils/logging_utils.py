@@ -2,7 +2,17 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import time
 from pathlib import Path
+
+
+def format_duration(seconds: float) -> str:
+    """Format a duration (seconds) as HH:MM:SS.mmm for logs/console."""
+    milliseconds = int((seconds - int(seconds)) * 1000)
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
 
 
 def console_enabled() -> bool:
@@ -30,3 +40,11 @@ def log_section(log_path: Path, title: str) -> None:
     append_log(log_path, f"[{ts}] {title}")
     append_log(log_path, "=" * 90 + "\n")
     console_print(f"[{ts}] {title}")
+
+
+def log_step_done(log_path: Path, title: str, start_time: float) -> None:
+    """Log a completion line with elapsed time for a step."""
+    elapsed = time.perf_counter() - start_time
+    msg = f"[DONE] {title} in {format_duration(elapsed)}"
+    append_log(log_path, msg)
+    console_print(msg)

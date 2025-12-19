@@ -1,80 +1,50 @@
 # Cosmos-Transfer2.5 全自动批处理工程
 
-本工程用于将你目前手动执行的 **Step2~Step5** 串成一个可批量、多卡并行的自动化流水线，并针对 **depth 控制信号** 做缓存复用（同一输入视频只生成一次 depth 控制信号）。
+这份工程把 Cosmos-Transfer2.5 的 **Step2~Step5** 自动化成可复用的批处理流水线，支持多卡并行，并对 **prompt** 与 **depth 控制信号** 做指纹级缓存。相同视频会直接命中缓存，减少重复读取与计算。
 
-## 你现有的手动流程（已自动化）
-1. 输入原始 mp4 路径（批量）
-2. 生成随机纹理替换的 prompt（Qwen / AutoPrompt）
-3. 生成控制信号（目前实现 depth；保留 edge/blur/seg/combo 接口）
-4. 生成对应的 json spec
-5. 调用 Cosmos-Transfer2.5 推理，输出最终替换版本
+## 工程能做什么
+1. 批量读取 mp4 输入。
+2. 调用 Qwen2.5-VL（AutoPrompt）生成三步式 prompt（默认复用缓存，命中后跳过重新读取视频）。
+3. 生成 depth 控制信号（缓存命中优先；edge/blur/seg/combo 接口预留）。
+4. 生成对应的 json spec。
+5. 调用 Cosmos-Transfer2.5 输出替换视频，并在控制台透传扩散式进度条。
 
 ## 依赖假设
-- `conda` 命令可用，且存在环境：
-  - `qwen25vl`：用于 `AutoPrompt/robot_video_to_prompt.py`
-  - `depthanything`：用于 `Video-Depth-Anything/run.py`
-- Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`，并且存在：
-  - `<transfer_root>/.venv/bin/python`
-- HuggingFace 缓存变量会在推理子进程中自动设置：
-  - `HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
+- 具备 `conda`，并存在：
+  - `qwen25vl`：运行 `robot_video_to_prompt.py`（本仓库已自带脚本，可通过 `autoprompt_root` 配置）。
+  - `depthanything`：运行 `Video-Depth-Anything/run.py`。
+- Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`，路径 `<transfer_root>/.venv/bin/python` 可用。
+- 推理子进程会自动继承 HF 缓存变量：`HF_HOME`、`HF_HUB_CACHE`、`HUGGINGFACE_HUB_CACHE`、`TRANSFORMERS_CACHE`。
 
-## 工程结构
-- `scripts/run_batch.py`：主入口（命令行运行这个）
-- `auto_transfer_runner/cli.py`：参数解析、多卡调度
-- `auto_transfer_runner/pipeline.py`：单个视频的完整流水线（Step2~Step5）
-- `auto_transfer_runner/steps/`：每一步一个文件（可读性高、易维护）
-- `auto_transfer_runner/utils/`：通用工具（日志、锁、指纹、路径等）
+## 目录速览
+- `scripts/run_batch.py`：命令行入口。
+- `auto_transfer_runner/cli.py`：参数解析与多卡调度。
+- `auto_transfer_runner/pipeline.py`：单视频 Step2~5 流水线。
+- `auto_transfer_runner/steps/`：各步骤实现。
+- `auto_transfer_runner/utils/`：日志、锁、指纹、路径等工具。
+- `robot_video_to_prompt.py`：三步式 prompt 生成脚本（仓库根目录）。
 
 ## 快速开始
-### 例 1：单卡跑全部
+单卡跑全部：
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
   --gpus 0 \
-  --control_type depth
+  --control_type depth \
+  --console
 ```
 
-### 例 2：4 卡并行（每张卡完成完整 2→5 流程）
+4 卡并行、限制 100 个视频：
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
   --num_videos 100 \
   --gpus 0,1,2,3 \
-  --control_type depth
+  --control_type depth \
+  --console
 ```
 
-## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
-- `prompt/`：每个视频（每个 job）独立的 prompt
-- `control_cache/`：depth 控制信号缓存（跨 job 复用）
-- `control/`：非缓存控制类型（预留，未来 edge/seg/... 可用）
-- `json/`：每个视频独立的 json spec
-- `output_video/`：Transfer2.5 输出目录
-- `logs/`：每个视频一个日志文件（追加写入）
-
-## 关于“视频指纹”和缓存
-- depth 缓存目录按 fingerprint 划分：`control_cache/depth/<fingerprint>/`
-- fingerprint 默认用 `stat`（路径 + 文件大小 + 修改时间），非常快
-- 如需最稳（读完整文件算 hash），使用：`--fingerprint_mode md5`
-
-## 后续扩展（edge/blur/seg/combo）
-你只需要在 `auto_transfer_runner/steps/control.py` 中补上对应命令即可；
-其他调度、命名、并行、日志、缓存框架不需要改。
-
-
-## 查看所有命令行参数（--help）
-```bash
-python scripts/run_batch.py --help
-```
-
-## 控制台打印每一步（可选）
-默认每个 job 的详细输出写入 `logs/*.log`。如需在终端实时看到每一步开始/结束与缓存命中情况：
-```bash
-python scripts/run_batch.py ... --console
-```
-
-
-## 每个视频重复生成 K 次（生成 K 个不同输出）
-如果你希望对每个输入视频生成多个不同版本（每次重新生成 prompt + 再推理一次）：
+对每个视频生成 K 个不同版本（Step2 与 Step5 重新跑，depth 继续复用缓存）：
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -84,52 +54,41 @@ python scripts/run_batch.py \
   --console
 ```
 
-说明：
-- 总任务数 = 选中的输入视频数量 * K
-- depth 控制信号会被缓存复用：同一个输入视频的第 1 次会生成 depth，其余 K-1 次直接命中缓存
-- 每个 variant 都会生成不同的：
-  - prompt 文件
-  - json spec
-  - 输出目录
-  - 日志文件
+提示：
+- `--console` 会在终端输出每步开始/完成、缓存命中，以及 Transfer2.5 的扩散式进度条。
+- 如需直接使用仓库自带的 prompt 脚本，可将 `--autoprompt_root` 设为当前仓库路径。
 
-## manifest.jsonl（输入-输出映射表）
-批处理会在 `<work_dir>/manifest.jsonl` 里追加写入每个任务的映射信息（JSON Lines）：
-- input_video / variant_idx / job_id
-- prompt_path / json_path / output_dir / log_path
-- control_vis_path（depth 控制信号最终引用的 *_vis.mp4）
+## 输出目录（默认 `work_dir=/mnt/data/ganrunhe/auto_transfer`）
+- `prompt/`：每个 job 独立的最终 prompt（来自缓存或新生成）。
+- `prompt_cache/`：按视频指纹缓存 prompt（三步结果都放在这里，命中后不再读取视频）。
+- `control_cache/`：depth 控制信号缓存。
+- `control/`：非缓存控制类型的预留目录。
+- `json/`：每个视频独立的 json spec。
+- `output_video/`：Transfer2.5 输出。
+- `logs/`：每个视频一个日志文件。
 
+## 视频指纹与缓存策略
+- 指纹计算支持 `path` / `stat` / `md5`，默认 `stat`（速度与稳健性的折中）。通过 `--fingerprint_mode` 配置，prompt 与 depth 共享同一指纹。
+- prompt 默认复用：命中缓存时直接复制缓存文件到当前 job，跳过重新读取视频。
+- depth 默认复用：`control_cache/depth/<fingerprint>/` 内的 `_vis.mp4` 命中即复用，带文件锁避免并发冲突。
 
-## Transfer2.5 默认路径（已更新）
-默认 `--transfer_root` 已更新为：
-- `/mnt/data/ganrunhe/cosmos-transfer2.5`
+## 扩散进度条与计时
+- 每一步的耗时会写入日志；开启 `--console` 时同步打印。
+- Step5（Transfer2.5 推理）会实时透传官方脚本的扩散式进度条，便于监控生成进度。
 
-如你本机路径不同，可通过命令行覆盖：
+## 常用参数（节选）
+- `--autoprompt_root`：prompt 脚本所在目录（默认 `/mnt/data/ganrunhe/AutoPrompt`，可设为当前仓库）。
+- `--transfer_root`：Cosmos-Transfer2.5 路径（默认 `/mnt/data/ganrunhe/cosmos-transfer2.5`）。
+- `--hf_cache`：HuggingFace 缓存目录。
+- `--no_reuse_prompt`：强制重算 prompt，即使缓存命中。
+- `--no_cache_control` / `--force_regen_control`：控制 depth 缓存开关。
+- `--keep_prompt` / `--keep_json` / `--keep_control_dir` / `--cleanup_logs`：控制成功后的清理策略。
+
+完整参数：
 ```bash
-python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
+python scripts/run_batch.py --help
 ```
 
-## 生成完成后自动清理中间文件
-默认行为：**每个任务成功完成推理后**，会自动清理该任务的中间文件：
-- prompt 文件（`prompt/*.txt`）
-- json spec（`json/*.json`）
-- 非缓存 control 目录（`control/<type>/<job_id>/`，主要为未来 edge/seg/... 预留）
-不会清理：
-- depth 控制缓存（`control_cache/`）
-- 最终输出（`output_video/`）
-- `manifest.jsonl`
-
-如需关闭清理：
-```bash
-python scripts/run_batch.py ... --no_cleanup
-```
-
-如需保留 prompt/json：
-```bash
-python scripts/run_batch.py ... --keep_prompt --keep_json
-```
-
-如需连同日志也清理（不推荐，除非你确认不需要排错日志）：
-```bash
-python scripts/run_batch.py ... --cleanup_logs
-```
+## 更新记录
+- 2025-12-19：指纹级 prompt/深度缓存、每步耗时记录、推理扩散进度条透传、README 说明更新。
+- 2025-12-20：prompt 缓存增加并发锁避免多卡重复生成；多卡数量不超过待处理视频数；队列分配优先覆盖不同视频指纹。
