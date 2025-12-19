@@ -6,10 +6,7 @@ import time
 from pathlib import Path
 from typing import Dict
 
-from ..utils.hashing import short_hash, video_fingerprint
-from ..utils.logging_utils import append_log, console_print
-from ..utils.subprocess_utils import conda_run, run_cmd
-from ..utils.text import sanitize_name
+from ..utils.subprocess_utils import run_cmd, conda_run
 
 
 def _with_pythonpath(env: Dict[str, str], autoprompt_root: Path) -> Dict[str, str]:
@@ -188,19 +185,13 @@ def generate_prompt(
     out_prompt: Path,
     autoprompt_root: Path,
     conda_env: str,
+    model_family: str,
     fps: float,
     size: str,
     variant: str,
-    model_family: str,
     env: Dict[str, str],
     log_path: Path,
     reuse_if_exists: bool,
-    work_dir: Path,
-    fingerprint_mode: str,
-    variant_idx: int,
-    job_token: str,
-    step1_status,
-    step1_paths,
 ) -> None:
     """
     Step2：生成三步式 prompt。
@@ -210,65 +201,26 @@ def generate_prompt(
     """
     out_prompt.parent.mkdir(parents=True, exist_ok=True)
 
-    fingerprint = video_fingerprint(video_path, mode=fingerprint_mode)
-    cache_dir = work_dir / "prompt_cache" / fingerprint
-    cache_dir.mkdir(parents=True, exist_ok=True)
-
-    base_name = f"{sanitize_name(video_path.stem)}__{fingerprint}"
-    base_prompt_path = cache_dir / f"{base_name}__step1_base.txt"
-    bracket_path = cache_dir / f"{base_name}__step2_bracketed.txt"
-    replacements_path = cache_dir / f"{base_name}__v{variant_idx:03d}_replacements.json"
-    final_prompt_path = cache_dir / f"{base_name}__v{variant_idx:03d}.txt"
-
-    def copy_cached_if_ready() -> bool:
-        if final_prompt_path.exists() and final_prompt_path.stat().st_size > 0:
-            shutil.copy2(final_prompt_path, out_prompt)
-            append_log(log_path, f"[CACHE HIT] prompt: {final_prompt_path}")
-            console_print(f"[PROMPT] cache hit for {video_path.name} (variant {variant_idx})")
-            return True
-        return False
-
-    if reuse_if_exists and copy_cached_if_ready():
+    if reuse_if_exists and out_prompt.exists() and out_prompt.stat().st_size > 0:
         return
 
-    seed = int(short_hash(f"{job_token}__v{variant_idx}", 8), 16)
-
-    # Step1: run once per fingerprint
-    ensured_base = _ensure_step1_base(
-        fingerprint=fingerprint,
-        video_path=video_path,
-        base_out=base_prompt_path,
-        autoprompt_root=autoprompt_root,
-        conda_env=conda_env,
-        fps=fps,
-        size=size,
-        variant=variant,
-        model_family=model_family,
-        env=env,
-        log_path=log_path,
-        step1_status=step1_status,
-        step1_paths=step1_paths,
-        job_token=job_token,
+    cmd = conda_run(
+        conda_env,
+        [
+            "python",
+            "robot_video_to_prompt.py",
+            "--video",
+            str(video_path),
+            "--out",
+            str(out_prompt),
+            "--model_family",
+            str(model_family),
+            "--size",
+            str(size),
+            "--variant",
+            str(variant),
+            "--fps",
+            str(fps),
+        ],
     )
-
-    # Step2+3: always tied to variant seed
-    console_print(f"[PROMPT][GPU {env.get('ATR_GPU_ID', '?')}] step2/3 start for {video_path.name} (variant {variant_idx})")
-    _run_prompt_step23(
-        base_in=ensured_base,
-        bracket_out=bracket_path,
-        replacements_out=replacements_path,
-        final_out=final_prompt_path,
-        autoprompt_root=autoprompt_root,
-        conda_env=conda_env,
-        size=size,
-        variant=variant,
-        model_family=model_family,
-        seed=seed,
-        reuse_bracket=reuse_if_exists,
-        env=env,
-        log_path=log_path,
-    )
-
-    shutil.copy2(final_prompt_path, out_prompt)
-    append_log(log_path, f"[PROMPT DONE] {out_prompt}")
-    console_print(f"[PROMPT] generated for {video_path.name} (variant {variant_idx})")
+    run_cmd(cmd, cwd=autoprompt_root, env=env, log_path=log_path, title="STEP2: Generate prompt (AutoPrompt/Qwen)")

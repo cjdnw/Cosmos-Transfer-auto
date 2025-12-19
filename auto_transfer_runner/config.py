@@ -19,11 +19,11 @@ class RepoPaths:
 class PromptConfig:
     """Step2: prompt generation config."""
     conda_env: str = "qwen25vl"
+    model_family: str = "qwen25vl"  # qwen25vl | qwen3vl
     fps: float = 4.0
     size: str = "7B"
     variant: str = "instruct"
-    model_family: str = "qwen25vl"  # qwen25vl | qwen3vl
-    reuse_if_exists: bool = True  # 默认命中缓存：同视频直接跳过 Step1 读取
+    reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
 
 
 @dataclass(frozen=True)

@@ -22,7 +22,6 @@ from .config import (
 )
 from .pipeline import Job, run_job
 from .utils.hashing import short_hash
-from .utils.logging_utils import console_print
 
 
 def now_tag() -> str:
@@ -56,10 +55,10 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
 
     prompt = PromptConfig(
         conda_env=args.qwen_env,
+        model_family=args.prompt_model_family,
         fps=args.prompt_fps,
         size=args.prompt_size,
         variant=args.prompt_variant,
-        model_family=args.prompt_model_family,
         reuse_if_exists=args.reuse_prompt,
     )
 
@@ -100,27 +99,14 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     return GlobalConfig(repos=repos, prompt=prompt, depth=depth, transfer=transfer, cache=cache, cleanup=cleanup, run=run)
 
 
-def worker_loop(
-    gpu_id: str,
-    q: mp.Queue,
-    cfg: GlobalConfig,
-    total_videos: int,
-    total_jobs: int,
-    step1_status: mp.Dict,
-    step1_paths: mp.Dict,
-) -> None:
+def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
     """One GPU == one worker process. Each worker runs Step2->Step5 for jobs it pulls."""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    env["ATR_GPU_ID"] = str(gpu_id)
-
-    console_print(f"[GPU {gpu_id}] worker online | videos={total_videos} | jobs={total_jobs}")
 
     while True:
-        console_print(f"[GPU {gpu_id}] waiting for job...")
         item = q.get()
         if item is None:
-            console_print(f"[GPU {gpu_id}] stop signal received.")
             return
 
         job = Job(
@@ -128,12 +114,10 @@ def worker_loop(
             job_id=item["job_id"],
             variant_idx=item.get("variant_idx", 0),
         )
-        console_print(f"[GPU {gpu_id}] start job video={job.video_path.name} variant={job.variant_idx} job_id={job.job_id}")
         try:
             run_job(job, cfg, env, step1_status, step1_paths)
         except Exception:
             # Per-job failure does not stop the whole batch.
-            console_print(f"[GPU {gpu_id}] job failed video={job.video_path.name} variant={job.variant_idx}")
             continue
 
 
@@ -181,15 +165,17 @@ def main(argv: List[str] | None = None) -> None:
 
     # Step2 (prompt)
     ap.add_argument("--qwen_env", type=str, default="qwen25vl", help="Conda env for Step2 (AutoPrompt)")
+    ap.add_argument(
+        "--prompt_model_family",
+        type=str,
+        default="qwen25vl",
+        choices=["qwen25vl", "qwen3vl"],
+        help="Model family passed to AutoPrompt/robot_video_to_prompt.py",
+    )
     ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
     ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
     ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
-    ap.add_argument("--prompt_model_family", type=str, default="qwen25vl", choices=["qwen25vl", "qwen3vl"],
-                    help="Select Qwen model family for prompt generation (qwen25vl or qwen3vl)")
-    ap.add_argument("--reuse_prompt", dest="reuse_prompt", action="store_true", default=True,
-                    help="Reuse cached prompt by fingerprint (default: enabled)")
-    ap.add_argument("--no_reuse_prompt", dest="reuse_prompt", action="store_false",
-                    help="Force regenerate prompt even if cache exists")
+    ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
 
     # Step3 (depth)
     ap.add_argument("--depth_env", type=str, default="depthanything", help="Conda env for Step3 (Depth Anything)")
@@ -246,24 +232,16 @@ def main(argv: List[str] | None = None) -> None:
     step1_paths = manager.dict()
     batch_tag = now_tag()
 
-    for v in range(args.variants_per_video):
-        for idx, vp in enumerate(videos):
-            base_hash = short_hash(str(vp.resolve()), 8)
+    for idx, vp in enumerate(videos):
+        base_hash = short_hash(str(vp.resolve()), 8)
+        for v in range(args.variants_per_video):
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
             q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
 
-    total_jobs = len(videos) * args.variants_per_video
-    console_print(
-        f"[SCHED] videos={len(videos)} variants_per_video={args.variants_per_video} total_jobs={total_jobs} "
-        f"| gpus_requested={cfg.run.gpus or ['0']}"
-    )
-
     # Start one worker per GPU
-    gpus = cfg.run.gpus or ["0"]
-    worker_count = min(len(gpus), len(videos)) if videos else 0
     procs: List[mp.Process] = []
-    for g in gpus[:worker_count]:
-        p = mp.Process(target=worker_loop, args=(g, q, cfg, len(videos), total_jobs, step1_status, step1_paths), daemon=False)
+    for g in (cfg.run.gpus or ["0"]):
+        p = mp.Process(target=worker_loop, args=(g, q, cfg), daemon=False)
         p.start()
         procs.append(p)
 
