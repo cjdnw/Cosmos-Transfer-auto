@@ -61,12 +61,16 @@ def generate_prompt(
         if cached_prompt.exists() and cached_prompt.stat().st_size > 0:
             shutil.copy2(cached_prompt, out_prompt)
             append_log(log_path, f"[CACHE HIT] prompt: {cached_prompt}")
-            console_print(f"[CACHE HIT] prompt for {video_path.name}")
+            console_print(f"[PROMPT][GPU {env.get('ATR_GPU_ID', '?')}] cache hit for {video_path.name}")
             return True
         return False
 
     if reuse_if_exists and copy_cached_if_ready():
         return
+
+    if lock_path.exists():
+        console_print(f"[PROMPT][GPU {env.get('ATR_GPU_ID', '?')}] waiting for prompt lock {lock_path.name}")
+        append_log(log_path, f"[CACHE WAIT] prompt lock exists: {lock_path}")
 
     with FileLock(lock_path, lock_cfg):
         if reuse_if_exists and copy_cached_if_ready():
@@ -89,6 +93,7 @@ def generate_prompt(
                 str(fps),
             ],
         )
+        console_print(f"[PROMPT][GPU {env.get('ATR_GPU_ID', '?')}] generating prompt for {video_path.name}")
         run_cmd(cmd, cwd=autoprompt_root, env=env, log_path=log_path, title="STEP2: Generate prompt (AutoPrompt/Qwen)")
 
         # Cache side artifacts for reuse (if they were written)

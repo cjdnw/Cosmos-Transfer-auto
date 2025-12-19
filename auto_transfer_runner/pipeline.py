@@ -29,15 +29,17 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     """Run the full pipeline for a single video: Step2 -> Step5."""
     repos = cfg.repos
     paths = make_job_paths(repos.work_dir, job.video_path, job.job_id, cfg.run.control_type)
+    gpu_tag = env.get("ATR_GPU_ID") or env.get("CUDA_VISIBLE_DEVICES") or "?"
 
     # Log header
     append_log(paths.log_path, "#" * 90)
     append_log(paths.log_path, f"JOB_ID={job.job_id}")
     append_log(paths.log_path, f"VARIANT_IDX={job.variant_idx}")
     append_log(paths.log_path, f"VIDEO={job.video_path}")
+    append_log(paths.log_path, f"GPU={gpu_tag}")
     append_log(paths.log_path, "#" * 90)
 
-    console_print(f"[JOB START] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
+    console_print(f"[GPU {gpu_tag}] [JOB START] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
 
     try:
         # Step2: prompt
