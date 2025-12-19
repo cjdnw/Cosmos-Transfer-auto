@@ -24,7 +24,7 @@ class Job:
     variant_idx: int = 0
 
 
-def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
+def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str], step1_status, step1_paths) -> None:
     """Run the full pipeline for a single video: Step2 -> Step5."""
     repos = cfg.repos
     paths = make_job_paths(repos.work_dir, job.video_path, job.job_id, cfg.run.control_type)
@@ -67,8 +67,6 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             enable_cache=cfg.cache.enable,
             force_regen=cfg.cache.force_regen,
             fingerprint_mode=cfg.cache.fingerprint_mode,
-            lock_timeout_sec=cfg.cache.lock_timeout_sec,
-            stale_lock_sec=cfg.cache.stale_lock_sec,
             non_cached_output_dir=paths.control_dir,
             env=env,
             log_path=paths.log_path,

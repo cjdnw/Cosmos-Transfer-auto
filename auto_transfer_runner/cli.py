@@ -8,6 +8,8 @@ import random
 from pathlib import Path
 from typing import List
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 from .config import (
     RepoPaths,
     PromptConfig,
@@ -20,7 +22,6 @@ from .config import (
 )
 from .pipeline import Job, run_job
 from .utils.hashing import short_hash
-from .utils.logging_utils import console_print
 
 
 def now_tag() -> str:
@@ -78,8 +79,6 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         enable=(not args.no_cache_control),
         force_regen=args.force_regen_control,
         fingerprint_mode=args.fingerprint_mode,
-        lock_timeout_sec=args.lock_timeout_sec,
-        stale_lock_sec=args.stale_lock_sec,
     )
 
     cleanup = CleanupConfig(
@@ -100,7 +99,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     return GlobalConfig(repos=repos, prompt=prompt, depth=depth, transfer=transfer, cache=cache, cleanup=cleanup, run=run)
 
 
-def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig, total_videos: int, total_jobs: int) -> None:
+def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
     """One GPU == one worker process. Each worker runs Step2->Step5 for jobs it pulls."""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
@@ -108,10 +107,8 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig, total_videos: int, 
     console_print(f"[GPU {gpu_id}] worker online | videos={total_videos} | jobs={total_jobs}")
 
     while True:
-        console_print(f"[GPU {gpu_id}] waiting for job...")
         item = q.get()
         if item is None:
-            console_print(f"[GPU {gpu_id}] stop signal received.")
             return
 
         job = Job(
@@ -119,12 +116,10 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig, total_videos: int, 
             job_id=item["job_id"],
             variant_idx=item.get("variant_idx", 0),
         )
-        console_print(f"[GPU {gpu_id}] start job video={job.video_path.name} variant={job.variant_idx} job_id={job.job_id}")
         try:
-            run_job(job, cfg, env)
+            run_job(job, cfg, env, step1_status, step1_paths)
         except Exception:
             # Per-job failure does not stop the whole batch.
-            console_print(f"[GPU {gpu_id}] job failed video={job.video_path.name} variant={job.variant_idx}")
             continue
 
 
@@ -159,7 +154,8 @@ def main(argv: List[str] | None = None) -> None:
 
     # Paths (all configurable via CLI)
     ap.add_argument("--work_dir", type=str, default="/mnt/data/ganrunhe/auto_transfer", help="Work/output directory")
-    ap.add_argument("--autoprompt_root", type=str, default="/mnt/data/ganrunhe/AutoPrompt", help="AutoPrompt repo path")
+    ap.add_argument("--autoprompt_root", type=str, default=str(PROJECT_ROOT),
+                    help="AutoPrompt repo path (defaults to this repository root)")
     ap.add_argument("--depth_root", type=str, default="/mnt/data/ganrunhe/Video-Depth-Anything", help="Video-Depth-Anything repo path")
     # Updated default as requested
     ap.add_argument("--transfer_root", type=str, default="/mnt/data/ganrunhe/cosmos-transfer2.5", help="Cosmos-Transfer2.5 repo path (contains .venv/)")
@@ -199,8 +195,6 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--force_regen_control", action="store_true", help="Force regenerate depth control (ignore cache)")
     ap.add_argument("--fingerprint_mode", type=str, default="stat", choices=["path", "stat", "md5"],
                     help="Fingerprint mode for cache key: stat (fast), md5 (strong), path (weak)")
-    ap.add_argument("--lock_timeout_sec", type=int, default=6 * 3600, help="Lock wait timeout for cache generation")
-    ap.add_argument("--stale_lock_sec", type=int, default=3 * 3600, help="Treat lock as stale after this many seconds")
 
     # Cleanup intermediates after successful jobs
     ap.add_argument("--no_cleanup", action="store_true",
@@ -235,6 +229,9 @@ def main(argv: List[str] | None = None) -> None:
     # - First select unique videos (controlled by --num_videos and --shuffle)
     # - Then expand each video into K variants (controlled by --variants_per_video)
     q: mp.Queue = mp.Queue()
+    manager = mp.Manager()
+    step1_status = manager.dict()
+    step1_paths = manager.dict()
     batch_tag = now_tag()
 
     for idx, vp in enumerate(videos):
@@ -242,12 +239,6 @@ def main(argv: List[str] | None = None) -> None:
         for v in range(args.variants_per_video):
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
             q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
-
-    total_jobs = len(videos) * args.variants_per_video
-    console_print(
-        f"[SCHED] videos={len(videos)} variants_per_video={args.variants_per_video} total_jobs={total_jobs} "
-        f"| gpus_requested={cfg.run.gpus or ['0']}"
-    )
 
     # Start one worker per GPU
     procs: List[mp.Process] = []

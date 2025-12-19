@@ -49,8 +49,6 @@ class CacheConfig:
     enable: bool = True
     force_regen: bool = False
     fingerprint_mode: str = "stat"  # path | stat | md5
-    lock_timeout_sec: int = 6 * 3600
-    stale_lock_sec: int = 3 * 3600
 
 
 @dataclass(frozen=True)
