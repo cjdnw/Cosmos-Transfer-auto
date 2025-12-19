@@ -21,7 +21,7 @@
 - `auto_transfer_runner/cli.py`：参数解析与多卡调度。
 - `auto_transfer_runner/pipeline.py`：单视频 Step2~5 流水线。
 - `auto_transfer_runner/steps/`：各步骤实现。
-- `auto_transfer_runner/utils/`：日志、锁、指纹、路径等工具。
+- `auto_transfer_runner/utils/`：日志、指纹、路径等工具。
 - `robot_video_to_prompt.py`：三步式 prompt 生成脚本（仓库根目录）。
 
 ## 快速开始
@@ -81,14 +81,14 @@ python scripts/run_batch.py \
 ## 视频指纹与缓存策略
 - 指纹计算支持 `path` / `stat` / `md5`，默认 `stat`（速度与稳健性的折中）。通过 `--fingerprint_mode` 配置，prompt 与 depth 共享同一指纹。
 - prompt 默认复用：命中缓存时直接复制缓存文件到当前 job，跳过重新读取视频。
-- depth 默认复用：`control_cache/depth/<fingerprint>/` 内的 `_vis.mp4` 命中即复用，带文件锁避免并发冲突。
+- depth 默认复用：`control_cache/depth/<fingerprint>/` 内的 `_vis.mp4` 命中即复用。
 
 ## 扩散进度条与计时
 - 每一步的耗时会写入日志；开启 `--console` 时同步打印。
 - Step5（Transfer2.5 推理）会实时透传官方脚本的扩散式进度条，便于监控生成进度。
 
 ## 常用参数（节选）
-- `--autoprompt_root`：prompt 脚本所在目录（默认 `/mnt/data/ganrunhe/AutoPrompt`，可设为当前仓库）。
+- `--autoprompt_root`：prompt 脚本所在目录（默认当前仓库根目录）。
 - `--transfer_root`：Cosmos-Transfer2.5 路径（默认 `/mnt/data/ganrunhe/cosmos-transfer2.5`）。
 - `--hf_cache`：HuggingFace 缓存目录。
 - `--prompt_model_family`：选择 prompt 所用模型族（`qwen25vl` 或 `qwen3vl`），内部会映射为 AutoPrompt 脚本支持的 `--model_type`（`Qwen2.5` 或 `Qwen3`）。
@@ -103,6 +103,6 @@ python scripts/run_batch.py --help
 
 ## 更新记录
 - 2025-12-19：指纹级 prompt/深度缓存、每步耗时记录、推理扩散进度条透传、README 说明更新。
-- 2025-12-19：prompt 缓存增加并发锁避免多卡重复生成；多卡数量不超过待处理视频数；队列分配优先覆盖不同视频指纹。
-- 2025-12-19：多卡调度与日志增强（GPU 等待/开始日志、prompt 锁等待提示）。将 GPU 数量大于视频数时的冗余等待显示清楚，方便排查。
-- 2025-12-19：新增 CLI 开关 `--prompt_model_family`，可在 Qwen2.5-VL 与 Qwen3-VL 之间切换（依赖 `robot_video_to_prompt.py` 对应支持）。
+- 2025-12-19：prompt 拆分 step1（只读视频）与 step2/3（纯文本），多卡针对同视频只跑一次 step1，再基于缓存文本做并发。多卡数量不超过待处理视频数；队列分配优先覆盖不同视频指纹。
+- 2025-12-19：多卡调度与日志增强（GPU 等待/开始日志、step1 共享状态提示）。将 GPU 数量大于视频数时的冗余等待显示清楚，方便排查。
+- 2025-12-19：新增 CLI 开关 `--prompt_model_family`，可在 Qwen2.5-VL 与 Qwen3-VL 之间切换（内置 prompt_worker 支持两种模型族）。
