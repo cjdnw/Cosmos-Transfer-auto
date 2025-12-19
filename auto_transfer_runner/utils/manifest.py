@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from .locking import FileLock, FileLockConfig
-
 
 def append_manifest(work_dir: Path, record: Dict[str, Any]) -> None:
     """
@@ -18,15 +16,9 @@ def append_manifest(work_dir: Path, record: Dict[str, Any]) -> None:
 
     Concurrency:
       - Multi-GPU means multi-process.
-      - We guard the manifest file with a small lock to avoid interleaved writes.
+      - Appends rely on the OS for atomicity of the single-line write.
     """
     manifest_path = work_dir / "manifest.jsonl"
-    lock_path = work_dir / "manifest.lock"
-
-    # Keep this lock separate from control cache locks.
-    lock_cfg = FileLockConfig(timeout_sec=60, stale_lock_sec=10 * 60)
-
-    with FileLock(lock_path, lock_cfg):
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        with manifest_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with manifest_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
