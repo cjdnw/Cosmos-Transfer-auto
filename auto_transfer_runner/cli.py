@@ -225,15 +225,17 @@ def main(argv: List[str] | None = None) -> None:
     q: mp.Queue = mp.Queue()
     batch_tag = now_tag()
 
-    for idx, vp in enumerate(videos):
-        base_hash = short_hash(str(vp.resolve()), 8)
-        for v in range(args.variants_per_video):
+    for v in range(args.variants_per_video):
+        for idx, vp in enumerate(videos):
+            base_hash = short_hash(str(vp.resolve()), 8)
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
             q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
 
     # Start one worker per GPU
+    gpus = cfg.run.gpus or ["0"]
+    worker_count = min(len(gpus), len(videos)) if videos else 0
     procs: List[mp.Process] = []
-    for g in (cfg.run.gpus or ["0"]):
+    for g in gpus[:worker_count]:
         p = mp.Process(target=worker_loop, args=(g, q, cfg), daemon=False)
         p.start()
         procs.append(p)
