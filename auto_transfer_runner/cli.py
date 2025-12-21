@@ -163,7 +163,7 @@ def main(argv: List[str] | None = None) -> None:
                     help="Control type; currently only depth is implemented")
 
     # Step2 (prompt)
-    ap.add_argument("--qwen_env", type=str, default="qwen25vl", help="Conda env for Step2 (AutoPrompt)")
+    ap.add_argument("--qwen_env", type=str, default="qwen3vl", help="Conda env for Step2 (AutoPrompt)")
     ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
     ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
     ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
