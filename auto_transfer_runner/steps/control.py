@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from ..utils.hashing import video_fingerprint
-from ..utils.locking import FileLock, FileLockConfig
 from ..utils.subprocess_utils import run_cmd, conda_run
 from ..utils.logging_utils import append_log, console_print
 
@@ -88,14 +87,12 @@ def ensure_cached_depth_control(
     enable_cache: bool,
     force_regen: bool,
     fingerprint_mode: str,
-    lock_timeout_sec: int,
-    stale_lock_sec: int,
 ) -> Path:
     """
     depth cache strategy:
     - cache_dir = <work_dir>/control_cache/depth/<fingerprint>/
     - If a valid *_vis.mp4 already exists: reuse it (skip generation)
-    - Otherwise: lock and generate once (safe for multi-GPU concurrency)
+    - Otherwise: generate once and cache for reuse
     """
     fp = video_fingerprint(video_path, mode=fingerprint_mode)
     cache_dir = work_dir / "control_cache" / "depth" / fp
@@ -108,31 +105,20 @@ def ensure_cached_depth_control(
             console_print(f"[CACHE HIT] depth control for {video_path.name}")
             return vis
 
-    lock_path = cache_dir / ".lock"
-    lock_cfg = FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec)
-
-    with FileLock(lock_path, lock_cfg):
-        if enable_cache and (not force_regen):
-            vis = find_vis_mp4(cache_dir, video_path)
-            if vis is not None and vis.exists() and vis.stat().st_size > 0:
-                append_log(log_path, f"[CACHE HIT AFTER LOCK] depth control: {vis}")
-                console_print(f"[CACHE HIT] depth control ready after lock for {video_path.name}")
-                return vis
-
-        console_print(f"[CACHE MISS] generating depth control for {video_path.name}")
-        vis = generate_control_depth(
-            video_path=video_path,
-            output_dir=cache_dir,
-            depth_root=depth_root,
-            conda_env=conda_env,
-            encoder=encoder,
-            grayscale=grayscale,
-            env=env,
-            log_path=log_path,
-        )
-        append_log(log_path, f"[CACHE GENERATED] depth control: {vis}")
-        console_print(f"[CACHE GENERATED] {vis.name}")
-        return vis
+    console_print(f"[CACHE MISS] generating depth control for {video_path.name}")
+    vis = generate_control_depth(
+        video_path=video_path,
+        output_dir=cache_dir,
+        depth_root=depth_root,
+        conda_env=conda_env,
+        encoder=encoder,
+        grayscale=grayscale,
+        env=env,
+        log_path=log_path,
+    )
+    append_log(log_path, f"[CACHE GENERATED] depth control: {vis}")
+    console_print(f"[CACHE GENERATED] {vis.name}")
+    return vis
 
 
 def generate_control(
@@ -146,8 +132,6 @@ def generate_control(
     enable_cache: bool,
     force_regen: bool,
     fingerprint_mode: str,
-    lock_timeout_sec: int,
-    stale_lock_sec: int,
     non_cached_output_dir: Path,
     env: Dict[str, str],
     log_path: Path,
@@ -170,8 +154,6 @@ def generate_control(
             enable_cache=enable_cache,
             force_regen=force_regen,
             fingerprint_mode=fingerprint_mode,
-            lock_timeout_sec=lock_timeout_sec,
-            stale_lock_sec=stale_lock_sec,
         )
 
     # Reserved for future implementation

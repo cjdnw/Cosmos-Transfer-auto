@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
+import time
 
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control
 from .steps.json_spec import write_json_spec_depth
 from .steps.inference import run_transfer_inference
-from .utils.logging_utils import append_log, console_print
+from .utils.logging_utils import append_log, console_print, log_step_done
 from .utils.paths import make_job_paths
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
@@ -24,22 +25,25 @@ class Job:
     variant_idx: int = 0
 
 
-def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
+def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str], step1_status, step1_paths) -> None:
     """Run the full pipeline for a single video: Step2 -> Step5."""
     repos = cfg.repos
     paths = make_job_paths(repos.work_dir, job.video_path, job.job_id, cfg.run.control_type)
+    gpu_tag = env.get("ATR_GPU_ID") or env.get("CUDA_VISIBLE_DEVICES") or "?"
 
     # Log header
     append_log(paths.log_path, "#" * 90)
     append_log(paths.log_path, f"JOB_ID={job.job_id}")
     append_log(paths.log_path, f"VARIANT_IDX={job.variant_idx}")
     append_log(paths.log_path, f"VIDEO={job.video_path}")
+    append_log(paths.log_path, f"GPU={gpu_tag}")
     append_log(paths.log_path, "#" * 90)
 
-    console_print(f"[JOB START] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
+    console_print(f"[GPU {gpu_tag}] [JOB START] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
 
     try:
         # Step2: prompt
+        step2_start = time.perf_counter()
         generate_prompt(
             video_path=job.video_path,
             out_prompt=paths.prompt_path,
@@ -48,12 +52,21 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             fps=cfg.prompt.fps,
             size=cfg.prompt.size,
             variant=cfg.prompt.variant,
+            model_family=cfg.prompt.model_family,
             env=env,
             log_path=paths.log_path,
             reuse_if_exists=cfg.prompt.reuse_if_exists,
+            work_dir=repos.work_dir,
+            fingerprint_mode=cfg.cache.fingerprint_mode,
+            variant_idx=job.variant_idx,
+            job_token=job.job_id,
+            step1_status=step1_status,
+            step1_paths=step1_paths,
         )
+        log_step_done(paths.log_path, "STEP2 prompt", step2_start)
 
         # Step3: control
+        step3_start = time.perf_counter()
         control_type = ControlType(cfg.run.control_type)
         control_vis = generate_control(
             control_type=control_type,
@@ -66,14 +79,14 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             enable_cache=cfg.cache.enable,
             force_regen=cfg.cache.force_regen,
             fingerprint_mode=cfg.cache.fingerprint_mode,
-            lock_timeout_sec=cfg.cache.lock_timeout_sec,
-            stale_lock_sec=cfg.cache.stale_lock_sec,
             non_cached_output_dir=paths.control_dir,
             env=env,
             log_path=paths.log_path,
         )
+        log_step_done(paths.log_path, "STEP3 control", step3_start)
 
         # Step4: json spec (depth only)
+        step4_start = time.perf_counter()
         name = f"{sanitize_name(job.video_path.stem)}__{job.job_id}__{cfg.run.control_type}"
         if control_type == ControlType.DEPTH:
             write_json_spec_depth(
@@ -88,11 +101,13 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             )
         else:
             raise NotImplementedError("Only depth json spec is implemented for now.")
+        log_step_done(paths.log_path, "STEP4 json", step4_start)
 
         append_log(paths.log_path, f"[STEP4] Wrote json: {paths.json_path}")
         console_print(f"[STEP4] json={paths.json_path.name}")
 
         # Step5: inference
+        step5_start = time.perf_counter()
         run_transfer_inference(
             transfer_root=repos.transfer_root,
             json_path=paths.json_path,
@@ -102,6 +117,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             log_path=paths.log_path,
             skip_if_output_exists=cfg.transfer.skip_if_output_exists,
         )
+        log_step_done(paths.log_path, "STEP5 inference", step5_start)
 
         append_log(paths.log_path, f"[DONE] output_dir={paths.output_dir}")
         console_print(f"[JOB DONE]  out={paths.output_dir}")

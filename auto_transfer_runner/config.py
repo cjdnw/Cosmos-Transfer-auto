@@ -22,7 +22,8 @@ class PromptConfig:
     fps: float = 4.0
     size: str = "7B"
     variant: str = "instruct"
-    reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
+    model_family: str = "qwen25vl"  # qwen25vl | qwen3vl
+    reuse_if_exists: bool = True  # 默认命中缓存：同视频直接跳过 Step1 读取
 
 
 @dataclass(frozen=True)
@@ -48,8 +49,6 @@ class CacheConfig:
     enable: bool = True
     force_regen: bool = False
     fingerprint_mode: str = "stat"  # path | stat | md5
-    lock_timeout_sec: int = 6 * 3600
-    stale_lock_sec: int = 3 * 3600
 
 
 @dataclass(frozen=True)
