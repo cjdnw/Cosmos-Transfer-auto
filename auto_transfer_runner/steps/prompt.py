@@ -27,7 +27,7 @@ def generate_prompt(
       python robot_video_to_prompt.py \
         --video <in> \
         --out <out> \
-        --size 7B --variant instruct --model_type Qwen3 --fps 4.0
+        --size 7B --variant instruct --model_type Qwen2.5 --fps 4.0
     """
     out_prompt.parent.mkdir(parents=True, exist_ok=True)
 

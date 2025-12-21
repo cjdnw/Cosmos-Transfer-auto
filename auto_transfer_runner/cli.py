@@ -170,7 +170,7 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument(
         "--prompt_model_type",
         type=str,
-        default="Qwen3",
+        default="Qwen2.5",
         choices=["Qwen3", "Qwen2.5"],
         help="Model family for robot_video_to_prompt.py (Qwen3 or Qwen2.5)",
     )

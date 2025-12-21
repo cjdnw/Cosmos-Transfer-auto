@@ -11,7 +11,7 @@
 
 ## 依赖与环境
 - `conda` 命令可用，且存在环境：
-  - `qwen3vl`（默认）：用于 `AutoPrompt/robot_video_to_prompt.py`，支持 `--model_type Qwen3|Qwen2.5`
+  - `qwen25vl`（默认）：用于 `AutoPrompt/robot_video_to_prompt.py`，支持 `--model_type Qwen3|Qwen2.5`
   - `depthanything`：用于 `Video-Depth-Anything/run.py`
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
@@ -41,7 +41,7 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
-### 例 3：指定 Qwen 模型族
+### 例 3：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -135,4 +135,4 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
-- 2025-12-21：适配新版 `robot_video_to_prompt.py`（支持 Qwen3/Qwen2.5 的 `--model_type` 参数），新增命令行参数 `--prompt_model_type`，默认 conda 环境更新为 `qwen3vl`。描述改为工程化表述，匹配顶会论文风格。
+- 2025-12-21：适配新版 `robot_video_to_prompt.py`（支持 Qwen3/Qwen2.5 的 `--model_type` 参数），新增命令行参数 `--prompt_model_type`，默认 conda 环境保持 `qwen25vl`，可选切换为 `qwen3vl`。描述改为工程化表述，匹配顶会论文风格。
