@@ -22,6 +22,7 @@ class PromptConfig:
     fps: float = 4.0
     size: str = "7B"
     variant: str = "instruct"
+    model_type: str = "Qwen2.5"  # Qwen3 | Qwen2.5
     reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
 
 
