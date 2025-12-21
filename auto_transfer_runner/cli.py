@@ -56,6 +56,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         fps=args.prompt_fps,
         size=args.prompt_size,
         variant=args.prompt_variant,
+        model_type=args.prompt_model_type,
         reuse_if_exists=args.reuse_prompt,
     )
 
@@ -162,10 +163,17 @@ def main(argv: List[str] | None = None) -> None:
                     help="Control type; currently only depth is implemented")
 
     # Step2 (prompt)
-    ap.add_argument("--qwen_env", type=str, default="qwen25vl", help="Conda env for Step2 (AutoPrompt)")
+    ap.add_argument("--qwen_env", type=str, default="qwen3vl", help="Conda env for Step2 (AutoPrompt)")
     ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
     ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
     ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
+    ap.add_argument(
+        "--prompt_model_type",
+        type=str,
+        default="Qwen3",
+        choices=["Qwen3", "Qwen2.5"],
+        help="Model family for robot_video_to_prompt.py (Qwen3 or Qwen2.5)",
+    )
     ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
 
     # Step3 (depth)

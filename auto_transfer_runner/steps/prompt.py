@@ -14,6 +14,7 @@ def generate_prompt(
     fps: float,
     size: str,
     variant: str,
+    model_type: str,
     env: Dict[str, str],
     log_path: Path,
     reuse_if_exists: bool,
@@ -21,12 +22,12 @@ def generate_prompt(
     """
     Step2：调用 AutoPrompt 生成 prompt。
 
-    你的原始命令：
+    等效命令示例：
       cd /mnt/data/ganrunhe/AutoPrompt
       python robot_video_to_prompt.py \
         --video <in> \
         --out <out> \
-        --size 7B --variant instruct --fps 4.0
+        --size 7B --variant instruct --model_type Qwen3 --fps 4.0
     """
     out_prompt.parent.mkdir(parents=True, exist_ok=True)
 
@@ -46,6 +47,8 @@ def generate_prompt(
             str(size),
             "--variant",
             str(variant),
+            "--model_type",
+            str(model_type),
             "--fps",
             str(fps),
         ],

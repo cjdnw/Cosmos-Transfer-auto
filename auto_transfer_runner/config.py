@@ -18,10 +18,11 @@ class RepoPaths:
 @dataclass(frozen=True)
 class PromptConfig:
     """Step2: prompt generation config."""
-    conda_env: str = "qwen25vl"
+    conda_env: str = "qwen3vl"
     fps: float = 4.0
     size: str = "7B"
     variant: str = "instruct"
+    model_type: str = "Qwen3"  # Qwen3 | Qwen2.5
     reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
 
 
