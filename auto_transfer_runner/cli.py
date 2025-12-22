@@ -20,6 +20,7 @@ from .config import (
 )
 from .pipeline import Job, run_job
 from .utils.hashing import short_hash
+from .utils.logging_utils import format_console_line
 
 
 def now_tag() -> str:
@@ -250,6 +251,6 @@ def main(argv: List[str] | None = None) -> None:
     for p in procs:
         p.join()
 
-    print("All jobs finished.")
-    print(f"work_dir={cfg.repos.work_dir}")
-    print("Outputs: output_video/, control_cache/, logs/ (optional), manifest.jsonl")
+    print(format_console_line("All jobs finished."))
+    print(format_console_line(f"work_dir={cfg.repos.work_dir}"))
+    print(format_console_line("Outputs: output_video/, control_cache/, logs/ (optional), manifest.jsonl"))
