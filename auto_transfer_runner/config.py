@@ -24,6 +24,9 @@ class PromptConfig:
     variant: str = "instruct"
     model_type: str = "Qwen2.5"  # Qwen3 | Qwen2.5
     reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
+    num_alts: int = 6
+    min_replace_terms: int = 1
+    max_replace_terms: int = 3
 
 
 @dataclass(frozen=True)

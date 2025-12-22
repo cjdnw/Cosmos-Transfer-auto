@@ -61,6 +61,9 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         variant=args.prompt_variant,
         model_type=args.prompt_model_type,
         reuse_if_exists=args.reuse_prompt,
+        num_alts=args.prompt_num_alts,
+        min_replace_terms=args.prompt_min_replace_terms,
+        max_replace_terms=args.prompt_max_replace_terms,
     )
 
     depth = DepthConfig(
@@ -177,6 +180,9 @@ def main(argv: List[str] | None = None) -> None:
         choices=["Qwen3", "Qwen2.5"],
         help="Model family for robot_video_to_prompt.py (Qwen3 or Qwen2.5)",
     )
+    ap.add_argument("--prompt_num_alts", type=int, default=6, help="Number of replacement candidates per descriptor")
+    ap.add_argument("--prompt_min_replace_terms", type=int, default=1, help="Min descriptors to replace when applying skins")
+    ap.add_argument("--prompt_max_replace_terms", type=int, default=3, help="Max descriptors to replace when applying skins")
     ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
 
     # Step3 (depth)
@@ -211,6 +217,9 @@ def main(argv: List[str] | None = None) -> None:
     # Enable console printing across the project via an environment variable.
     if args.console:
         os.environ["ATR_CONSOLE"] = "1"
+
+    if args.prompt_min_replace_terms > args.prompt_max_replace_terms:
+        raise ValueError("--prompt_min_replace_terms must be <= --prompt_max_replace_terms")
 
     if args.variants_per_video < 1:
         raise ValueError("--variants_per_video must be >= 1")

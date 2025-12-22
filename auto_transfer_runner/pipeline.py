@@ -15,7 +15,7 @@ from .utils.paths import make_job_paths
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates
-from .utils.hashing import short_hash
+import secrets
 
 
 T = TypeVar("T")
@@ -76,12 +76,11 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 env=env,
                 log_path=paths.log_path,
                 reuse_if_exists=cfg.prompt.reuse_if_exists,
-                enable_cache=cfg.cache.enable,
-                force_regen=cfg.cache.force_regen,
-                fingerprint_mode=cfg.cache.fingerprint_mode,
-                lock_timeout_sec=cfg.cache.lock_timeout_sec,
-                stale_lock_sec=cfg.cache.stale_lock_sec,
-                seed=int(short_hash(job.job_id, 8), 16),
+                seed=secrets.randbelow(2**32),
+                cache_dir=repos.work_dir / "prompt_cache",
+                num_alts=cfg.prompt.num_alts,
+                min_replace_terms=cfg.prompt.min_replace_terms,
+                max_replace_terms=cfg.prompt.max_replace_terms,
             ),
         )
 
