@@ -31,6 +31,7 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - Constrain each sentence to a SINGLE texture/material/finish descriptor; if multiple objects have textures, split them into separate sentences to keep one texture description per sentence.
 # - Identify the robot arm(s), including materials, colors, and their positions relative to the scene.
 # - Identify any container and clearly state its initial state (empty or occupied).
+# - Mention colors/materials ONLY when they are visually certain; avoid vague terms like "dark" or "light" without a specific hue, and omit interior colors if they are not definitively visible.
 #
 # Action description rules:
 # - Use natural temporal phrasing (At the beginning…, As the video progresses…, Then…, Finally…).
