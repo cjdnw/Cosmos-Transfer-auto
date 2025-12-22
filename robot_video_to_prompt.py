@@ -302,6 +302,49 @@ def log_time(label: str, duration: float):
     print(f"[TIME] {label}={duration:.2f}s")
 
 
+class FileLock:
+    def __init__(self, path: Path, timeout: int = 6 * 3600, stale: int = 3 * 3600):
+        self.path = path
+        self.timeout = timeout
+        self.stale = stale
+        self.acquired = False
+
+    def acquire(self) -> None:
+        start = time.time()
+        while True:
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, f"pid={os.getpid()} t={time.time()}\n".encode("utf-8"))
+                os.close(fd)
+                self.acquired = True
+                return
+            except FileExistsError:
+                if self.path.exists() and (time.time() - self.path.stat().st_mtime > self.stale):
+                    try:
+                        self.path.unlink()
+                        continue
+                    except Exception:
+                        pass
+                if time.time() - start > self.timeout:
+                    raise TimeoutError(f"Lock timeout: {self.path}")
+                time.sleep(2)
+
+    def release(self) -> None:
+        if self.acquired and self.path.exists():
+            try:
+                self.path.unlink()
+            finally:
+                self.acquired = False
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.release()
+        return False
+
+
 # =======================
 # 6) CLI
 # =======================
@@ -440,44 +483,46 @@ def main():
         paths = cache_paths(cache_root, fp)
         paths["base"].parent.mkdir(parents=True, exist_ok=True)
 
-        missing_base = not paths["base"].exists()
-        missing_bracket = not paths["bracket"].exists()
-        missing_repl = not paths["repl"].exists()
+        lock = FileLock(paths["base"].parent / ".lock")
+        with lock:
+            missing_base = not paths["base"].exists()
+            missing_bracket = not paths["bracket"].exists()
+            missing_repl = not paths["repl"].exists()
 
-        model = processor = None
-        if missing_base or missing_bracket or missing_repl:
-            model, processor, load_time = load_model_and_processor(args.model_type, args.size, args.variant)
-            log_time("MODEL_LOAD_TIME", load_time)
+            model = processor = None
+            if missing_base or missing_bracket or missing_repl:
+                model, processor, load_time = load_model_and_processor(args.model_type, args.size, args.variant)
+                log_time("MODEL_LOAD_TIME", load_time)
 
-        if missing_base:
-            start = time.perf_counter()
-            base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
-            log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
-            print(f"[TOKENS] STEP1={gen_tokens}")
-            write_text(str(paths["base"]), base)
-        else:
-            print("[CACHE] base exists, skip")
+            if missing_base:
+                start = time.perf_counter()
+                base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+                log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+                print(f"[TOKENS] STEP1={gen_tokens}")
+                write_text(str(paths["base"]), base)
+            else:
+                print("[CACHE] base exists, skip")
 
-        if missing_bracket:
-            base = read_text(paths["base"])
-            max_new = dynamic_max_new_tokens(base, processor)
-            start = time.perf_counter()
-            bracket, gen_tokens = step2_bracket_base(model, processor, base, max_new)
-            log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
-            print(f"[TOKENS] STEP2={gen_tokens}")
-            write_text(str(paths["bracket"]), bracket)
-        else:
-            print("[CACHE] bracket exists, skip")
+            if missing_bracket:
+                base = read_text(paths["base"])
+                max_new = dynamic_max_new_tokens(base, processor)
+                start = time.perf_counter()
+                bracket, gen_tokens = step2_bracket_base(model, processor, base, max_new)
+                log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+                print(f"[TOKENS] STEP2={gen_tokens}")
+                write_text(str(paths["bracket"]), bracket)
+            else:
+                print("[CACHE] bracket exists, skip")
 
-        if missing_repl:
-            bracket = read_text(paths["bracket"])
-            start = time.perf_counter()
-            repl, gen_tokens = step3_generate_replacements_json(model, processor, bracket, args.num_alts)
-            log_time("GENERATE_TIME_STEP3", time.perf_counter() - start)
-            print(f"[TOKENS] STEP3={gen_tokens}")
-            write_json(str(paths["repl"]), {"replacements": repl})
-        else:
-            print("[CACHE] repl exists, skip")
+            if missing_repl:
+                bracket = read_text(paths["bracket"])
+                start = time.perf_counter()
+                repl, gen_tokens = step3_generate_replacements_json(model, processor, bracket, args.num_alts)
+                log_time("GENERATE_TIME_STEP3", time.perf_counter() - start)
+                print(f"[TOKENS] STEP3={gen_tokens}")
+                write_json(str(paths["repl"]), {"replacements": repl})
+            else:
+                print("[CACHE] repl exists, skip")
 
         return
 
@@ -485,11 +530,13 @@ def main():
         cache_root = Path(args.cache_dir)
         fp = video_fingerprint(args.video)
         paths = cache_paths(cache_root, fp)
-        if paths["base"].exists():
-            print("[CACHE] base exists, skip model load")
-            ensure_parent(Path(args.out_base))
-            write_text(args.out_base, read_text(paths["base"]))
-            return
+        lock = FileLock(paths["base"].parent / ".lock")
+        with lock:
+            if paths["base"].exists():
+                print("[CACHE] base exists, skip model load")
+                ensure_parent(Path(args.out_base))
+                write_text(args.out_base, read_text(paths["base"]))
+                return
 
     if args.cmd == "step23":
         cache_root = Path(args.cache_dir) if args.cache_dir else None
@@ -512,7 +559,7 @@ def main():
             final = apply_random_replacements(
                 bracket_prompt,
                 repl_data_cached,
-                seed=args.seed,
+                seed=args.seed if args.seed is not None else random.SystemRandom().randrange(2**32),
                 min_terms=args.min_replace_terms,
                 max_terms=args.max_replace_terms,
             )
@@ -538,12 +585,25 @@ def main():
         if cache_root:
             fp = video_fingerprint(args.video)
             paths = cache_paths(cache_root, fp)
-            out_base = paths["base"]
-        start = time.perf_counter()
-        base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
-        log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
-        print(f"[TOKENS] STEP1={gen_tokens}")
-        write_text(str(out_base), base)
+            lock = FileLock(paths["base"].parent / ".lock")
+            with lock:
+                if paths["base"].exists():
+                    print("[CACHE] base exists, skip generation")
+                    ensure_parent(out_base)
+                    write_text(str(out_base), read_text(paths["base"]))
+                    return
+                out_base = paths["base"]
+                start = time.perf_counter()
+                base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+                log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+                print(f"[TOKENS] STEP1={gen_tokens}")
+                write_text(str(out_base), base)
+        else:
+            start = time.perf_counter()
+            base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+            log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+            print(f"[TOKENS] STEP1={gen_tokens}")
+            write_text(str(out_base), base)
         print("[INFO] Wrote:", out_base)
         return
 
@@ -576,12 +636,14 @@ def main():
 
         base_path = Path(args.base_in)
         cache_paths_map: Optional[Dict[str, Path]] = None
+        lock: Optional[FileLock] = None
 
         if cache_root and args.video:
             fp = video_fingerprint(args.video)
             cache_paths_map = cache_paths(cache_root, fp)
             if cache_paths_map["base"].exists():
                 base_path = cache_paths_map["base"]
+            lock = FileLock(cache_paths_map["base"].parent / ".lock")
 
         base_prompt = read_text(str(base_path))
         max_new = dynamic_max_new_tokens(base_prompt, processor)
@@ -589,36 +651,52 @@ def main():
         bracket_path = cache_paths_map["bracket"] if cache_paths_map else bracket_path_out
         repl_path = cache_paths_map["repl"] if cache_paths_map else None
 
-        need_step2 = not (bracket_path and bracket_path.exists())
-        need_step3 = (args.repl_json_in is None) and not (repl_path and repl_path.exists())
+        if lock:
+            lock.__enter__()
+        try:
+            if cache_paths_map and not base_path.exists():
+                start = time.perf_counter()
+                base_prompt, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+                log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+                print(f"[TOKENS] STEP1={gen_tokens}")
+                ensure_parent(base_path)
+                write_text(str(base_path), base_prompt)
+            else:
+                base_prompt = base_prompt
 
-        start = time.perf_counter()
-        if need_step2:
-            bracket_prompt, gen_tokens = step2_bracket_base(model, processor, base_prompt, max_new)
-            log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
-            print(f"[TOKENS] STEP2={gen_tokens}")
-            target_path = bracket_path_out or bracket_path or Path(args.out_final).with_suffix(".bracket.txt")
-            ensure_parent(target_path)
-            write_text(str(target_path), bracket_prompt)
-            bracket_path = target_path
-        else:
-            bracket_prompt = read_text(str(bracket_path))
-            log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+            need_step2 = not (bracket_path and bracket_path.exists())
+            need_step3 = (args.repl_json_in is None) and not (repl_path and repl_path.exists())
 
-        if args.repl_json_in:
-            repl_data = read_json(args.repl_json_in).get("replacements", {})
-        elif repl_path and repl_path.exists():
-            repl_data = read_json(str(repl_path)).get("replacements", {})
-            log_time("GENERATE_TIME_STEP3", 0.0)
-        else:
-            step3_start = time.perf_counter()
-            repl_data, gen_tokens = step3_generate_replacements_json(model, processor, bracket_prompt, args.num_alts)
-            log_time("GENERATE_TIME_STEP3", time.perf_counter() - step3_start)
-            print(f"[TOKENS] STEP3={gen_tokens}")
-            target_repl = repl_path_out or repl_path or Path(args.out_final).with_suffix(".repl.json")
-            ensure_parent(target_repl)
-            write_json(str(target_repl), {"replacements": repl_data})
-            repl_path = target_repl
+            start = time.perf_counter()
+            if need_step2:
+                bracket_prompt, gen_tokens = step2_bracket_base(model, processor, base_prompt, max_new)
+                log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+                print(f"[TOKENS] STEP2={gen_tokens}")
+                target_path = bracket_path_out or bracket_path or Path(args.out_final).with_suffix(".bracket.txt")
+                ensure_parent(target_path)
+                write_text(str(target_path), bracket_prompt)
+                bracket_path = target_path
+            else:
+                bracket_prompt = read_text(str(bracket_path))
+                log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+
+            if args.repl_json_in:
+                repl_data = read_json(args.repl_json_in).get("replacements", {})
+            elif repl_path and repl_path.exists():
+                repl_data = read_json(str(repl_path)).get("replacements", {})
+                log_time("GENERATE_TIME_STEP3", 0.0)
+            else:
+                step3_start = time.perf_counter()
+                repl_data, gen_tokens = step3_generate_replacements_json(model, processor, bracket_prompt, args.num_alts)
+                log_time("GENERATE_TIME_STEP3", time.perf_counter() - step3_start)
+                print(f"[TOKENS] STEP3={gen_tokens}")
+                target_repl = repl_path_out or repl_path or Path(args.out_final).with_suffix(".repl.json")
+                ensure_parent(target_repl)
+                write_json(str(target_repl), {"replacements": repl_data})
+                repl_path = target_repl
+        finally:
+            if lock:
+                lock.__exit__(None, None, None)
 
         apply_start = time.perf_counter()
         final = apply_random_replacements(
