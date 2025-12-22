@@ -33,6 +33,7 @@ def safe_rmtree(path: Path, log_path: Optional[Path] = None) -> None:
 
 def cleanup_job_intermediates(
     prompt_path: Path,
+    prompt_intermediate_paths: Optional[list[Path]],
     json_path: Path,
     non_cached_control_dir: Path,
     log_path: Path,
@@ -55,8 +56,13 @@ def cleanup_job_intermediates(
       - per-job json spec
       - per-job non-cached control output dir (reserved for edge/seg/...)
       - per-job log file (optional; default False to preserve debug trail)
+    Always deletes:
+      - prompt_intermediate_paths (e.g., bracketed prompt, replacement json)
     """
     console_print("[CLEANUP] removing intermediates (prompt/json/...)")
+
+    for p in prompt_intermediate_paths or []:
+        safe_unlink(p, log_path=log_path)
 
     if delete_prompt:
         safe_unlink(prompt_path, log_path=log_path)
