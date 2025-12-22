@@ -269,6 +269,13 @@ def main():
     p2.add_argument("--base_in", required=True)
     p2.add_argument("--out", required=True)
 
+    # step2+3 combined
+    p23 = sub.add_parser("step23")
+    add_model_args(p23)
+    p23.add_argument("--base_in", required=True)
+    p23.add_argument("--out_bracket", required=True)
+    p23.add_argument("--out_repl_json", required=True)
+
     # step3a
     p3 = sub.add_parser("step3_replacements")
     add_model_args(p3)
@@ -327,6 +334,17 @@ def main():
         bracketed = step2_bracket_base(model, processor, base)
         write_text(args.out, bracketed)
         print("[INFO] Wrote:", args.out)
+        return
+
+    if args.cmd == "step23":
+        base = read_text(args.base_in)
+        bracketed = step2_bracket_base(model, processor, base)
+        write_text(args.out_bracket, bracketed)
+
+        repl = step3_generate_replacements_json(model, processor, bracketed)
+        write_json(args.out_repl_json, {"replacements": repl})
+
+        print("[INFO] Wrote:", args.out_bracket, args.out_repl_json)
         return
 
     if args.cmd == "step3_replacements":

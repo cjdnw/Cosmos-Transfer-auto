@@ -9,6 +9,13 @@ def short_hash(s: str, n: int = 12) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()[:n]
 
 
+def text_md5(text: str, n: int | None = 16) -> str:
+    """MD5 hash of a string (optionally shortened)."""
+    h = hashlib.md5(text.encode("utf-8"))
+    digest = h.hexdigest()
+    return digest if n is None else digest[:n]
+
+
 def video_fingerprint(video_path: Path, mode: str = "stat") -> str:
     """
     计算“视频指纹”，用于缓存复用（同一输入视频 => 同一控制信号缓存目录）。
