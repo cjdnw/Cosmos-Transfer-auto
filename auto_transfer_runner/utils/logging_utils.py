@@ -3,6 +3,20 @@ from __future__ import annotations
 import datetime as dt
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _current_timestamp() -> str:
+    """Return the current Asia/Shanghai timestamp string, with timezone offset."""
+    return dt.datetime.now(SHANGHAI_TZ).isoformat(timespec="seconds")
+
+
+def format_console_line(message: str) -> str:
+    """Prefix a message with the Asia/Shanghai timestamp."""
+    ts = _current_timestamp()
+    return f"[{ts}] {message}"
 
 
 def console_enabled() -> bool:
@@ -11,9 +25,9 @@ def console_enabled() -> bool:
 
 
 def console_print(message: str) -> None:
-    """Print a single progress line to stdout when enabled."""
+    """Print a single progress line to stdout when enabled, prefixed with Asia/Shanghai time."""
     if console_enabled():
-        print(message, flush=True)
+        print(format_console_line(message), flush=True)
 
 
 def append_log(log_path: Path, message: str) -> None:
@@ -25,8 +39,8 @@ def append_log(log_path: Path, message: str) -> None:
 
 def log_section(log_path: Path, title: str) -> None:
     """Write a readable section header to the log file; also print a short line to console if enabled."""
-    ts = dt.datetime.now().isoformat(timespec="seconds")
+    ts = _current_timestamp()
     append_log(log_path, "\n" + "=" * 90)
     append_log(log_path, f"[{ts}] {title}")
     append_log(log_path, "=" * 90 + "\n")
-    console_print(f"[{ts}] {title}")
+    console_print(title)
