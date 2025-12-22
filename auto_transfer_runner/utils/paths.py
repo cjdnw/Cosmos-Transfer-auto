@@ -28,7 +28,7 @@ def make_job_paths(work_dir: Path, video_path: Path, job_id: str, control_type: 
     base = f"{stem}__{job_id}"
 
     return PathBundle(
-        prompt_path=prompt_dir / f"{base}__prompt_3step.txt",
+        prompt_path=prompt_dir / f"{base}__prompt.txt",
         control_dir=control_dir / base,  # 非缓存控制类型预留
         json_path=json_dir / f"{base}__{control_type}.json",
         output_dir=output_root / f"{base}__{control_type}",
