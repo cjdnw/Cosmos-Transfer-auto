@@ -1,9 +1,12 @@
-import os
-import re
-import json
-import random
 import argparse
-from typing import Dict, List, Any, Optional
+import hashlib
+import json
+import os
+import random
+import re
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from transformers import AutoProcessor
@@ -124,6 +127,7 @@ def apply_random_replacements(
     min_terms: int = 1,
     max_terms: int = 3,
 ) -> str:
+    """Replace only a subset of unique descriptors, controlled by seed and range."""
     rng = random.Random(seed)
     terms = list({t.strip() for t in re.findall(r"【(.*?)】", bracketed_prompt)})
 
@@ -145,8 +149,20 @@ def apply_random_replacements(
     return out.replace("【", "").replace("】", "")
 
 
+def dynamic_max_new_tokens(base_prompt: str, processor: Any) -> int:
+    if processor and getattr(processor, "tokenizer", None):
+        try:
+            token_len = len(processor.tokenizer.encode(base_prompt))
+            return min(512, token_len + 64)
+        except Exception:
+            pass
+    # Fallback based on text length
+    approx_tokens = max(1, len(base_prompt.split()))
+    return min(512, approx_tokens + 64)
+
+
 @torch.no_grad()
-def run_generation(model, processor, messages, max_new_tokens: int, do_sample: bool, temperature: float, top_p: float) -> str:
+def run_generation(model, processor, messages, max_new_tokens: int, do_sample: bool, temperature: float, top_p: float) -> Tuple[str, int]:
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     image_inputs, video_inputs = process_vision_info(messages)
 
@@ -164,10 +180,11 @@ def run_generation(model, processor, messages, max_new_tokens: int, do_sample: b
 
     outputs = model.generate(**inputs, **gen_kwargs)
     gen_ids = outputs[0][inputs["input_ids"].shape[-1]:]
-    return processor.decode(gen_ids, skip_special_tokens=True).strip()
+    return processor.decode(gen_ids, skip_special_tokens=True).strip(), gen_ids.numel()
 
 
-def load_model_and_processor(model_type: str, size: str, variant: str):
+def load_model_and_processor(model_type: str, size: str, variant: str) -> Tuple[Any, Any, float]:
+    start = time.perf_counter()
     model_id = pick_model_id(size, variant, model_type)
     print(f"[INFO] Loading model: {model_id}")
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
@@ -182,13 +199,14 @@ def load_model_and_processor(model_type: str, size: str, variant: str):
             model_id, device_map="auto", dtype=dtype, trust_remote_code=True
         )
     model.eval()
-    return model, processor
+    load_time = time.perf_counter() - start
+    return model, processor, load_time
 
 
 # =======================
 # 4) Step APIs
 # =======================
-def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
+def step1_generate_base(model, processor, video_path: str, fps: float) -> Tuple[str, int]:
     messages = [{
         "role": "user",
         "content": [
@@ -199,15 +217,15 @@ def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
     return run_generation(model, processor, messages, 500, False, 1.0, 1.0)
 
 
-def step2_bracket_base(model, processor, base_prompt: str) -> str:
+def step2_bracket_base(model, processor, base_prompt: str, max_new_tokens: int) -> Tuple[str, int]:
     messages = [{
         "role": "user",
         "content": [{"type": "text", "text": BRACKET_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
     }]
-    return run_generation(model, processor, messages, 700, False, 1.0, 1.0)
+    return run_generation(model, processor, messages, max_new_tokens, False, 1.0, 1.0)
 
 
-def step3_generate_replacements_json(model, processor, bracketed_prompt: str) -> Dict[str, List[str]]:
+def step3_generate_replacements_json(model, processor, bracketed_prompt: str, num_alts: int) -> Dict[str, List[str]]:
     terms = extract_bracket_terms(bracketed_prompt)
     if not terms:
         return {}
@@ -218,8 +236,20 @@ def step3_generate_replacements_json(model, processor, bracketed_prompt: str) ->
         "content": [{"type": "text", "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(descriptor_block=block)}],
     }]
 
-    raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
-    return safe_parse_json(raw).get("replacements", {}) or {}
+    raw, gen_tokens = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
+    repl = safe_parse_json(raw).get("replacements", {}) or {}
+    cleaned: Dict[str, List[str]] = {}
+    for k, vals in repl.items():
+        uniq = []
+        seen = set()
+        for v in vals:
+            if v not in seen:
+                uniq.append(v)
+                seen.add(v)
+            if len(uniq) >= num_alts:
+                break
+        cleaned[k] = uniq
+    return cleaned, gen_tokens
 
 
 def write_text(path: str, text: str):
@@ -245,7 +275,80 @@ def read_json(path: str) -> Any:
 
 
 # =======================
-# 5) CLI
+# 5) Utils: caching & IO
+# =======================
+def video_fingerprint(video_path: str, keep: int = 24) -> str:
+    h = hashlib.sha256()
+    with open(video_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4 * 1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()[:keep]
+
+
+def cache_paths(cache_dir: Path, fingerprint: str) -> Dict[str, Path]:
+    base = cache_dir / fingerprint
+    return {
+        "base": base / "base.txt",
+        "bracket": base / "bracket.txt",
+        "repl": base / "repl.json",
+    }
+
+
+def ensure_parent(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def log_time(label: str, duration: float):
+    print(f"[TIME] {label}={duration:.2f}s")
+
+
+class FileLock:
+    def __init__(self, path: Path, timeout: int = 6 * 3600, stale: int = 3 * 3600):
+        self.path = path
+        self.timeout = timeout
+        self.stale = stale
+        self.acquired = False
+
+    def acquire(self) -> None:
+        # Ensure lock directory exists
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        start = time.time()
+        while True:
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, f"pid={os.getpid()} t={time.time()}\n".encode("utf-8"))
+                os.close(fd)
+                self.acquired = True
+                return
+            except FileExistsError:
+                if self.path.exists() and (time.time() - self.path.stat().st_mtime > self.stale):
+                    try:
+                        self.path.unlink()
+                        continue
+                    except Exception:
+                        pass
+                if time.time() - start > self.timeout:
+                    raise TimeoutError(f"Lock timeout: {self.path}")
+                time.sleep(2)
+
+    def release(self) -> None:
+        if self.acquired and self.path.exists():
+            try:
+                self.path.unlink()
+            finally:
+                self.acquired = False
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.release()
+        return False
+
+
+# =======================
+# 6) CLI
 # =======================
 def main():
     parser = argparse.ArgumentParser()
@@ -256,52 +359,84 @@ def main():
         p.add_argument("--variant", default="instruct", choices=["instruct", "awq"])
         p.add_argument("--model_type", default="Qwen3", choices=["Qwen2.5", "Qwen3"])
 
+    def add_replace_args(p):
+        p.add_argument("--min_replace_terms", type=int, default=1)
+        p.add_argument("--max_replace_terms", type=int, default=3)
+
     # step1
     p1 = sub.add_parser("step1_base")
     add_model_args(p1)
     p1.add_argument("--video", required=True)
     p1.add_argument("--fps", type=float, default=4.0)
-    p1.add_argument("--out", required=True)
+    p1.add_argument("--out_base", required=True)
+    p1.add_argument("--cache_dir", type=str, default=None)
 
     # step2
     p2 = sub.add_parser("step2_bracket")
     add_model_args(p2)
     p2.add_argument("--base_in", required=True)
-    p2.add_argument("--out", required=True)
+    p2.add_argument("--out_bracket", required=True)
 
     # step3a
     p3 = sub.add_parser("step3_replacements")
     add_model_args(p3)
     p3.add_argument("--bracket_in", required=True)
-    p3.add_argument("--out_json", required=True)
+    p3.add_argument("--out_repl_json", required=True)
+    p3.add_argument("--num_alts", type=int, default=6)
 
     # step3b apply
     p4 = sub.add_parser("step3_apply")
     p4.add_argument("--bracket_in", required=True)
     p4.add_argument("--repl_json", required=False, help="If omitted, will apply without changes (only remove brackets).")
-    p4.add_argument("--seed", type=int, required=True)
-    p4.add_argument("--min_replace_terms", type=int, default=1)
-    p4.add_argument("--max_replace_terms", type=int, default=3)
-    p4.add_argument("--out", required=True)
+    p4.add_argument("--seed", type=int, default=None, help="If omitted, a random seed will be generated")
+    p4.add_argument("--out_final", required=True)
+    add_replace_args(p4)
 
-    # full pipeline
-    p5 = sub.add_parser("all")
-    add_model_args(p5)
-    p5.add_argument("--video", required=True)
-    p5.add_argument("--fps", type=float, default=4.0)
-    p5.add_argument("--seed", type=int, required=False)
-    p5.add_argument("--min_replace_terms", type=int, default=1)
-    p5.add_argument("--max_replace_terms", type=int, default=3)
-    p5.add_argument("--out_base", required=True)
-    p5.add_argument("--out_bracket", required=True)
-    p5.add_argument("--out_repl_json", required=True)
-    p5.add_argument("--out_final", required=True)
+    # step23 combined
+    p23 = sub.add_parser("step23")
+    add_model_args(p23)
+    p23.add_argument("--base_in", required=True)
+    p23.add_argument("--seed", type=int, default=None, help="If omitted, a random seed will be generated")
+    p23.add_argument("--out_final", required=True)
+    p23.add_argument("--out_bracket", type=str, default=None)
+    p23.add_argument("--out_repl_json", type=str, default=None)
+    p23.add_argument("--repl_json_in", type=str, default=None)
+    p23.add_argument("--num_alts", type=int, default=6)
+    p23.add_argument("--cache_dir", type=str, default=None)
+    p23.add_argument("--video", type=str, default=None, help="Used for cache lookup (fingerprint).")
+    add_replace_args(p23)
+
+    # cache_build
+    p_cache = sub.add_parser("cache_build")
+    add_model_args(p_cache)
+    p_cache.add_argument("--video", required=True)
+    p_cache.add_argument("--fps", type=float, default=4.0)
+    p_cache.add_argument("--cache_dir", type=str, default="./cache")
+    p_cache.add_argument("--num_alts", type=int, default=6)
+
+    # skin_batch
+    p_skin = sub.add_parser("skin_batch")
+    p_skin.add_argument("--video", required=True)
+    p_skin.add_argument("--cache_dir", type=str, default="./cache")
+    p_skin.add_argument("--seeds", type=int, nargs="*", default=None)
+    p_skin.add_argument("--num", type=int, default=0, help="Generate N random seeds if --seeds not provided")
+    p_skin.add_argument("--out_dir", required=True)
+    add_replace_args(p_skin)
 
     args = parser.parse_args()
 
+    if getattr(args, "min_replace_terms", 1) > getattr(args, "max_replace_terms", 1):
+        raise ValueError("--min_replace_terms must be <= --max_replace_terms")
+    if hasattr(args, "num_alts") and args.num_alts < 1:
+        raise ValueError("--num_alts must be >= 1")
+
     if args.cmd == "step3_apply":
+        print("[INFO] step3_apply: no model load (cache-only apply)")
         bracketed = read_text(args.bracket_in)
         replacements = read_json(args.repl_json).get("replacements", {}) if args.repl_json else {}
+        if args.seed is None:
+            args.seed = random.SystemRandom().randrange(2**32)
+            print(f"[INFO] Generated random seed for apply: {args.seed}")
         final = apply_random_replacements(
             bracketed,
             replacements,
@@ -309,56 +444,280 @@ def main():
             min_terms=args.min_replace_terms,
             max_terms=args.max_replace_terms,
         )
-        write_text(args.out, final)
-        print("[INFO] Wrote:", args.out)
+        ensure_parent(Path(args.out_final))
+        write_text(args.out_final, final)
+        print("[INFO] Wrote:", args.out_final)
         return
 
-    # other commands need model
-    model, processor = load_model_and_processor(args.model_type, args.size, args.variant)
+    if args.cmd == "skin_batch":
+        fp = video_fingerprint(args.video)
+        paths = cache_paths(Path(args.cache_dir), fp)
+        if not paths["bracket"].exists() or not paths["repl"].exists():
+            raise FileNotFoundError(f"Cache missing for {args.video}. Run cache_build first. Expected {paths}")
+        bracketed = read_text(paths["bracket"])
+        replacements = read_json(paths["repl"]).get("replacements", {})
+        seeds = args.seeds if args.seeds else []
+        if not seeds and args.num > 0:
+            rng = random.Random(0)
+            seeds = [rng.randrange(2**32) for _ in range(args.num)]
+        if not seeds:
+            raise ValueError("Provide --seeds or --num for skin_batch")
+        Path(args.out_dir).mkdir(parents=True, exist_ok=True)
+        print("[INFO] skin_batch: no model load (cache-only apply)")
+        start = time.perf_counter()
+        for s in seeds:
+            final = apply_random_replacements(
+                bracketed,
+                replacements,
+                seed=int(s),
+                min_terms=args.min_replace_terms,
+                max_terms=args.max_replace_terms,
+            )
+            out = Path(args.out_dir) / f"final_seed{s}.txt"
+            write_text(str(out), final)
+        log_time("APPLY_TIME", time.perf_counter() - start)
+        print(f"[INFO] Generated {len(seeds)} files to {args.out_dir}")
+        return
+
+    if args.cmd == "cache_build":
+        cache_root = Path(args.cache_dir)
+        fp = video_fingerprint(args.video)
+        paths = cache_paths(cache_root, fp)
+        paths["base"].parent.mkdir(parents=True, exist_ok=True)
+
+        lock = FileLock(paths["base"].parent / ".lock")
+        with lock:
+            missing_base = not paths["base"].exists()
+            missing_bracket = not paths["bracket"].exists()
+            missing_repl = not paths["repl"].exists()
+
+            model = processor = None
+            if missing_base or missing_bracket or missing_repl:
+                model, processor, load_time = load_model_and_processor(args.model_type, args.size, args.variant)
+                log_time("MODEL_LOAD_TIME", load_time)
+
+            if missing_base:
+                start = time.perf_counter()
+                base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+                log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+                print(f"[TOKENS] STEP1={gen_tokens}")
+                write_text(str(paths["base"]), base)
+            else:
+                print("[CACHE] base exists, skip")
+
+            if missing_bracket:
+                base = read_text(paths["base"])
+                max_new = dynamic_max_new_tokens(base, processor)
+                start = time.perf_counter()
+                bracket, gen_tokens = step2_bracket_base(model, processor, base, max_new)
+                log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+                print(f"[TOKENS] STEP2={gen_tokens}")
+                write_text(str(paths["bracket"]), bracket)
+            else:
+                print("[CACHE] bracket exists, skip")
+
+            if missing_repl:
+                bracket = read_text(paths["bracket"])
+                start = time.perf_counter()
+                repl, gen_tokens = step3_generate_replacements_json(model, processor, bracket, args.num_alts)
+                log_time("GENERATE_TIME_STEP3", time.perf_counter() - start)
+                print(f"[TOKENS] STEP3={gen_tokens}")
+                write_json(str(paths["repl"]), {"replacements": repl})
+            else:
+                print("[CACHE] repl exists, skip")
+
+        return
+
+    if args.cmd == "step1_base" and args.cache_dir:
+        cache_root = Path(args.cache_dir)
+        fp = video_fingerprint(args.video)
+        paths = cache_paths(cache_root, fp)
+        lock = FileLock(paths["base"].parent / ".lock")
+        with lock:
+            if paths["base"].exists():
+                print("[CACHE] base exists, skip model load")
+                ensure_parent(Path(args.out_base))
+                write_text(args.out_base, read_text(paths["base"]))
+                return
+
+    if args.cmd == "step23":
+        cache_root = Path(args.cache_dir) if args.cache_dir else None
+        cache_paths_map = None
+        bracket_path_cached = None
+        repl_data_cached = None
+        if cache_root and args.video:
+            fp = video_fingerprint(args.video)
+            cache_paths_map = cache_paths(cache_root, fp)
+            if cache_paths_map["bracket"].exists():
+                bracket_path_cached = cache_paths_map["bracket"]
+            if args.repl_json_in:
+                repl_data_cached = read_json(args.repl_json_in).get("replacements", {})
+            elif cache_paths_map["repl"].exists():
+                repl_data_cached = read_json(cache_paths_map["repl"]).get("replacements", {})
+        if bracket_path_cached is not None and repl_data_cached is not None:
+            print("[INFO] step23: cache hit, no model load")
+            bracket_prompt = read_text(str(bracket_path_cached))
+            apply_start = time.perf_counter()
+            final = apply_random_replacements(
+                bracket_prompt,
+                repl_data_cached,
+                seed=args.seed if args.seed is not None else random.SystemRandom().randrange(2**32),
+                min_terms=args.min_replace_terms,
+                max_terms=args.max_replace_terms,
+            )
+            apply_duration = time.perf_counter() - apply_start
+            ensure_parent(Path(args.out_final))
+            write_text(args.out_final, final)
+            if args.out_bracket:
+                write_text(args.out_bracket, bracket_prompt)
+            if args.out_repl_json:
+                write_json(args.out_repl_json, {"replacements": repl_data_cached})
+            log_time("MODEL_LOAD_TIME", 0.0)
+            log_time("GENERATE_TIME_STEP2", 0.0)
+            log_time("GENERATE_TIME_STEP3", 0.0)
+            log_time("APPLY_TIME", apply_duration)
+            return
+    # Commands below need model (step1/2/3/23)
+    model, processor, load_time = load_model_and_processor(args.model_type, args.size, args.variant)
+    log_time("MODEL_LOAD_TIME", load_time)
 
     if args.cmd == "step1_base":
-        base = step1_generate_base(model, processor, args.video, args.fps)
-        write_text(args.out, base)
-        print("[INFO] Wrote:", args.out)
+        cache_root = Path(args.cache_dir) if args.cache_dir else None
+        out_base = Path(args.out_base)
+        if cache_root:
+            fp = video_fingerprint(args.video)
+            paths = cache_paths(cache_root, fp)
+            lock = FileLock(paths["base"].parent / ".lock")
+            with lock:
+                if paths["base"].exists():
+                    print("[CACHE] base exists, skip generation")
+                    ensure_parent(out_base)
+                    write_text(str(out_base), read_text(paths["base"]))
+                    return
+                out_base = paths["base"]
+                start = time.perf_counter()
+                base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+                log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+                print(f"[TOKENS] STEP1={gen_tokens}")
+                write_text(str(out_base), base)
+        else:
+            start = time.perf_counter()
+            base, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+            log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+            print(f"[TOKENS] STEP1={gen_tokens}")
+            write_text(str(out_base), base)
+        print("[INFO] Wrote:", out_base)
         return
 
     if args.cmd == "step2_bracket":
         base = read_text(args.base_in)
-        bracketed = step2_bracket_base(model, processor, base)
-        write_text(args.out, bracketed)
-        print("[INFO] Wrote:", args.out)
+        max_new = dynamic_max_new_tokens(base, processor)
+        start = time.perf_counter()
+        bracketed, gen_tokens = step2_bracket_base(model, processor, base, max_new)
+        log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+        print(f"[TOKENS] STEP2={gen_tokens}")
+        write_text(args.out_bracket, bracketed)
+        print("[INFO] Wrote:", args.out_bracket)
         return
 
     if args.cmd == "step3_replacements":
         bracketed = read_text(args.bracket_in)
-        repl = step3_generate_replacements_json(model, processor, bracketed)
-        write_json(args.out_json, {"replacements": repl})
-        print("[INFO] Wrote:", args.out_json)
+        start = time.perf_counter()
+        repl, gen_tokens = step3_generate_replacements_json(model, processor, bracketed, args.num_alts)
+        log_time("GENERATE_TIME_STEP3", time.perf_counter() - start)
+        print(f"[TOKENS] STEP3={gen_tokens}")
+        write_json(args.out_repl_json, {"replacements": repl})
+        print("[INFO] Wrote:", args.out_repl_json)
         return
 
-    if args.cmd == "all":
-        if args.seed is None:
-            args.seed = random.randrange(2**32)
+    if args.cmd == "step23":
+        seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**32)
+        cache_root = Path(args.cache_dir) if args.cache_dir else None
+        bracket_path_out = Path(args.out_bracket) if args.out_bracket else None
+        repl_path_out = Path(args.out_repl_json) if args.out_repl_json else None
 
-        base = step1_generate_base(model, processor, args.video, args.fps)
-        write_text(args.out_base, base)
+        base_path = Path(args.base_in)
+        cache_paths_map: Optional[Dict[str, Path]] = None
+        lock: Optional[FileLock] = None
 
-        bracketed = step2_bracket_base(model, processor, base)
-        write_text(args.out_bracket, bracketed)
+        if cache_root and args.video:
+            fp = video_fingerprint(args.video)
+            cache_paths_map = cache_paths(cache_root, fp)
+            if cache_paths_map["base"].exists():
+                base_path = cache_paths_map["base"]
+            lock = FileLock(cache_paths_map["base"].parent / ".lock")
 
-        repl = step3_generate_replacements_json(model, processor, bracketed)
-        write_json(args.out_repl_json, {"replacements": repl})
+        base_prompt = read_text(str(base_path))
+        max_new = dynamic_max_new_tokens(base_prompt, processor)
 
+        bracket_path = cache_paths_map["bracket"] if cache_paths_map else bracket_path_out
+        repl_path = cache_paths_map["repl"] if cache_paths_map else None
+
+        if lock:
+            lock.__enter__()
+        try:
+            if cache_paths_map and not base_path.exists():
+                start = time.perf_counter()
+                base_prompt, gen_tokens = step1_generate_base(model, processor, args.video, args.fps)
+                log_time("GENERATE_TIME_STEP1", time.perf_counter() - start)
+                print(f"[TOKENS] STEP1={gen_tokens}")
+                ensure_parent(base_path)
+                write_text(str(base_path), base_prompt)
+            else:
+                base_prompt = base_prompt
+
+            need_step2 = not (bracket_path and bracket_path.exists())
+            need_step3 = (args.repl_json_in is None) and not (repl_path and repl_path.exists())
+
+            start = time.perf_counter()
+            if need_step2:
+                bracket_prompt, gen_tokens = step2_bracket_base(model, processor, base_prompt, max_new)
+                log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+                print(f"[TOKENS] STEP2={gen_tokens}")
+                target_path = bracket_path_out or bracket_path or Path(args.out_final).with_suffix(".bracket.txt")
+                ensure_parent(target_path)
+                write_text(str(target_path), bracket_prompt)
+                bracket_path = target_path
+            else:
+                bracket_prompt = read_text(str(bracket_path))
+                log_time("GENERATE_TIME_STEP2", time.perf_counter() - start)
+
+            if args.repl_json_in:
+                repl_data = read_json(args.repl_json_in).get("replacements", {})
+            elif repl_path and repl_path.exists():
+                repl_data = read_json(str(repl_path)).get("replacements", {})
+                log_time("GENERATE_TIME_STEP3", 0.0)
+            else:
+                step3_start = time.perf_counter()
+                repl_data, gen_tokens = step3_generate_replacements_json(model, processor, bracket_prompt, args.num_alts)
+                log_time("GENERATE_TIME_STEP3", time.perf_counter() - step3_start)
+                print(f"[TOKENS] STEP3={gen_tokens}")
+                target_repl = repl_path_out or repl_path or Path(args.out_final).with_suffix(".repl.json")
+                ensure_parent(target_repl)
+                write_json(str(target_repl), {"replacements": repl_data})
+                repl_path = target_repl
+        finally:
+            if lock:
+                lock.__exit__(None, None, None)
+
+        apply_start = time.perf_counter()
         final = apply_random_replacements(
-            bracketed,
-            repl,
-            seed=args.seed,
+            bracket_prompt,
+            repl_data,
+            seed=seed,
             min_terms=args.min_replace_terms,
             max_terms=args.max_replace_terms,
         )
+        log_time("APPLY_TIME", time.perf_counter() - apply_start)
+        ensure_parent(Path(args.out_final))
         write_text(args.out_final, final)
 
-        print("[INFO] Wrote:", args.out_base, args.out_bracket, args.out_repl_json, args.out_final)
+        if bracket_path_out and bracket_path_out != bracket_path:
+            write_text(str(bracket_path_out), bracket_prompt)
+        if repl_path_out and repl_path_out != repl_path:
+            write_json(str(repl_path_out), {"replacements": repl_data})
+
+        print("[INFO] Wrote:", args.out_final)
         return
 
 
