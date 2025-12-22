@@ -45,7 +45,7 @@ class TransferConfig:
 
 @dataclass(frozen=True)
 class CacheConfig:
-    """Control cache strategy (currently only depth is cached)."""
+    """Cache strategy (depth control + base prompt)."""
     enable: bool = True
     force_regen: bool = False
     fingerprint_mode: str = "stat"  # path | stat | md5
