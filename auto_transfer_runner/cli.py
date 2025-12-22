@@ -106,6 +106,8 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
     """One GPU == one worker process. Each worker runs Step2->Step5 for jobs it pulls."""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    # Also update the process environment so console logs include the GPU tag.
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
 
     while True:
         item = q.get()
