@@ -64,10 +64,13 @@ python scripts/run_batch.py \
 - `logs/`：每个视频一个日志文件（追加写入）
 
 ## “视频指纹”与缓存
-- prompt 基础描述缓存：`prompt_cache/<fingerprint>/base.txt`，命中后跳过 Step1；Step2/Step3 的 bracket/replacements 为临时文件，生成最终 prompt 后立即删除。
+- prompt 三层缓存（一次算，多次复用）：
+  - Step1：`prompt_cache/<fingerprint>/base.txt`，键 = video_fingerprint（路径+size+mtime 为默认）。
+  - Step2：`prompt_cache_bracket/<base_hash>.txt`，键 = base.txt 的 md5；与视频无关，只看 base 文本。
+  - Step3：`prompt_cache_replacements/<bracket_hash>.json`，键 = bracket.txt 的 md5；与具体括号标注文本绑定。
+- Step2+3 在同一进程里跑新的 `step23` 子命令，命中后直接复用缓存，避免模型重复加载；只有 Step3_apply（无模型）会在换肤时再次执行。
 - depth 缓存目录按 fingerprint 划分：`control_cache/depth/<fingerprint>/`
-- fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快
-- 如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
+- fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
 
 ## 扩展接口（edge/blur/seg/combo）
 在 `auto_transfer_runner/steps/control.py` 中补充对应命令即可；调度、命名、并行、日志与缓存框架保持不变。
