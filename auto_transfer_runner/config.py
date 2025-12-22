@@ -5,6 +5,17 @@ from pathlib import Path
 from typing import List
 
 
+# Repository root (used for defaults)
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Default paths (kept consistent with original CLI defaults)
+DEFAULT_WORK_DIR = Path("/mnt/data/ganrunhe/auto_transfer")
+DEFAULT_AUTOPROMPT_ROOT = REPO_ROOT
+DEFAULT_DEPTH_ROOT = Path("/mnt/data/ganrunhe/Video-Depth-Anything")
+DEFAULT_TRANSFER_ROOT = Path("/mnt/data/ganrunhe/cosmos-transfer2.5")
+DEFAULT_HF_CACHE = Path("/mnt/data/ganrunhe/hf_cache")
+
+
 @dataclass(frozen=True)
 class RepoPaths:
     """All repo / working directories used by the pipeline."""
@@ -84,3 +95,12 @@ class GlobalConfig:
     cache: CacheConfig
     cleanup: CleanupConfig
     run: RunConfig
+
+
+# Default config objects (single source of truth for CLI defaults)
+PROMPT_DEFAULTS = PromptConfig()
+DEPTH_DEFAULTS = DepthConfig()
+TRANSFER_DEFAULTS = TransferConfig()
+CACHE_DEFAULTS = CacheConfig()
+CLEANUP_DEFAULTS = CleanupConfig()
+RUN_DEFAULTS = RunConfig(control_type="depth", gpus=None, shuffle=False, num_videos=0)

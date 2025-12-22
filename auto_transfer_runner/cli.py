@@ -9,6 +9,15 @@ from pathlib import Path
 from typing import List
 
 from .config import (
+    DEFAULT_AUTOPROMPT_ROOT,
+    DEFAULT_DEPTH_ROOT,
+    DEFAULT_HF_CACHE,
+    DEFAULT_TRANSFER_ROOT,
+    DEFAULT_WORK_DIR,
+    CACHE_DEFAULTS,
+    DEPTH_DEFAULTS,
+    PROMPT_DEFAULTS,
+    TRANSFER_DEFAULTS,
     RepoPaths,
     PromptConfig,
     DepthConfig,
@@ -21,8 +30,6 @@ from .config import (
 from .pipeline import Job, run_job
 from .utils.hashing import short_hash
 from .utils.logging_utils import format_console_line
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def now_tag() -> str:
@@ -158,26 +165,25 @@ def main(argv: List[str] | None = None) -> None:
                     help="Repeat each input video K times to generate K different outputs (default: 1)")
 
     # Paths (all configurable via CLI)
-    ap.add_argument("--work_dir", type=str, default="/mnt/data/ganrunhe/auto_transfer", help="Work/output directory")
-    ap.add_argument("--autoprompt_root", type=str, default=str(REPO_ROOT), help="AutoPrompt repo path")
-    ap.add_argument("--depth_root", type=str, default="/mnt/data/ganrunhe/Video-Depth-Anything", help="Video-Depth-Anything repo path")
-    # Updated default as requested
-    ap.add_argument("--transfer_root", type=str, default="/mnt/data/ganrunhe/cosmos-transfer2.5", help="Cosmos-Transfer2.5 repo path (contains .venv/)")
-    ap.add_argument("--hf_cache", type=str, default="/mnt/data/ganrunhe/hf_cache", help="HuggingFace cache root")
+    ap.add_argument("--work_dir", type=str, default=str(DEFAULT_WORK_DIR), help="Work/output directory")
+    ap.add_argument("--autoprompt_root", type=str, default=str(DEFAULT_AUTOPROMPT_ROOT), help="AutoPrompt repo path")
+    ap.add_argument("--depth_root", type=str, default=str(DEFAULT_DEPTH_ROOT), help="Video-Depth-Anything repo path")
+    ap.add_argument("--transfer_root", type=str, default=str(DEFAULT_TRANSFER_ROOT), help="Cosmos-Transfer2.5 repo path (contains .venv/)")
+    ap.add_argument("--hf_cache", type=str, default=str(DEFAULT_HF_CACHE), help="HuggingFace cache root")
 
     # Control type (depth implemented; others reserved)
     ap.add_argument("--control_type", type=str, default="depth", choices=["depth", "edge", "blur", "seg", "combo"],
                     help="Control type; currently only depth is implemented")
 
     # Step2 (prompt)
-    ap.add_argument("--qwen_env", type=str, default="qwen3vl", help="Conda env for Step2 (AutoPrompt)")
-    ap.add_argument("--prompt_fps", type=float, default=4.0, help="FPS for robot_video_to_prompt.py")
-    ap.add_argument("--prompt_size", type=str, default="7B", help="Model size argument passed to robot_video_to_prompt.py")
-    ap.add_argument("--prompt_variant", type=str, default="instruct", help="Variant argument passed to robot_video_to_prompt.py")
+    ap.add_argument("--qwen_env", type=str, default=PROMPT_DEFAULTS.conda_env, help="Conda env for Step2 (AutoPrompt)")
+    ap.add_argument("--prompt_fps", type=float, default=PROMPT_DEFAULTS.fps, help="FPS for robot_video_to_prompt.py")
+    ap.add_argument("--prompt_size", type=str, default=PROMPT_DEFAULTS.size, help="Model size argument passed to robot_video_to_prompt.py")
+    ap.add_argument("--prompt_variant", type=str, default=PROMPT_DEFAULTS.variant, help="Variant argument passed to robot_video_to_prompt.py")
     ap.add_argument(
         "--prompt_model_type",
         type=str,
-        default="Qwen2.5",
+        default=PROMPT_DEFAULTS.model_type,
         choices=["Qwen3", "Qwen2.5"],
         help="Model family for robot_video_to_prompt.py (Qwen3 or Qwen2.5)",
     )
@@ -185,34 +191,34 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument(
         "--min_terms",
         type=int,
-        default=1,
+        default=PROMPT_DEFAULTS.min_replace_terms,
         help="Minimum number of variable terms to replace in the prompt (default: 1)",
     )
     ap.add_argument(
         "--max_terms",
         type=int,
-        default=3,
+        default=PROMPT_DEFAULTS.max_replace_terms,
         help="Maximum number of variable terms to replace in the prompt (default: 3)",
     )
 
     # Step3 (depth)
-    ap.add_argument("--depth_env", type=str, default="depthanything", help="Conda env for Step3 (Depth Anything)")
-    ap.add_argument("--depth_encoder", type=str, default="vitb", help="Encoder for depth model (e.g., vitb)")
+    ap.add_argument("--depth_env", type=str, default=DEPTH_DEFAULTS.conda_env, help="Conda env for Step3 (Depth Anything)")
+    ap.add_argument("--depth_encoder", type=str, default=DEPTH_DEFAULTS.encoder, help="Encoder for depth model (e.g., vitb)")
     ap.add_argument("--no_depth_grayscale", action="store_true", help="Disable --grayscale for depth generation")
 
     # Step4/5 parameters
-    ap.add_argument("--guidance", type=float, default=3.0, help="guidance value in json spec")
-    ap.add_argument("--num_steps", type=int, default=35, help="num_steps in json spec (default: 35)")
-    ap.add_argument("--control_weight", type=float, default=1.0, help="control_weight in json spec")
+    ap.add_argument("--guidance", type=float, default=TRANSFER_DEFAULTS.guidance, help="guidance value in json spec")
+    ap.add_argument("--num_steps", type=int, default=TRANSFER_DEFAULTS.num_steps, help="num_steps in json spec (default: 35)")
+    ap.add_argument("--control_weight", type=float, default=TRANSFER_DEFAULTS.control_weight, help="control_weight in json spec")
     ap.add_argument("--force_infer", action="store_true", help="Force inference even if output directory is not empty")
 
     # Depth cache
     ap.add_argument("--no_cache_control", action="store_true", help="Disable depth control cache (default: enabled)")
     ap.add_argument("--force_regen_control", action="store_true", help="Force regenerate depth control (ignore cache)")
-    ap.add_argument("--fingerprint_mode", type=str, default="stat", choices=["path", "stat", "md5"],
+    ap.add_argument("--fingerprint_mode", type=str, default=CACHE_DEFAULTS.fingerprint_mode, choices=["path", "stat", "md5"],
                     help="Fingerprint mode for cache key: stat (fast), md5 (strong), path (weak)")
-    ap.add_argument("--lock_timeout_sec", type=int, default=6 * 3600, help="Lock wait timeout for cache generation")
-    ap.add_argument("--stale_lock_sec", type=int, default=3 * 3600, help="Treat lock as stale after this many seconds")
+    ap.add_argument("--lock_timeout_sec", type=int, default=CACHE_DEFAULTS.lock_timeout_sec, help="Lock wait timeout for cache generation")
+    ap.add_argument("--stale_lock_sec", type=int, default=CACHE_DEFAULTS.stale_lock_sec, help="Treat lock as stale after this many seconds")
 
     # Cleanup intermediates after successful jobs
     ap.add_argument("--no_cleanup", action="store_true",
