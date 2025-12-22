@@ -28,6 +28,7 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - Begin with a brief overview of the setting, as if documenting a laboratory demonstration.
 # - Describe static background elements first from an overhead or observer viewpoint.
 # - Describe each static object in a separate, standalone sentence.
+# - Constrain each sentence to a SINGLE texture/material/finish descriptor; if multiple objects have textures, split them into separate sentences to keep one texture description per sentence.
 # - Identify the robot arm(s), including materials, colors, and their positions relative to the scene.
 # - Identify any container and clearly state its initial state (empty or occupied).
 #
