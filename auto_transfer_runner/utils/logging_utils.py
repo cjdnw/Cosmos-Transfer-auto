@@ -13,10 +13,18 @@ def _current_timestamp() -> str:
     return dt.datetime.now(SHANGHAI_TZ).isoformat(timespec="seconds")
 
 
+def _gpu_prefix() -> str:
+    """Return GPU tag based on CUDA_VISIBLE_DEVICES, empty if unset."""
+    cuda = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+    if not cuda:
+        return ""
+    return f"[GPU{cuda}] "
+
+
 def format_console_line(message: str) -> str:
-    """Prefix a message with the Asia/Shanghai timestamp."""
+    """Prefix a message with the Asia/Shanghai timestamp and GPU tag."""
     ts = _current_timestamp()
-    return f"[{ts}] {message}"
+    return f"[{ts}]{_gpu_prefix()}{message}"
 
 
 def console_enabled() -> bool:

@@ -22,6 +22,8 @@ from .pipeline import Job, run_job
 from .utils.hashing import short_hash
 from .utils.logging_utils import format_console_line
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 def now_tag() -> str:
     return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -153,7 +155,7 @@ def main(argv: List[str] | None = None) -> None:
 
     # Paths (all configurable via CLI)
     ap.add_argument("--work_dir", type=str, default="/mnt/data/ganrunhe/auto_transfer", help="Work/output directory")
-    ap.add_argument("--autoprompt_root", type=str, default="/mnt/data/ganrunhe/AutoPrompt", help="AutoPrompt repo path")
+    ap.add_argument("--autoprompt_root", type=str, default=str(REPO_ROOT), help="AutoPrompt repo path")
     ap.add_argument("--depth_root", type=str, default="/mnt/data/ganrunhe/Video-Depth-Anything", help="Video-Depth-Anything repo path")
     # Updated default as requested
     ap.add_argument("--transfer_root", type=str, default="/mnt/data/ganrunhe/cosmos-transfer2.5", help="Cosmos-Transfer2.5 repo path (contains .venv/)")
