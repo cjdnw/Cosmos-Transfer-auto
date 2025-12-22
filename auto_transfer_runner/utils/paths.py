@@ -10,6 +10,8 @@ from .text import sanitize_name
 class PathBundle:
     """一个 job 对应的所有输出路径（prompt/json/output/log）。"""
     prompt_path: Path
+    prompt_bracket_path: Path
+    prompt_replacements_path: Path
     control_dir: Path
     json_path: Path
     output_dir: Path
@@ -28,7 +30,9 @@ def make_job_paths(work_dir: Path, video_path: Path, job_id: str, control_type: 
     base = f"{stem}__{job_id}"
 
     return PathBundle(
-        prompt_path=prompt_dir / f"{base}__prompt_3step.txt",
+        prompt_path=prompt_dir / f"{base}__prompt.txt",
+        prompt_bracket_path=prompt_dir / f"{base}__prompt_bracket.txt",
+        prompt_replacements_path=prompt_dir / f"{base}__prompt_replacements.json",
         control_dir=control_dir / base,  # 非缓存控制类型预留
         json_path=json_dir / f"{base}__{control_type}.json",
         output_dir=output_root / f"{base}__{control_type}",
