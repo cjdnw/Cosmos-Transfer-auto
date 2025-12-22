@@ -131,8 +131,9 @@ def apply_random_replacements(
     if not terms:
         return bracketed_prompt.replace("【", "").replace("】", "")
 
-    k = rng.randint(min_terms, max_terms)
-    k = max(0, min(k, len(terms)))
+    max_allowed = min(max_terms, len(terms))
+    min_allowed = min(min_terms, max_allowed)
+    k = rng.randint(min_allowed, max_allowed) if max_allowed > 0 else 0
     selected = set(rng.sample(terms, k)) if k > 0 else set()
 
     def repl(match: re.Match) -> str:
