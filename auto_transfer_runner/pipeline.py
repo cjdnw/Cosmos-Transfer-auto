@@ -82,6 +82,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 lock_timeout_sec=cfg.cache.lock_timeout_sec,
                 stale_lock_sec=cfg.cache.stale_lock_sec,
                 seed=int(short_hash(job.job_id, 8), 16),
+                min_replace_terms=cfg.prompt.min_replace_terms,
+                max_replace_terms=cfg.prompt.max_replace_terms,
             ),
         )
 
