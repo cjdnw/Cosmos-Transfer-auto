@@ -161,6 +161,30 @@ def dynamic_max_new_tokens(base_prompt: str, processor: Any) -> int:
     return min(512, approx_tokens + 64)
 
 
+def dynamic_max_new_tokens(base_prompt: str, processor: Any) -> int:
+    if processor and getattr(processor, "tokenizer", None):
+        try:
+            token_len = len(processor.tokenizer.encode(base_prompt))
+            return min(512, token_len + 64)
+        except Exception:
+            pass
+    # Fallback based on text length
+    approx_tokens = max(1, len(base_prompt.split()))
+    return min(512, approx_tokens + 64)
+
+
+def dynamic_max_new_tokens(base_prompt: str, processor: Any) -> int:
+    if processor and getattr(processor, "tokenizer", None):
+        try:
+            token_len = len(processor.tokenizer.encode(base_prompt))
+            return min(512, token_len + 64)
+        except Exception:
+            pass
+    # Fallback based on text length
+    approx_tokens = max(1, len(base_prompt.split()))
+    return min(512, approx_tokens + 64)
+
+
 @torch.no_grad()
 def run_generation(model, processor, messages, max_new_tokens: int, do_sample: bool, temperature: float, top_p: float) -> Tuple[str, int]:
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)

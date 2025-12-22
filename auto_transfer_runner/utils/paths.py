@@ -10,6 +10,8 @@ from .text import sanitize_name
 class PathBundle:
     """一个 job 对应的所有输出路径（prompt/json/output/log）。"""
     prompt_path: Path
+    prompt_bracket_path: Path
+    prompt_replacements_path: Path
     control_dir: Path
     json_path: Path
     output_dir: Path
