@@ -15,6 +15,7 @@ from .utils.paths import make_job_paths
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates
+import secrets
 
 
 T = TypeVar("T")
@@ -63,6 +64,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             lambda: generate_prompt(
                 video_path=job.video_path,
                 out_prompt=paths.prompt_path,
+                work_dir=repos.work_dir,
                 autoprompt_root=repos.autoprompt_root,
                 conda_env=cfg.prompt.conda_env,
                 fps=cfg.prompt.fps,
@@ -72,6 +74,13 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 env=env,
                 log_path=paths.log_path,
                 reuse_if_exists=cfg.prompt.reuse_if_exists,
+                seed=secrets.randbelow(2**32),
+                num_alts=cfg.prompt.num_alts,
+                min_replace_terms=cfg.prompt.min_replace_terms,
+                max_replace_terms=cfg.prompt.max_replace_terms,
+                fingerprint_mode=cfg.cache.fingerprint_mode,
+                lock_timeout_sec=cfg.cache.lock_timeout_sec,
+                stale_lock_sec=cfg.cache.stale_lock_sec,
             ),
         )
 
@@ -160,6 +169,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "CLEANUP",
                 lambda: cleanup_job_intermediates(
                     prompt_path=paths.prompt_path,
+                    prompt_intermediate_paths=[],
                     json_path=paths.json_path,
                     non_cached_control_dir=paths.control_dir,
                     log_path=paths.log_path,

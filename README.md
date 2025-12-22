@@ -56,6 +56,7 @@ python scripts/run_batch.py \
 
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
+- `prompt_cache/`：按视频指纹缓存的 Step1 base prompt（跨任务复用）
 - `control_cache/`：depth 控制信号缓存（跨 job 复用）
 - `control/`：非缓存控制类型（预留，未来 edge/seg/... 可用）
 - `json/`：每个视频独立的 json spec
@@ -63,6 +64,7 @@ python scripts/run_batch.py \
 - `logs/`：每个视频一个日志文件（追加写入）
 
 ## “视频指纹”与缓存
+- prompt 基础描述缓存：`prompt_cache/<fingerprint>/base.txt`，命中后跳过 Step1；Step2/Step3 的 bracket/replacements 为临时文件，生成最终 prompt 后立即删除。指纹使用视频内容的 `sha256`（前 24 位）。
 - depth 缓存目录按 fingerprint 划分：`control_cache/depth/<fingerprint>/`
 - fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快
 - 如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
@@ -80,6 +82,7 @@ python scripts/run_batch.py --help
 ```bash
 python scripts/run_batch.py ... --console
 ```
+说明：控制台行现在会带上 GPU 标签（例如 `[GPU0]`），方便分卡观察。
 
 ## 每个视频重复生成 K 次（生成 K 个不同输出）
 ```bash
@@ -87,6 +90,8 @@ python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
   --gpus 0,1,2,3 \
   --control_type depth \
+  --prompt_min_replace_terms 1 \
+  --prompt_max_replace_terms 3 \
   --variants_per_video 5 \
   --console
 ```
@@ -109,6 +114,15 @@ python scripts/run_batch.py \
 ```bash
 python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
 ```
+
+## AutoPrompt 默认路径
+默认 `--autoprompt_root` 指向本仓库根目录（包含 `robot_video_to_prompt.py`），无需额外克隆独立的 AutoPrompt 仓库。
+
+### AutoPrompt CLI（单独使用）
+- `step1_base`：生成 base prompt，默认缓存到 `prompt_cache/<fingerprint>/base.txt`
+- `step23`：一次运行 bracket + replacements + apply，支持 `--cache_dir`（命中即不再加载模型）与 `--num_alts/--min_replace_terms/--max_replace_terms`
+- `cache_build`：为视频预构建 base/bracket/repl 缓存
+- `skin_batch`：纯缓存换肤，不加载模型，针对不同 `seed` 批量生成 final prompt
 
 ## 成功生成后的自动清理
 默认行为：**每个任务成功完成推理后**，自动清理中间文件：
@@ -136,5 +150,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-23：重构 `robot_video_to_prompt.py` 为多子命令 CLI（step1/step2/step3/step23/cache_build/skin_batch），引入 sha256 指纹缓存、可配置替换候选数（`--prompt_num_alts`）以及换肤时仅替换 1–3 个 descriptor；批量换肤场景支持纯缓存无模型路径。
+- 2025-12-22：Prompt 生成流程适配拆分版 `robot_video_to_prompt.py`（step1~step3），新增基于视频指纹的 base prompt 缓存（`prompt_cache/`），默认使用本仓库内的脚本路径；控制台打印增加 GPU 标签。
 - 2025-12-22：为终端输出统一添加东八区时间戳，并在 Step2~Step5（含清理）及整条流水线上记录耗时，便于观测性能。
 - 2025-12-21：适配新版 `robot_video_to_prompt.py`（支持 Qwen3/Qwen2.5 的 `--model_type` 参数），新增命令行参数 `--prompt_model_type`，默认 conda 环境保持 `qwen25vl`，可选切换为 `qwen3vl`。描述改为工程化表述，匹配顶会论文风格。
