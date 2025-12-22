@@ -61,6 +61,8 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         variant=args.prompt_variant,
         model_type=args.prompt_model_type,
         reuse_if_exists=args.reuse_prompt,
+        min_replace_terms=args.min_terms,
+        max_replace_terms=args.max_terms,
     )
 
     depth = DepthConfig(
@@ -180,6 +182,18 @@ def main(argv: List[str] | None = None) -> None:
         help="Model family for robot_video_to_prompt.py (Qwen3 or Qwen2.5)",
     )
     ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
+    ap.add_argument(
+        "--min_terms",
+        type=int,
+        default=1,
+        help="Minimum number of variable terms to replace in the prompt (default: 1)",
+    )
+    ap.add_argument(
+        "--max_terms",
+        type=int,
+        default=3,
+        help="Maximum number of variable terms to replace in the prompt (default: 3)",
+    )
 
     # Step3 (depth)
     ap.add_argument("--depth_env", type=str, default="depthanything", help="Conda env for Step3 (Depth Anything)")
@@ -216,6 +230,10 @@ def main(argv: List[str] | None = None) -> None:
 
     if args.variants_per_video < 1:
         raise ValueError("--variants_per_video must be >= 1")
+    if args.min_terms < 1:
+        raise ValueError("--min_terms must be >= 1")
+    if args.max_terms < args.min_terms:
+        raise ValueError("--max_terms must be >= --min_terms")
 
     cfg = build_config(args)
 
