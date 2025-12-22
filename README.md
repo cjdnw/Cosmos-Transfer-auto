@@ -120,6 +120,15 @@ python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
 ## AutoPrompt 默认路径
 默认 `--autoprompt_root` 指向本仓库根目录（包含 `robot_video_to_prompt.py`），无需额外克隆独立的 AutoPrompt 仓库。
 
+## 路径与环境默认值（config.py）
+所有内置的路径与环境默认值统一集中在 `auto_transfer_runner/config.py`，CLI 会直接读取这些常量：
+- 路径：`DEFAULT_WORK_DIR`、`DEFAULT_AUTOPROMPT_ROOT`、`DEFAULT_DEPTH_ROOT`、`DEFAULT_TRANSFER_ROOT`、`DEFAULT_HF_CACHE`
+- 环境/模型参数：`PROMPT_DEFAULTS`（如 `conda_env`/`fps`/`model_type` 等）、`DEPTH_DEFAULTS`、`TRANSFER_DEFAULTS`、`CACHE_DEFAULTS`
+
+如需修改默认路径或环境名称，有两种方式：
+1. 直接编辑 `config.py` 中上述常量/默认对象，保存后即成为新的全局默认值。
+2. 运行命令时通过 CLI 参数覆盖（例如 `--work_dir`、`--autoprompt_root`、`--depth_root`、`--transfer_root`、`--hf_cache`、`--qwen_env` 等），无需改动源码。
+
 ## 成功生成后的自动清理
 默认行为：**每个任务成功完成推理后**，自动清理中间文件：
 - prompt 文件（`prompt/*.txt`）
@@ -146,6 +155,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-22：将路径与环境默认值集中到 `config.py`（CLI 统一读取），并在 README 增补路径修改指引。
 - 2025-12-22：加强 Step1 base prompt 对颜色/材质描述的确定性约束，特别是容器内部颜色不清晰时要求直接省略，避免生成模糊的“深色”表述。
 - 2025-12-22：新增 Step2+Step3 合并的 `step23` 子命令与三层 prompt 缓存（fingerprint/base_hash/bracket_hash），同一视频/文本多 worker 会被文件锁串行化，仅 Step3_apply 在换肤时毫秒级复用。
 - 2025-12-22：Prompt 生成流程适配拆分版 `robot_video_to_prompt.py`（step1~step3），新增基于视频指纹的 base prompt 缓存（`prompt_cache/`），默认使用本仓库内的脚本路径；控制台打印增加 GPU 标签。
