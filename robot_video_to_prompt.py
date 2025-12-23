@@ -20,6 +20,11 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # factual, neutral in tone, continuous, and focused on clearly describing the scene, setup, and manipulation process.
 # The paragraph should read smoothly rather than like a checklist, while still remaining precise and unambiguous.
 #
+# COLOR SAFETY RULES (strict, apply from the very beginning):
+# - Do NOT use stacked dark intensifiers like "deep black", "deep dark", or "dark black".
+# - Avoid vague or hedged color terms (e.g., "grayish", "dark-colored", "unsure color"); always pick a concrete, plausible color.
+# - Black, dark, and gray are allowed, but keep them concise and unambiguous; when uncertain, choose a specific color (any reasonable choice is acceptable).
+#
 # CRITICAL TEMPORAL CONSTRAINT:
 # - Do not assume the presence of any manipulated object at the beginning unless it is explicitly visible at the start.
 # - If an object appears later in the video, describe its entry as a distinct event before any interaction.
