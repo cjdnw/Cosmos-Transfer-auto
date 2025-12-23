@@ -28,10 +28,8 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - Begin with a brief overview of the setting, as if documenting a laboratory demonstration.
 # - Describe static background elements first from an overhead or observer viewpoint.
 # - Describe each static object in a separate, standalone sentence.
-# - Constrain each sentence to a SINGLE texture/material/finish descriptor; if multiple objects have textures, split them into separate sentences to keep one texture description per sentence.
 # - Identify the robot arm(s), including materials, colors, and their positions relative to the scene.
 # - Identify any container and clearly state its initial state (empty or occupied).
-# - Mention colors/materials ONLY when they are visually certain; avoid vague terms like "dark" or "light" without a specific hue, and omit interior colors if they are not definitively visible.
 #
 # Action description rules:
 # - Use natural temporal phrasing (At the beginning…, As the video progresses…, Then…, Finally…).
@@ -52,7 +50,7 @@ STRICT RULES:
 - DO NOT translate, paraphrase, rewrite, reorder, or delete ANY characters.
 - The output must be IDENTICAL to the input paragraph after removing all 【】.
 - The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
-- If unsure whether a span describes color/material/texture/finish/surface, leave it unbracketed.
+- Only bracket spans that describe COLOR or TEXTURE. If unsure whether a span fits COLOR or TEXTURE, leave it unbracketed.
 
 Example:
 Input:  "a light-colored sofa with an orange cushion"
@@ -63,7 +61,7 @@ PARAGRAPH:
 """
 
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """You are helping create prompt variations.
-For each descriptor in the list below (each is a word or short phrase describing color/material/texture/finish),
+For each descriptor in the list below (each is a word or short phrase describing COLOR or TEXTURE),
 propose 6 alternative descriptors of the SAME TYPE that are plausible in a robotics manipulation scene description.
 
 Rules:
