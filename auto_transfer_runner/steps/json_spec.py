@@ -18,6 +18,7 @@ def _build_base_spec(
         "name": name,
         "prompt_path": str(prompt_path),
         "seed": seed,
+        "negative_prompt": transfer_cfg.negative_prompt,
         "guidance": transfer_cfg.guidance,
         "video_path": str(video_path),
         "image_context_path": transfer_cfg.image_context_path,

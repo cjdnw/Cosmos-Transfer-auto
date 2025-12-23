@@ -69,6 +69,14 @@ class SegConfig:
 class TransferConfig:
     """Step5: Transfer2.5 inference config."""
     seed: int | None = 2025
+    negative_prompt: str = (
+        "extra objects, foreign objects, hallucinated items, object duplication, "
+        "sudden appearance/disappearance, flicker, jitter, wobble, camera shake, "
+        "warped geometry, deformed shapes, texture crawling, inconsistent lighting, "
+        "sudden dark shadows, overly dark basket interior, moving/warping background, "
+        "motion blur, heavy compression artifacts, noise, low resolution, subtitles, "
+        "text, watermark, cartoon, CGI"
+    )
     num_conditional_frames: int = 1
     resolution: str = "720"
     sigma_max: float | None = None
