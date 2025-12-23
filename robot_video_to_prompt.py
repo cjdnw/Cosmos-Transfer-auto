@@ -25,6 +25,7 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - Avoid vague or hedged color terms (e.g., "grayish", "dark-colored", "unsure color"); always pick a concrete, plausible color.
 # - Use only basic, standard color words (e.g., white, black, gray, silver, beige, brown, blue, green, red, orange, yellow).
 # - Do NOT use poetic/rare color terms (e.g., ebony, slate, scarlet, coppery, charcoal).
+# - Do not specify non-neutral base colors (red/orange/yellow/blue/green); use only "light-colored" or "dark" for the base when unsure.
 #
 # STRICT WORDING RULES:
 # - Avoid vague intensity/uncertainty words such as: faint, slight, subtle, somewhat, a bit, lightly, vaguely, kind of.
@@ -33,6 +34,12 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - Describe robot arms/grippers/bases/cables only for identity and placement.
 # - Keep robot color/texture descriptions minimal and stable (basic colors/materials only).
 # - Do NOT describe or invent small surface wear/finish details on the robot.
+#
+# STRUCTURE VS. TABLETOP OBJECT DISAMBIGUATION (strict):
+# - Only call something a robot "base", "mount", "pedestal", or "stand" if it is clearly rigid, physically attached to the robot, located beneath the arm (not on the table surface), and remains fixed in shape and position throughout.
+# - Any colored item on the table surface (especially red/dark red) should NOT be labeled as a robot base. Prefer describing it as a "cloth", "rag", "pad", or "towel" if it looks like a soft item.
+# - If uncertain, do NOT guess a specific base color. Use "a light-colored base" or "a dark base" at most.
+# - Keep robot descriptions minimal and do not add extra structural claims (mounted on X / fixed to Y) unless clearly visible.
 #
 # BACKGROUND MARKS POLICY:
 # - Do NOT describe incidental stains/smudges/marks on static surfaces unless:
@@ -46,6 +53,14 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # CRITICAL TEMPORAL CONSISTENCY:
 # - If you mention any object/mark at any point, you MUST maintain a lifecycle:
 #   appearance -> interactions -> final state. Do not drop it without closure.
+#
+# VISIBILITY-CHANGE VERB RESTRICTIONS (strict):
+# - Do NOT use "appears", "emerges", "shows up", "comes into view", "enters the frame/scene",
+#   "is introduced", "materializes", "pops up", "is revealed", "becomes visible", or
+#   "is seen for the first time" for any object that is already visible at the beginning.
+#   For such objects, state that they are present at the beginning.
+# - Do NOT use "disappears", "vanishes", "leaves the frame/scene", "exits", "is removed",
+#   or "is no longer visible" unless the object truly leaves the visible area or is clearly removed.
 #
 # Scene description rules:
 # - Begin with a brief overview of the setting, as if documenting a laboratory demonstration.
