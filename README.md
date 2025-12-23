@@ -1,11 +1,11 @@
 # Cosmos-Transfer2.5 全自动批处理工程
 
-面向 Cosmos-Transfer2.5 的批处理流水线，将原本手动执行的 **Step2~Step5** 串成可批量、多卡并行的自动化流程，并针对 **depth 控制信号** 做缓存复用（同一输入视频仅生成一次 depth 控制信号）。
+面向 Cosmos-Transfer2.5 的批处理流水线，将原本手动执行的 **Step2~Step5** 串成可批量、多卡并行的自动化流程，并针对 **depth/seg 控制信号** 做缓存复用（同一输入视频仅生成一次控制信号）。
 
 ## 自动化前的手动流程（现已自动化）
 1. 提供原始 mp4 路径（批量）
 2. 生成随机纹理替换的 prompt（AutoPrompt，支持 Qwen3/Qwen2.5）
-3. 生成控制信号（目前实现 depth；保留 edge/blur/seg/combo 接口）
+3. 生成控制信号（目前实现 depth/seg；保留 edge/blur/combo 接口）
 4. 生成对应的 json spec
 5. 调用 Cosmos-Transfer2.5 推理，输出最终替换版本
 
@@ -13,6 +13,7 @@
 - `conda` 命令可用，且存在环境：
   - `qwen25vl`（默认）：用于 `AutoPrompt/robot_video_to_prompt.py`，支持 `--model_type Qwen3|Qwen2.5`
   - `depthanything`：用于 `Video-Depth-Anything/run.py`
+  - `autoseg`：用于 `AutoSeg-SAM2`（seg 控制信号）
 - 若指定的 `--qwen_env` 不存在，运行时会自动回退到 `qwen25vl` 并在日志中打印警告。
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
@@ -42,7 +43,17 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
-### 例 3：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
+### 例 3：自动生成 seg 控制信号（缓存复用）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type seg \
+  --seg_level large \
+  --seg_detect_stride 10
+```
+
+### 例 4：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -54,7 +65,7 @@ python scripts/run_batch.py \
   --qwen_env qwen3vl
 ```
 
-### 例 4：随机替换改为“全部替换”
+### 例 5：随机替换改为“全部替换”
 默认会在括号标注的描述中随机选择若干个词语进行替换；如需直接替换所有可替换的词，增加：
 ```bash
 python scripts/run_batch.py \
@@ -64,7 +75,7 @@ python scripts/run_batch.py \
   --replace_all_terms
 ```
 
-### 例 5：控制随机替换的上下限
+### 例 6：控制随机替换的上下限
 通过 `--min_terms` 和 `--max_terms` 控制每次随机替换的数量区间（未开启 `--replace_all_terms` 时生效）：
 ```bash
 python scripts/run_batch.py \
@@ -75,7 +86,7 @@ python scripts/run_batch.py \
   --max_terms 5
 ```
 
-### 例 6：调整每个词的替换备选数量（默认 6 个）
+### 例 7：调整每个词的替换备选数量（默认 6 个）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -88,11 +99,78 @@ python scripts/run_batch.py \
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
 - `prompt_cache/`：按视频指纹缓存的 Step1 base prompt（跨任务复用）
-- `control_cache/`：depth 控制信号缓存（跨 job 复用）
-- `control/`：非缓存控制类型（预留，未来 edge/seg/... 可用）
+- `control_cache/`：depth/seg 控制信号缓存（跨 job 复用）
+- `control/`：非缓存控制类型（预留，未来 edge/... 可用）
 - `json/`：每个视频独立的 json spec
 - `output_video/`：Transfer2.5 输出目录
 - `logs/`：每个视频一个日志文件（追加写入）
+
+## Seg 控制信号生成与复用（新增）
+目前工程**已自动集成 seg 控制信号**（`--control_type seg`），复用逻辑与 depth 完全一致：
+- 缓存路径：`control_cache/seg/<fingerprint>/`
+- 默认依赖：`/mnt/data/ganrunhe/AutoSeg-SAM2` + conda env `autoseg`
+- 可通过 CLI 覆盖路径/参数：`--seg_root`、`--seg_env`、`--seg_level`、`--seg_detect_stride`、`--seg_enable_highlight`、`--seg_disable_overlay`、`--seg_overlay_style` 等
+
+### 手动生成 Seg 控制信号
+1. 切换到 AutoSeg-SAM2 工程与环境  
+   - 仓库路径：`/mnt/data/ganrunhe/AutoSeg-SAM2`  
+   - Conda 环境：`autoseg`
+2. 生成逐帧分割掩码（会在 `output_dir/large/final-output/` 下生成 png）：
+   ```bash
+   python auto-mask-batch.py \
+     --video_path <输入视频路径> \
+     --output_dir <临时 cache 目录> \
+     --level large \
+     --use_other_level 0 \
+     --detect_stride 10 \
+     --save_intermediate 0 \
+     --save_npy 0
+   ```
+3. 合成 seg 控制信号 mp4（覆盖高亮/叠加开关按需调整，这里为纯 mask 叠加）：
+   ```bash
+   python visulization.py \
+     --video_path <输入视频路径> \
+     --output_dir <临时 cache 目录> \
+     --level large \
+     --enable_highlight 0 \
+     --enable_overlay 1 \
+     --overlay_style mask
+   ```
+4. 将生成的 mp4 拷贝到缓存目录，供后续复用：  
+   - 目标路径：`/mnt/data/ganrunhe/auto_transfer/control_cache/seg/`  
+   - 拷贝完成后可清空上述临时 `output_dir`
+
+### Seg 对应的 json 片段
+在生成 Cosmos-Transfer2.5 的任务 json 时，加入如下字段（`control_path` 指向上一步缓存好的 mp4，其他字段保持 depth 同样的结构与分 chunk 逻辑）：
+```json
+{
+  "name": "robot_seg",
+  "prompt_path": "<prompt 路径>",
+  "seed": 2025,
+  "guidance": 3,
+  "video_path": "<输入视频路径>",
+  "image_context_path": null,
+  "num_conditional_frames": 1,
+  "resolution": "720",
+  "sigma_max": null,
+  "num_video_frames_per_chunk": 93,
+  "num_steps": 35,
+  "show_control_condition": false,
+  "show_input": false,
+  "keep_input_resolution": true,
+  "edge": null,
+  "depth": null,
+  "vis": null,
+  "seg": {
+    "control_path": "<control_cache/seg 下的 mp4>",
+    "control_weight": 1.0,
+    "mask_path": null,
+    "mask_prompt": null,
+    "control_prompt": null
+  }
+}
+```
+生成后即可将 json 与 prompt 一同传入 Cosmos-Transfer2.5 推理流程。
 
 ## “视频指纹”与缓存
 - prompt 三层缓存（一次算，多次复用）：
@@ -104,8 +182,8 @@ python scripts/run_batch.py \
 - depth 缓存目录按 fingerprint 划分：`control_cache/depth/<fingerprint>/`
 - fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
 
-## 扩展接口（edge/blur/seg/combo）
-在 `auto_transfer_runner/steps/control.py` 中补充对应命令即可；调度、命名、并行、日志与缓存框架保持不变。
+## 扩展接口（edge/blur/combo）
+seg 已实现；如需扩展其他控制信号，在 `auto_transfer_runner/steps/control.py` 中补充对应命令即可；调度、命名、并行、日志与缓存框架保持不变。
 
 ## 查看所有命令行参数
 ```bash
@@ -153,8 +231,8 @@ python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
 
 ## 路径与环境默认值（config.py）
 所有内置的路径与环境默认值统一集中在 `auto_transfer_runner/config.py`，CLI 会直接读取这些常量：
-- 路径：`DEFAULT_WORK_DIR`、`DEFAULT_AUTOPROMPT_ROOT`、`DEFAULT_DEPTH_ROOT`、`DEFAULT_TRANSFER_ROOT`、`DEFAULT_HF_CACHE`
-- 环境/模型参数：`PROMPT_DEFAULTS`（如 `conda_env`/`fps`/`model_type` 等）、`DEPTH_DEFAULTS`、`TRANSFER_DEFAULTS`、`CACHE_DEFAULTS`
+- 路径：`DEFAULT_WORK_DIR`、`DEFAULT_AUTOPROMPT_ROOT`、`DEFAULT_DEPTH_ROOT`、`DEFAULT_SEG_ROOT`、`DEFAULT_TRANSFER_ROOT`、`DEFAULT_HF_CACHE`
+- 环境/模型参数：`PROMPT_DEFAULTS`（如 `conda_env`/`fps`/`model_type` 等）、`DEPTH_DEFAULTS`、`SEG_DEFAULTS`、`TRANSFER_DEFAULTS`、`CACHE_DEFAULTS`
 
 如需修改默认路径或环境名称，有两种方式：
 1. 直接编辑 `config.py` 中上述常量/默认对象，保存后即成为新的全局默认值。
@@ -186,6 +264,8 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-24：新增 seg 控制信号支持，给出 AutoSeg-SAM2 生成命令、缓存落地目录（`control_cache/seg/`）与 json 结构示例，可直接复用至 Cosmos-Transfer2.5。
+  - CLI 现已内置 `--control_type seg` 自动调用 AutoSeg-SAM2、写入 seg json 结构，并按指纹缓存到 `control_cache/seg/`。
 - 2025-12-23：调整 Step1 base prompt 文案为官方演示叙事风格；Step2 括号替换限定为颜色/纹理描述，Step3 只生成颜色或纹理的替换词。
 - 2025-12-23：新增 `--replace_all_terms` 参数，可直接替换所有括号标注的描述（跳过随机抽样逻辑）。
 - 2025-12-23：新增 `--replacements_per_term` 参数，可调整每个括号术语生成的替换候选数量（默认 6），并对缓存进行区分。
