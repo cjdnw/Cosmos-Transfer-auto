@@ -62,13 +62,13 @@ PARAGRAPH:
 
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """You are helping create prompt variations.
 For each descriptor in the list below (each is a word or short phrase describing COLOR or TEXTURE),
-propose 6 alternative descriptors of the SAME TYPE that are plausible in a robotics manipulation scene description.
+propose {num_alternatives} alternative descriptors of the SAME TYPE that are plausible in a robotics manipulation scene description.
 
 Rules:
 - Do NOT repeat the original descriptor.
 - Keep each alternative short (1-5 words).
-- Output STRICT JSON only, exactly in this schema:
-  {{"replacements": {{"<src>": ["alt1","alt2","alt3","alt4","alt5","alt6"], ...}}}}
+- Output STRICT JSON only, exactly in this schema (each list must contain exactly {num_alternatives} items):
+  {{"replacements": {{"<src>": ["alt1", "alt2", ...], ...}}}}
 
 DESCRIPTORS:
 {descriptor_block}
@@ -212,7 +212,12 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
     return run_generation(model, processor, messages, 700, False, 1.0, 1.0)
 
 
-def step3_generate_replacements_json(model, processor, bracketed_prompt: str) -> Dict[str, List[str]]:
+def step3_generate_replacements_json(
+    model,
+    processor,
+    bracketed_prompt: str,
+    alternatives_per_term: int = 6,
+) -> Dict[str, List[str]]:
     terms = extract_bracket_terms(bracketed_prompt)
     if not terms:
         return {}
@@ -220,7 +225,13 @@ def step3_generate_replacements_json(model, processor, bracketed_prompt: str) ->
     block = "\n".join([f"- {t}" for t in terms])
     messages = [{
         "role": "user",
-        "content": [{"type": "text", "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(descriptor_block=block)}],
+        "content": [{
+            "type": "text",
+            "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
+                descriptor_block=block,
+                num_alternatives=alternatives_per_term,
+            ),
+        }],
     }]
 
     raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
@@ -280,12 +291,14 @@ def main():
     p23.add_argument("--base_in", required=True)
     p23.add_argument("--out_bracket", required=True)
     p23.add_argument("--out_repl_json", required=True)
+    p23.add_argument("--replacements_per_term", type=int, default=6)
 
     # step3a
     p3 = sub.add_parser("step3_replacements")
     add_model_args(p3)
     p3.add_argument("--bracket_in", required=True)
     p3.add_argument("--out_json", required=True)
+    p3.add_argument("--replacements_per_term", type=int, default=6)
 
     # step3b apply
     p4 = sub.add_parser("step3_apply")
@@ -306,6 +319,7 @@ def main():
     p5.add_argument("--min_replace_terms", type=int, default=1)
     p5.add_argument("--max_replace_terms", type=int, default=3)
     p5.add_argument("--replace_all_terms", action="store_true", help="Replace all bracketed terms instead of sampling a subset.")
+    p5.add_argument("--replacements_per_term", type=int, default=6)
     p5.add_argument("--out_base", required=True)
     p5.add_argument("--out_bracket", required=True)
     p5.add_argument("--out_repl_json", required=True)
@@ -349,7 +363,12 @@ def main():
         bracketed = step2_bracket_base(model, processor, base)
         write_text(args.out_bracket, bracketed)
 
-        repl = step3_generate_replacements_json(model, processor, bracketed)
+        repl = step3_generate_replacements_json(
+            model,
+            processor,
+            bracketed,
+            alternatives_per_term=args.replacements_per_term,
+        )
         write_json(args.out_repl_json, {"replacements": repl})
 
         print("[INFO] Wrote:", args.out_bracket, args.out_repl_json)
@@ -357,7 +376,12 @@ def main():
 
     if args.cmd == "step3_replacements":
         bracketed = read_text(args.bracket_in)
-        repl = step3_generate_replacements_json(model, processor, bracketed)
+        repl = step3_generate_replacements_json(
+            model,
+            processor,
+            bracketed,
+            alternatives_per_term=args.replacements_per_term,
+        )
         write_json(args.out_json, {"replacements": repl})
         print("[INFO] Wrote:", args.out_json)
         return
@@ -372,7 +396,12 @@ def main():
         bracketed = step2_bracket_base(model, processor, base)
         write_text(args.out_bracket, bracketed)
 
-        repl = step3_generate_replacements_json(model, processor, bracketed)
+        repl = step3_generate_replacements_json(
+            model,
+            processor,
+            bracketed,
+            alternatives_per_term=args.replacements_per_term,
+        )
         write_json(args.out_repl_json, {"replacements": repl})
 
         final = apply_random_replacements(
