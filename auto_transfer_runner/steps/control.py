@@ -180,7 +180,7 @@ def generate_control_seg(
             "python",
             "visulization.py",
             "--video_path",
-            str(video_path),
+            str(frames_dir),
             "--output_dir",
             str(tmp_dir),
             "--level",
