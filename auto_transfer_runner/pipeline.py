@@ -8,7 +8,7 @@ from typing import Callable, Dict, TypeVar
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control
-from .steps.json_spec import write_json_spec_depth
+from .steps.json_spec import write_json_spec_depth, write_json_spec_seg
 from .steps.inference import run_transfer_inference
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import make_job_paths
@@ -91,16 +91,26 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 
         # Step3: control
         control_type = ControlType(cfg.run.control_type)
-        control_vis = _run_with_timing(
+        control_path = _run_with_timing(
             "STEP3 Control",
             lambda: generate_control(
                 control_type=control_type,
                 video_path=job.video_path,
                 work_dir=repos.work_dir,
                 depth_root=repos.depth_root,
+                seg_root=repos.seg_root,
                 depth_conda_env=cfg.depth.conda_env,
+                seg_conda_env=cfg.seg.conda_env,
                 encoder=cfg.depth.encoder,
                 grayscale=cfg.depth.grayscale,
+                seg_level=cfg.seg.level,
+                seg_use_other_level=cfg.seg.use_other_level,
+                seg_detect_stride=cfg.seg.detect_stride,
+                seg_save_intermediate=cfg.seg.save_intermediate,
+                seg_save_npy=cfg.seg.save_npy,
+                seg_enable_highlight=cfg.seg.enable_highlight,
+                seg_enable_overlay=cfg.seg.enable_overlay,
+                seg_overlay_style=cfg.seg.overlay_style,
                 enable_cache=cfg.cache.enable,
                 force_regen=cfg.cache.force_regen,
                 fingerprint_mode=cfg.cache.fingerprint_mode,
@@ -112,8 +122,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             ),
         )
 
-        # Step4: json spec (depth only)
+        # Step4: json spec
         name = f"{sanitize_name(job.video_path.stem)}__{job.job_id}__{cfg.run.control_type}"
+        seed = cfg.transfer.seed if cfg.transfer.seed is not None else int(short_hash(job.job_id, 8), 16)
         if control_type == ControlType.DEPTH:
             _run_with_timing(
                 "STEP4 JSON",
@@ -122,14 +133,26 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     name=name,
                     prompt_path=paths.prompt_path,
                     video_path=job.video_path,
-                    guidance=cfg.transfer.guidance,
-                    num_steps=cfg.transfer.num_steps,
-                    control_vis_path=control_vis,
-                    control_weight=cfg.transfer.control_weight,
+                    seed=seed,
+                    transfer_cfg=cfg.transfer,
+                    control_path=control_path,
+                ),
+            )
+        elif control_type == ControlType.SEG:
+            _run_with_timing(
+                "STEP4 JSON",
+                lambda: write_json_spec_seg(
+                    json_path=paths.json_path,
+                    name=name,
+                    prompt_path=paths.prompt_path,
+                    video_path=job.video_path,
+                    seed=seed,
+                    transfer_cfg=cfg.transfer,
+                    control_path=control_path,
                 ),
             )
         else:
-            raise NotImplementedError("Only depth json spec is implemented for now.")
+            raise NotImplementedError("Only depth/seg json spec are implemented for now.")
 
         append_log(paths.log_path, f"[STEP4] Wrote json: {paths.json_path}")
         console_print(f"[STEP4] json={paths.json_path.name}")
@@ -164,7 +187,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "json_path": str(paths.json_path),
                 "output_dir": str(paths.output_dir),
                 "log_path": str(paths.log_path),
-                "control_vis_path": str(control_vis),
+                "control_vis_path": str(control_path),
             },
         )
 

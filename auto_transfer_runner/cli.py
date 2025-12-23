@@ -11,16 +11,19 @@ from typing import List
 from .config import (
     DEFAULT_AUTOPROMPT_ROOT,
     DEFAULT_DEPTH_ROOT,
+    DEFAULT_SEG_ROOT,
     DEFAULT_HF_CACHE,
     DEFAULT_TRANSFER_ROOT,
     DEFAULT_WORK_DIR,
     CACHE_DEFAULTS,
     DEPTH_DEFAULTS,
+    SEG_DEFAULTS,
     PROMPT_DEFAULTS,
     TRANSFER_DEFAULTS,
     RepoPaths,
     PromptConfig,
     DepthConfig,
+    SegConfig,
     TransferConfig,
     CacheConfig,
     CleanupConfig,
@@ -57,6 +60,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         work_dir=Path(args.work_dir),
         autoprompt_root=Path(args.autoprompt_root),
         depth_root=Path(args.depth_root),
+        seg_root=Path(args.seg_root),
         transfer_root=Path(args.transfer_root),
         hf_cache=Path(args.hf_cache),
     )
@@ -80,7 +84,28 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         grayscale=(not args.no_depth_grayscale),
     )
 
+    seg = SegConfig(
+        conda_env=args.seg_env,
+        level=args.seg_level,
+        use_other_level=args.seg_use_other_level,
+        detect_stride=args.seg_detect_stride,
+        save_intermediate=args.seg_save_intermediate,
+        save_npy=args.seg_save_npy,
+        enable_highlight=args.seg_enable_highlight,
+        enable_overlay=(not args.seg_disable_overlay),
+        overlay_style=args.seg_overlay_style,
+    )
+
     transfer = TransferConfig(
+        seed=args.seed,
+        num_conditional_frames=args.num_conditional_frames,
+        resolution=args.resolution,
+        sigma_max=args.sigma_max,
+        num_video_frames_per_chunk=args.num_video_frames_per_chunk,
+        show_control_condition=args.show_control_condition,
+        show_input=args.show_input,
+        keep_input_resolution=(not args.disable_keep_input_resolution),
+        image_context_path=args.image_context_path,
         guidance=args.guidance,
         num_steps=args.num_steps,
         control_weight=args.control_weight,
@@ -110,7 +135,16 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         num_videos=args.num_videos,
     )
 
-    return GlobalConfig(repos=repos, prompt=prompt, depth=depth, transfer=transfer, cache=cache, cleanup=cleanup, run=run)
+    return GlobalConfig(
+        repos=repos,
+        prompt=prompt,
+        depth=depth,
+        seg=seg,
+        transfer=transfer,
+        cache=cache,
+        cleanup=cleanup,
+        run=run,
+    )
 
 
 def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
@@ -140,7 +174,7 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
 def main(argv: List[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="run_batch.py",
-        description="Cosmos-Transfer2.5 batch automation (multi-GPU, cached depth control).",
+        description="Cosmos-Transfer2.5 batch automation (multi-GPU, cached depth/seg control).",
         epilog=(
             "Examples:\n"
             "  # Batch a whole folder\n"
@@ -170,12 +204,13 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--work_dir", type=str, default=str(DEFAULT_WORK_DIR), help="Work/output directory")
     ap.add_argument("--autoprompt_root", type=str, default=str(DEFAULT_AUTOPROMPT_ROOT), help="AutoPrompt repo path")
     ap.add_argument("--depth_root", type=str, default=str(DEFAULT_DEPTH_ROOT), help="Video-Depth-Anything repo path")
+    ap.add_argument("--seg_root", type=str, default=str(DEFAULT_SEG_ROOT), help="AutoSeg-SAM2 repo path")
     ap.add_argument("--transfer_root", type=str, default=str(DEFAULT_TRANSFER_ROOT), help="Cosmos-Transfer2.5 repo path (contains .venv/)")
     ap.add_argument("--hf_cache", type=str, default=str(DEFAULT_HF_CACHE), help="HuggingFace cache root")
 
     # Control type (depth implemented; others reserved)
     ap.add_argument("--control_type", type=str, default="depth", choices=["depth", "edge", "blur", "seg", "combo"],
-                    help="Control type; currently only depth is implemented")
+                    help="Control type; depth & seg are implemented, others are reserved")
 
     # Step2 (prompt)
     ap.add_argument("--qwen_env", type=str, default=PROMPT_DEFAULTS.conda_env, help="Conda env for Step2 (AutoPrompt)")
@@ -219,7 +254,35 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--depth_encoder", type=str, default=DEPTH_DEFAULTS.encoder, help="Encoder for depth model (e.g., vitb)")
     ap.add_argument("--no_depth_grayscale", action="store_true", help="Disable --grayscale for depth generation")
 
+    # Step3 (seg)
+    ap.add_argument("--seg_env", type=str, default=SEG_DEFAULTS.conda_env, help="Conda env for Step3 (Seg, AutoSeg-SAM2)")
+    ap.add_argument("--seg_level", type=str, default=SEG_DEFAULTS.level, choices=["small", "middle", "large"],
+                    help="Seg level passed to auto-mask-batch.py (small/middle/large)")
+    ap.add_argument("--seg_use_other_level", action="store_true", help="Enable AutoSeg-SAM2 --use_other_level (default: off)")
+    ap.add_argument("--seg_detect_stride", type=int, default=SEG_DEFAULTS.detect_stride, help="Stride for detection in auto-mask-batch.py")
+    ap.add_argument("--seg_save_intermediate", action="store_true", help="Keep intermediate seg outputs (default: off)")
+    ap.add_argument("--seg_save_npy", action="store_true", help="Save npy outputs for seg (default: off)")
+    ap.add_argument("--seg_enable_highlight", action="store_true", help="Enable highlight overlay in seg visualization")
+    ap.add_argument("--seg_disable_overlay", action="store_true", help="Disable overlay in seg visualization (default: overlay on)")
+    ap.add_argument("--seg_overlay_style", type=str, default=SEG_DEFAULTS.overlay_style,
+                    help="Overlay style for seg visualization (passed to visulization.py)")
+
     # Step4/5 parameters
+    ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
+    ap.add_argument("--num_conditional_frames", type=int, default=TRANSFER_DEFAULTS.num_conditional_frames,
+                    help="num_conditional_frames in json spec (default: 1)")
+    ap.add_argument("--resolution", type=str, default=TRANSFER_DEFAULTS.resolution, help="resolution in json spec (default: 720)")
+    ap.add_argument("--sigma_max", type=float, default=TRANSFER_DEFAULTS.sigma_max,
+                    help="sigma_max in json spec (default: None)")
+    ap.add_argument("--num_video_frames_per_chunk", type=int, default=TRANSFER_DEFAULTS.num_video_frames_per_chunk,
+                    help="num_video_frames_per_chunk in json spec (default: 93)")
+    ap.add_argument("--show_control_condition", action="store_true",
+                    help="Set show_control_condition=true in json spec (default: false)")
+    ap.add_argument("--show_input", action="store_true", help="Set show_input=true in json spec (default: false)")
+    ap.add_argument("--disable_keep_input_resolution", action="store_true",
+                    help="Set keep_input_resolution=false in json spec (default: true)")
+    ap.add_argument("--image_context_path", type=str, default=TRANSFER_DEFAULTS.image_context_path,
+                    help="image_context_path in json spec (default: null)")
     ap.add_argument("--guidance", type=float, default=TRANSFER_DEFAULTS.guidance, help="guidance value in json spec")
     ap.add_argument("--num_steps", type=int, default=TRANSFER_DEFAULTS.num_steps, help="num_steps in json spec (default: 35)")
     ap.add_argument("--control_weight", type=float, default=TRANSFER_DEFAULTS.control_weight, help="control_weight in json spec")
