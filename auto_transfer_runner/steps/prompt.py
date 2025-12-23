@@ -266,6 +266,7 @@ def generate_prompt(
     seed: int,
     min_replace_terms: int = 1,
     max_replace_terms: int = 3,
+    replace_all_terms: bool = False,
 ) -> None:
     """
     Step2：调用 AutoPrompt 生成 prompt。
@@ -363,6 +364,10 @@ def generate_prompt(
         str(min_replace_terms),
         "--max_replace_terms",
         str(max_replace_terms),
+    ]
+    if replace_all_terms:
+        step3b_args.append("--replace_all_terms")
+    step3b_args += [
         "--out",
         str(out_prompt),
     ]
