@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_WORK_DIR = Path("/mnt/data/ganrunhe/auto_transfer")
 DEFAULT_AUTOPROMPT_ROOT = REPO_ROOT
 DEFAULT_DEPTH_ROOT = Path("/mnt/data/ganrunhe/Video-Depth-Anything")
+DEFAULT_SEG_ROOT = Path("/mnt/data/ganrunhe/AutoSeg-SAM2")
 DEFAULT_TRANSFER_ROOT = Path("/mnt/data/ganrunhe/cosmos-transfer2.5")
 DEFAULT_HF_CACHE = Path("/mnt/data/ganrunhe/hf_cache")
 
@@ -22,6 +23,7 @@ class RepoPaths:
     work_dir: Path
     autoprompt_root: Path
     depth_root: Path
+    seg_root: Path
     transfer_root: Path
     hf_cache: Path
 
@@ -50,8 +52,31 @@ class DepthConfig:
 
 
 @dataclass(frozen=True)
+class SegConfig:
+    """Step3: seg control generation config (AutoSeg-SAM2)."""
+    conda_env: str = "autoseg"
+    level: str = "large"  # small | middle | large
+    use_other_level: bool = False
+    detect_stride: int = 10
+    save_intermediate: bool = False
+    save_npy: bool = False
+    enable_highlight: bool = False
+    enable_overlay: bool = True
+    overlay_style: str = "mask"
+
+
+@dataclass(frozen=True)
 class TransferConfig:
     """Step5: Transfer2.5 inference config."""
+    seed: int | None = 2025
+    num_conditional_frames: int = 1
+    resolution: str = "720"
+    sigma_max: float | None = None
+    num_video_frames_per_chunk: int = 93
+    show_control_condition: bool = False
+    show_input: bool = False
+    keep_input_resolution: bool = True
+    image_context_path: str | None = None
     guidance: float = 3.0
     num_steps: int = 35
     control_weight: float = 1.0
@@ -60,7 +85,7 @@ class TransferConfig:
 
 @dataclass(frozen=True)
 class CacheConfig:
-    """Cache strategy (depth control + base prompt)."""
+    """Cache strategy (control signals + base prompt)."""
     enable: bool = True
     force_regen: bool = False
     fingerprint_mode: str = "stat"  # path | stat | md5
@@ -93,6 +118,7 @@ class GlobalConfig:
     repos: RepoPaths
     prompt: PromptConfig
     depth: DepthConfig
+    seg: SegConfig
     transfer: TransferConfig
     cache: CacheConfig
     cleanup: CleanupConfig
@@ -102,6 +128,7 @@ class GlobalConfig:
 # Default config objects (single source of truth for CLI defaults)
 PROMPT_DEFAULTS = PromptConfig()
 DEPTH_DEFAULTS = DepthConfig()
+SEG_DEFAULTS = SegConfig()
 TRANSFER_DEFAULTS = TransferConfig()
 CACHE_DEFAULTS = CacheConfig()
 CLEANUP_DEFAULTS = CleanupConfig()
