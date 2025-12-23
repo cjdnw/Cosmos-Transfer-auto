@@ -3,7 +3,7 @@ import re
 import json
 import random
 import argparse
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 import torch
 from transformers import AutoProcessor
@@ -23,17 +23,35 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # COLOR SAFETY RULES (strict, apply from the very beginning):
 # - Do NOT use stacked dark intensifiers like "deep black", "deep dark", or "dark black".
 # - Avoid vague or hedged color terms (e.g., "grayish", "dark-colored", "unsure color"); always pick a concrete, plausible color.
-# - Black, dark, and gray are allowed, but keep them concise and unambiguous; when uncertain, choose a specific color (any reasonable choice is acceptable).
+# - Use only basic, standard color words (e.g., white, black, gray, silver, beige, brown, blue, green, red, orange, yellow).
+# - Do NOT use poetic/rare color terms (e.g., ebony, slate, scarlet, coppery, charcoal).
+#
+# STRICT WORDING RULES:
+# - Avoid vague intensity/uncertainty words such as: faint, slight, subtle, somewhat, a bit, lightly, vaguely, kind of.
+#
+# ROBOT INVARIANCE (do not elaborate):
+# - Describe robot arms/grippers/bases/cables only for identity and placement.
+# - Keep robot color/texture descriptions minimal and stable (basic colors/materials only).
+# - Do NOT describe or invent small surface wear/finish details on the robot.
+#
+# BACKGROUND MARKS POLICY:
+# - Do NOT describe incidental stains/smudges/marks on static surfaces unless:
+#   (i) they are clearly salient AND persist throughout, OR
+#   (ii) the robot explicitly interacts with them (e.g., wiping/cleaning), in which case you MUST describe the change outcome.
 #
 # CRITICAL TEMPORAL CONSTRAINT:
 # - Do not assume the presence of any manipulated object at the beginning unless it is explicitly visible at the start.
 # - If an object appears later in the video, describe its entry as a distinct event before any interaction.
 #
+# CRITICAL TEMPORAL CONSISTENCY:
+# - If you mention any object/mark at any point, you MUST maintain a lifecycle:
+#   appearance -> interactions -> final state. Do not drop it without closure.
+#
 # Scene description rules:
 # - Begin with a brief overview of the setting, as if documenting a laboratory demonstration.
-# - Describe static background elements first from an overhead or observer viewpoint.
-# - Describe each static object in a separate, standalone sentence.
-# - Identify the robot arm(s), including materials, colors, and their positions relative to the scene.
+# - Describe major static background elements first from an overhead or observer viewpoint; avoid trivial micro-details.
+# - Describe each major static object in a separate, standalone sentence.
+# - Identify the robot arm(s), including basic materials and colors, and their positions relative to the scene.
 # - Identify any container and clearly state its initial state (empty or occupied).
 #
 # Action description rules:
@@ -41,6 +59,7 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - Introduce manipulated objects only at the moment they first appear.
 # - Do not imply grasping, lifting, or containment before the object’s appearance is explicitly described.
 # - Describe motions and interactions in a clear, observational manner, without speculation or intent.
+# - End with a final-state sentence summarizing where the key objects are at the end.
 #
 # Do not mention models, frames, timestamps, or reasoning steps.
 # Output only the paragraph.
@@ -55,7 +74,11 @@ STRICT RULES:
 - DO NOT translate, paraphrase, rewrite, reorder, or delete ANY characters.
 - The output must be IDENTICAL to the input paragraph after removing all 【】.
 - The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
-- Only bracket spans that describe COLOR or TEXTURE. If unsure whether a span fits COLOR or TEXTURE, leave it unbracketed.
+- Only bracket spans that describe COLOR or TEXTURE.
+- NEVER bracket any COLOR/TEXTURE that belongs to the robot system, including:
+  robotic arm(s), gripper/end-effector, fingers, base, mount, joints, cables, wires, sensors.
+  If a color/texture appears in the same clause or sentence as any of these robot terms, leave it unbracketed.
+- If unsure whether a span fits COLOR or TEXTURE, leave it unbracketed.
 
 Example:
 Input:  "a light-colored sofa with an orange cushion"
@@ -72,12 +95,34 @@ propose {num_alternatives} alternative descriptors of the SAME TYPE that are pla
 Rules:
 - Do NOT repeat the original descriptor.
 - Keep each alternative short (1-5 words).
+- Use only basic, standard color/texture words. Avoid poetic/rare color terms (e.g., ebony, slate, scarlet, coppery, charcoal).
+- Avoid intensifiers and vague modifiers (e.g., deep, very, quite, faint, slight, subtle).
 - Output STRICT JSON only, exactly in this schema (each list must contain exactly {num_alternatives} items):
   {{"replacements": {{"<src>": ["alt1", "alt2", ...], ...}}}}
 
 DESCRIPTORS:
 {descriptor_block}
 """
+
+ROBOT_KEYWORDS = {
+    "robot",
+    "robotic",
+    "arm",
+    "gripper",
+    "end-effector",
+    "endeffector",
+    "finger",
+    "fingers",
+    "base",
+    "mount",
+    "joint",
+    "cable",
+    "cables",
+    "wire",
+    "wires",
+    "sensor",
+    "sensors",
+}
 
 # =======================
 # 2) Model Options
@@ -120,6 +165,28 @@ def safe_parse_json(text: str) -> Dict[str, Any]:
 
 def extract_bracket_terms(text: str) -> List[str]:
     return list({t.strip() for t in re.findall(r"【(.*?)】", text)})
+
+
+def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
+    for match in re.finditer(re.escape(span), paragraph):
+        start, end = match.span()
+        ctx_start = max(0, start - window)
+        ctx_end = min(len(paragraph), end + window)
+        context = paragraph[ctx_start:ctx_end].lower()
+        if any(keyword in context for keyword in ROBOT_KEYWORDS):
+            return True
+    return False
+
+
+def filter_robot_descriptors(bracketed_prompt: str, window: int = 200) -> List[str]:
+    base_paragraph = bracketed_prompt.replace("【", "").replace("】", "")
+    descriptors = extract_bracket_terms(bracketed_prompt)
+    filtered = []
+    for descriptor in descriptors:
+        if _in_robot_context(descriptor, base_paragraph, window):
+            continue
+        filtered.append(descriptor)
+    return filtered
 
 
 def apply_random_replacements(
@@ -223,7 +290,7 @@ def step3_generate_replacements_json(
     bracketed_prompt: str,
     alternatives_per_term: int = 6,
 ) -> Dict[str, List[str]]:
-    terms = extract_bracket_terms(bracketed_prompt)
+    terms = filter_robot_descriptors(bracketed_prompt)
     if not terms:
         return {}
 
