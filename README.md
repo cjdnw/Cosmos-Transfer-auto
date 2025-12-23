@@ -105,6 +105,7 @@ python scripts/run_batch.py \
 - `output_video/`：Transfer2.5 输出目录
 - `logs/`：每个视频一个日志文件（追加写入）
 
+
 ## “视频指纹”与缓存
 - prompt 三层缓存（一次算，多次复用）：
   - Step1：`prompt_cache/<fingerprint>/base.txt`，键 = video_fingerprint（路径+size+mtime 为默认）。
@@ -198,7 +199,9 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
-- 2025-12-24：修复 seg 控制生成需要帧目录的报错，流水线自动用 ffmpeg 抽帧再调用 AutoSeg-SAM2，结果仍按指纹缓存到 `control_cache/seg/`，CLI 直接通过 `--control_type seg` 调用。
+- 2025-12-23：修复 seg 控制生成需要帧目录的报错，流水线自动用 ffmpeg 抽帧再调用 AutoSeg-SAM2，结果仍按指纹缓存到 `control_cache/seg/`，CLI 直接通过 `--control_type seg` 调用。
+- 2025-12-23：调整 `robot_video_to_prompt.py` 的颜色安全规则：禁止使用“deep black/dark black”等叠加深色描述；避免“grayish/dark-colored”等模糊颜色词汇；黑色/深色/灰色可直接使用但需简洁明确，不确定时选定一个具体颜色即可。
+- 2025-12-23：集成 seg 控制信号自动化，使用 AutoSeg-SAM2 在 `control_cache/seg/` 按指纹落盘并复用，CLI 直接通过 `--control_type seg` 调用。
 - 2025-12-23：调整 Step1 base prompt 文案为官方演示叙事风格；Step2 括号替换限定为颜色/纹理描述，Step3 只生成颜色或纹理的替换词。
 - 2025-12-23：新增 `--replace_all_terms` 参数，可直接替换所有括号标注的描述（跳过随机抽样逻辑）。
 - 2025-12-23：新增 `--replacements_per_term` 参数，可调整每个括号术语生成的替换候选数量（默认 6），并对缓存进行区分。
