@@ -133,6 +133,22 @@ def generate_control_seg(
     if tmp_dir.exists():
         shutil.rmtree(tmp_dir, ignore_errors=True)
     tmp_dir.mkdir(parents=True, exist_ok=True)
+    frames_dir = tmp_dir / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    # AutoSeg-SAM2 expects a directory of extracted frames; pre-extract with ffmpeg.
+    extract_cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-q:v",
+        "2",
+        "-start_number",
+        "1",
+        str(frames_dir / "%06d.jpg"),
+    ]
+    run_cmd(extract_cmd, cwd=seg_root, env=env, log_path=log_path, title="STEP3: Extract frames for seg")
 
     mask_cmd = conda_run(
         conda_env,
@@ -140,7 +156,7 @@ def generate_control_seg(
             "python",
             "auto-mask-batch.py",
             "--video_path",
-            str(video_path),
+            str(frames_dir),
             "--output_dir",
             str(tmp_dir),
             "--level",
