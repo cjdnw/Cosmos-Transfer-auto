@@ -70,6 +70,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         reuse_if_exists=args.reuse_prompt,
         min_replace_terms=args.min_terms,
         max_replace_terms=args.max_terms,
+        replace_all_terms=args.replace_all_terms,
     )
 
     depth = DepthConfig(
@@ -199,6 +200,11 @@ def main(argv: List[str] | None = None) -> None:
         type=int,
         default=PROMPT_DEFAULTS.max_replace_terms,
         help="Maximum number of variable terms to replace in the prompt (default: 3)",
+    )
+    ap.add_argument(
+        "--replace_all_terms",
+        action="store_true",
+        help="Replace all bracketed terms (ignore --min_terms/--max_terms limits)",
     )
 
     # Step3 (depth)
