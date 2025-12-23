@@ -20,6 +20,15 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # factual, neutral in tone, continuous, and focused on clearly describing the scene, setup, and manipulation process.
 # The paragraph should read smoothly rather than like a checklist, while still remaining precise and unambiguous.
 #
+# CONTROL-AGNOSTIC STABILITY RULES (strict):
+# - Never introduce any new objects that are not clearly visible in the video. If uncertain, OMIT them.
+# - Do not describe micro-artifacts, small debris, floating pieces, or incidental specks unless they are clearly salient AND persist throughout.
+# - Treat rigid scene items (e.g., sofa, basket, rug, floor, table) as stable: do NOT describe wobble, deformation, or "sudden movement" unless it is clearly visible and large.
+# - Do NOT describe lighting flicker or sudden shadow changes unless clearly visible and persistent.
+# - CONTAINER INTERIOR POLICY: For containers (basket/box/bin), do NOT describe the interior color/brightness (avoid phrases like "dark interior", "shadowy interior", "black interior", "deep inside", "pitch black"). Prefer describing only the container type/material and rim/exterior if needed.
+# - Avoid stacked darkness intensifiers everywhere ("deep black", "very dark", etc.) and avoid "dark interior" specifically.
+# - In the FINAL state sentence, ALWAYS add a stability clause like: "No additional objects appear, and the background and rigid items remain unchanged/stationary." (choose one phrasing, but ensure it is included in the final sentence).
+#
 # COLOR SAFETY RULES (strict, apply from the very beginning):
 # - Do NOT use stacked dark intensifiers like "deep black", "deep dark", or "dark black".
 # - Avoid vague or hedged color terms (e.g., "grayish", "dark-colored", "unsure color"); always pick a concrete, plausible color.
@@ -90,6 +99,9 @@ STRICT RULES:
 - The output must be IDENTICAL to the input paragraph after removing all 【】.
 - The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
 - Only bracket spans that describe COLOR or TEXTURE.
+- Never bracket any spans that describe lighting or illumination rather than object surface properties (e.g., "well-lit", "bright", "dark", "shadowy", "shaded", "glossy due to light").
+- Never bracket any spans that refer to container interiors/insides (e.g., "interior", "inside", "in the basket", "within the basket"), and never bracket "dark interior" or similar phrases.
+- Bracket ONLY stable, surface-level color/texture descriptors of large, static objects (floor, rug, sofa, cushions, cloth, basket exterior/rim). Keep the "never bracket robot system colors/textures" rule.
 - NEVER bracket any COLOR/TEXTURE that belongs to the robot system, including:
   robotic arm(s), gripper/end-effector, fingers, base, mount, joints, cables, wires, sensors.
   If a color/texture appears in the same clause or sentence as any of these robot terms, leave it unbracketed.
@@ -112,6 +124,9 @@ Rules:
 - Keep each alternative short (1-5 words).
 - Use only basic, standard color/texture words. Avoid poetic/rare color terms (e.g., ebony, slate, scarlet, coppery, charcoal).
 - Avoid intensifiers and vague modifiers (e.g., deep, very, quite, faint, slight, subtle).
+- Never propose alternatives that imply extreme darkness or shadow (e.g., "deep black", "pitch black", "very dark", "shadowy", "dark interior").
+- Keep alternatives to basic/common color/texture words; no rare/poetic terms.
+- Do not propose alternatives that describe lighting (bright/well-lit/shadowy) instead of surface color/texture.
 - Output STRICT JSON only, exactly in this schema (each list must contain exactly {num_alternatives} items):
   {{"replacements": {{"<src>": ["alt1", "alt2", ...], ...}}}}
 
