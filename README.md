@@ -105,6 +105,73 @@ python scripts/run_batch.py \
 - `output_video/`：Transfer2.5 输出目录
 - `logs/`：每个视频一个日志文件（追加写入）
 
+## Seg 控制信号生成与复用（新增）
+目前工程**已自动集成 seg 控制信号**（`--control_type seg`），复用逻辑与 depth 完全一致：
+- 缓存路径：`control_cache/seg/<fingerprint>/`
+- 默认依赖：`/mnt/data/ganrunhe/AutoSeg-SAM2` + conda env `autoseg`
+- 可通过 CLI 覆盖路径/参数：`--seg_root`、`--seg_env`、`--seg_level`、`--seg_detect_stride`、`--seg_enable_highlight`、`--seg_disable_overlay`、`--seg_overlay_style` 等
+
+### 手动生成 Seg 控制信号
+1. 切换到 AutoSeg-SAM2 工程与环境  
+   - 仓库路径：`/mnt/data/ganrunhe/AutoSeg-SAM2`  
+   - Conda 环境：`autoseg`
+2. 生成逐帧分割掩码（会在 `output_dir/large/final-output/` 下生成 png）：
+   ```bash
+   python auto-mask-batch.py \
+     --video_path <输入视频路径> \
+     --output_dir <临时 cache 目录> \
+     --level large \
+     --use_other_level 0 \
+     --detect_stride 10 \
+     --save_intermediate 0 \
+     --save_npy 0
+   ```
+3. 合成 seg 控制信号 mp4（覆盖高亮/叠加开关按需调整，这里为纯 mask 叠加）：
+   ```bash
+   python visulization.py \
+     --video_path <输入视频路径> \
+     --output_dir <临时 cache 目录> \
+     --level large \
+     --enable_highlight 0 \
+     --enable_overlay 1 \
+     --overlay_style mask
+   ```
+4. 将生成的 mp4 拷贝到缓存目录，供后续复用：  
+   - 目标路径：`/mnt/data/ganrunhe/auto_transfer/control_cache/seg/`  
+   - 拷贝完成后可清空上述临时 `output_dir`
+
+### Seg 对应的 json 片段
+在生成 Cosmos-Transfer2.5 的任务 json 时，加入如下字段（`control_path` 指向上一步缓存好的 mp4，其他字段保持 depth 同样的结构与分 chunk 逻辑）：
+```json
+{
+  "name": "robot_seg",
+  "prompt_path": "<prompt 路径>",
+  "seed": 2025,
+  "guidance": 3,
+  "video_path": "<输入视频路径>",
+  "image_context_path": null,
+  "num_conditional_frames": 1,
+  "resolution": "720",
+  "sigma_max": null,
+  "num_video_frames_per_chunk": 93,
+  "num_steps": 35,
+  "show_control_condition": false,
+  "show_input": false,
+  "keep_input_resolution": true,
+  "edge": null,
+  "depth": null,
+  "vis": null,
+  "seg": {
+    "control_path": "<control_cache/seg 下的 mp4>",
+    "control_weight": 1.0,
+    "mask_path": null,
+    "mask_prompt": null,
+    "control_prompt": null
+  }
+}
+```
+生成后即可将 json 与 prompt 一同传入 Cosmos-Transfer2.5 推理流程。
+
 ## “视频指纹”与缓存
 - prompt 三层缓存（一次算，多次复用）：
   - Step1：`prompt_cache/<fingerprint>/base.txt`，键 = video_fingerprint（路径+size+mtime 为默认）。
@@ -198,7 +265,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
-- 2025-12-24：集成 seg 控制信号自动化，使用 AutoSeg-SAM2 在 `control_cache/seg/` 按指纹落盘并复用，CLI 直接通过 `--control_type seg` 调用。
+- 2025-12-23：集成 seg 控制信号自动化，使用 AutoSeg-SAM2 在 `control_cache/seg/` 按指纹落盘并复用，CLI 直接通过 `--control_type seg` 调用。
 - 2025-12-23：调整 Step1 base prompt 文案为官方演示叙事风格；Step2 括号替换限定为颜色/纹理描述，Step3 只生成颜色或纹理的替换词。
 - 2025-12-23：新增 `--replace_all_terms` 参数，可直接替换所有括号标注的描述（跳过随机抽样逻辑）。
 - 2025-12-23：新增 `--replacements_per_term` 参数，可调整每个括号术语生成的替换候选数量（默认 6），并对缓存进行区分。
