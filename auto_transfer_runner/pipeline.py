@@ -84,6 +84,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 seed=int(short_hash(job.job_id, 8), 16),
                 min_replace_terms=cfg.prompt.min_replace_terms,
                 max_replace_terms=cfg.prompt.max_replace_terms,
+                replace_all_terms=cfg.prompt.replace_all_terms,
+                replacements_per_term=cfg.prompt.replacements_per_term,
             ),
         )
 

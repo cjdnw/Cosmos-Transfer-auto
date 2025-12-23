@@ -37,6 +37,8 @@ class PromptConfig:
     reuse_if_exists: bool = False  # default: regen (prompt is typically stochastic)
     min_replace_terms: int = 1
     max_replace_terms: int = 3
+    replace_all_terms: bool = False
+    replacements_per_term: int = 6
 
 
 @dataclass(frozen=True)

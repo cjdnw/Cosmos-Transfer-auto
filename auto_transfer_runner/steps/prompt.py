@@ -133,6 +133,7 @@ def _ensure_cached_step23(
     size: str,
     variant: str,
     model_type: str,
+    replacements_per_term: int,
     env: Dict[str, str],
     log_path: Path,
     use_cache: bool,
@@ -142,7 +143,8 @@ def _ensure_cached_step23(
     """
     Cache bracket + replacements using base prompt hash:
       - bracket cache key: base_hash -> prompt_cache_bracket/<base_hash>.txt
-      - replacements cache key: bracket_hash -> prompt_cache_replacements/<bracket_hash>.json
+      - replacements cache key: (bracket_hash, replacements_per_term)
+          -> prompt_cache_replacements/<bracket_hash>__k<replacements_per_term>.json
     Returns (bracket_path, bracket_hash, replacements_path).
     """
     bracket_cache_root = work_dir / "prompt_cache_bracket"
@@ -151,6 +153,7 @@ def _ensure_cached_step23(
     repl_cache_root.mkdir(parents=True, exist_ok=True)
 
     bracket_cache_path = bracket_cache_root / f"{base_hash}.txt"
+    repl_suffix = f"__k{replacements_per_term}"
     bracket_lock = FileLock(bracket_cache_root / f".{base_hash}.lock",
                             FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec))
 
@@ -163,7 +166,7 @@ def _ensure_cached_step23(
             console_print(f"[PROMPT CACHE MISS] generating step2+3 for base {base_hash}")
             append_log(log_path, f"[PROMPT CACHE MISS] bracket/repl for base={base_hash}")
 
-            tmp_repl_out = bracket_cache_root / f"{base_hash}__tmp_repl.json"
+            tmp_repl_out = bracket_cache_root / f"{base_hash}__tmp_repl_k{replacements_per_term}.json"
             step23_args = [
                 "step23",
                 "--base_in",
@@ -172,6 +175,8 @@ def _ensure_cached_step23(
                 str(bracket_cache_path),
                 "--out_repl_json",
                 str(tmp_repl_out),
+                "--replacements_per_term",
+                str(replacements_per_term),
                 *_model_args(size, variant, model_type),
             ]
             _run_prompt_step(
@@ -187,7 +192,7 @@ def _ensure_cached_step23(
                 raise FileNotFoundError(f"Bracket prompt not found after generation: {bracket_cache_path}")
 
             bracket_hash = text_md5(_read_text(bracket_cache_path))
-            repl_target = repl_cache_root / f"{bracket_hash}.json"
+            repl_target = repl_cache_root / f"{bracket_hash}{repl_suffix}.json"
             if not repl_target.exists() or repl_target.stat().st_size == 0:
                 tmp_repl_out.rename(repl_target)
                 append_log(log_path, f"[PROMPT CACHE GENERATED] repl={repl_target}")
@@ -201,14 +206,14 @@ def _ensure_cached_step23(
 
     # After lock: bracket exists, ensure replacements cache
     bracket_hash = text_md5(_read_text(bracket_cache_path))
-    repl_target = repl_cache_root / f"{bracket_hash}.json"
+    repl_target = repl_cache_root / f"{bracket_hash}{repl_suffix}.json"
     if repl_target.exists() and repl_target.stat().st_size > 0 and use_cache:
         append_log(log_path, f"[PROMPT CACHE HIT] repl={repl_target}")
         console_print(f"[PROMPT CACHE HIT] replacements for bracket {bracket_hash}")
         return bracket_cache_path, bracket_hash, repl_target
 
     # Need replacements; lock on bracket_hash to avoid duplicate step3
-    repl_lock = FileLock(repl_cache_root / f".{bracket_hash}.lock",
+    repl_lock = FileLock(repl_cache_root / f".{bracket_hash}{repl_suffix}.lock",
                          FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec))
     with repl_lock:
         if repl_target.exists() and repl_target.stat().st_size > 0 and use_cache:
@@ -216,13 +221,15 @@ def _ensure_cached_step23(
             console_print(f"[PROMPT CACHE HIT] replacements ready after lock for {bracket_hash}")
             return bracket_cache_path, bracket_hash, repl_target
 
-        tmp_repl_out = repl_cache_root / f"{bracket_hash}__tmp_repl.json"
+        tmp_repl_out = repl_cache_root / f"{bracket_hash}{repl_suffix}__tmp_repl.json"
         step3a_args = [
             "step3_replacements",
             "--bracket_in",
             str(bracket_cache_path),
             "--out_json",
             str(tmp_repl_out),
+            "--replacements_per_term",
+            str(replacements_per_term),
             *_model_args(size, variant, model_type),
         ]
         _run_prompt_step(
@@ -266,6 +273,8 @@ def generate_prompt(
     seed: int,
     min_replace_terms: int = 1,
     max_replace_terms: int = 3,
+    replace_all_terms: bool = False,
+    replacements_per_term: int = 6,
 ) -> None:
     """
     Step2：调用 AutoPrompt 生成 prompt。
@@ -318,6 +327,7 @@ def generate_prompt(
             size=size,
             variant=variant,
             model_type=model_type,
+            replacements_per_term=replacements_per_term,
             env=env,
             log_path=log_path,
             use_cache=use_cache,
@@ -339,6 +349,8 @@ def generate_prompt(
             str(prompt_bracket_path),
             "--out_repl_json",
             str(prompt_replacements_path),
+            "--replacements_per_term",
+            str(replacements_per_term),
             *_model_args(size, variant, model_type),
         ]
         _run_prompt_step(
@@ -363,6 +375,10 @@ def generate_prompt(
         str(min_replace_terms),
         "--max_replace_terms",
         str(max_replace_terms),
+    ]
+    if replace_all_terms:
+        step3b_args.append("--replace_all_terms")
+    step3b_args += [
         "--out",
         str(out_prompt),
     ]

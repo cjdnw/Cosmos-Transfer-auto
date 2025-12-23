@@ -70,6 +70,8 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         reuse_if_exists=args.reuse_prompt,
         min_replace_terms=args.min_terms,
         max_replace_terms=args.max_terms,
+        replace_all_terms=args.replace_all_terms,
+        replacements_per_term=args.replacements_per_term,
     )
 
     depth = DepthConfig(
@@ -200,6 +202,17 @@ def main(argv: List[str] | None = None) -> None:
         default=PROMPT_DEFAULTS.max_replace_terms,
         help="Maximum number of variable terms to replace in the prompt (default: 3)",
     )
+    ap.add_argument(
+        "--replace_all_terms",
+        action="store_true",
+        help="Replace all bracketed terms (ignore --min_terms/--max_terms limits)",
+    )
+    ap.add_argument(
+        "--replacements_per_term",
+        type=int,
+        default=PROMPT_DEFAULTS.replacements_per_term,
+        help="How many alternative descriptors to generate for each bracketed term (default: 6)",
+    )
 
     # Step3 (depth)
     ap.add_argument("--depth_env", type=str, default=DEPTH_DEFAULTS.conda_env, help="Conda env for Step3 (Depth Anything)")
@@ -240,6 +253,8 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--min_terms must be >= 1")
     if args.max_terms < args.min_terms:
         raise ValueError("--max_terms must be >= --min_terms")
+    if args.replacements_per_term < 1:
+        raise ValueError("--replacements_per_term must be >= 1")
 
     cfg = build_config(args)
 
