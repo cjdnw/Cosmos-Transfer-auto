@@ -201,6 +201,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ## 更新记录
 - 2025-12-24：在自动生成的 json spec 中增加默认 `negative_prompt` 关键词，抑制额外物体、抖动、伪影等不良现象。
 - 2025-12-24：更新 `robot_video_to_prompt.py` 的提示文本：新增控制通用稳定性规则，限制括注范围，避免生成过暗/光照相关的替换词。
+- 2025-12-24：精简 `robot_video_to_prompt.py` 三阶段提示词，并在 Step1 后加入机器人描述规范化，避免机器人外观被改写。
 - 2025-12-23：补强 `robot_video_to_prompt.py` 三步式 prompt：新增机器人基座 vs 台面软物的严格区分、底座颜色保持中性表述，以及可见性变化动词限制，并添加针对此规则的回归测试用例。
 - 2025-12-23：更新 `robot_video_to_prompt.py` 三步式 prompt：机器人部件颜色/纹理禁入括号与替换，禁用模糊/诗意色词；新增机器人相关描述符过滤兜底，避免替换机器人部件颜色/纹理，并强调背景污渍闭环与终态总结。
 - 2025-12-23：修复 seg 控制生成需要帧目录的报错，流水线自动用 ffmpeg 抽帧再调用 AutoSeg-SAM2，结果仍按指纹缓存到 `control_cache/seg/`，CLI 直接通过 `--control_type seg` 调用。

@@ -17,48 +17,22 @@ def load_cosmos_style_prompt() -> str:
     raise RuntimeError("COSMOS_STYLE_PROMPT not found in robot_video_to_prompt.py")
 
 
-def test_visibility_change_restrictions_present():
+def test_temporal_consistency_rules_present():
     COSMOS_STYLE_PROMPT = load_cosmos_style_prompt()
-    verbs = [
-        "appears",
-        "emerges",
-        "shows up",
-        "comes into view",
-        "enters the frame/scene",
-        "is introduced",
-        "materializes",
-        "pops up",
-        "is revealed",
-        "becomes visible",
-        "is seen for the first time",
-        "disappears",
-        "vanishes",
-        "leaves the frame/scene",
-        "exits",
-        "is removed",
-        "is no longer visible",
-    ]
-    lower_prompt = COSMOS_STYLE_PROMPT.lower()
-    for verb in verbs:
-        assert verb in lower_prompt
+    assert "TEMPORAL CONSISTENCY" in COSMOS_STYLE_PROMPT
+    assert "If the manipulated object is visible at the beginning" in COSMOS_STYLE_PROMPT
+    assert "If it becomes visible later" in COSMOS_STYLE_PROMPT
+    assert "Do not describe minor surface marks" in COSMOS_STYLE_PROMPT
 
 
-def test_tabletop_soft_item_is_not_called_base():
+def test_robot_description_is_minimal():
     COSMOS_STYLE_PROMPT = load_cosmos_style_prompt()
-    assert "STRUCTURE VS. TABLETOP OBJECT DISAMBIGUATION" in COSMOS_STYLE_PROMPT
-    assert (
-        "Any colored item on the table surface (especially red/dark red) should NOT be labeled as a robot base."
-        in COSMOS_STYLE_PROMPT
-    )
-    for soft_item in ["cloth", "rag", "pad", "towel"]:
-        assert soft_item in COSMOS_STYLE_PROMPT
-    assert "dark red base" not in COSMOS_STYLE_PROMPT.lower()
+    assert "Mention the robot arms only for position" in COSMOS_STYLE_PROMPT
+    assert "end-effector type (gripper)" in COSMOS_STYLE_PROMPT
 
 
-def test_base_color_guidance_is_neutral():
+def test_style_rules_are_present():
     COSMOS_STYLE_PROMPT = load_cosmos_style_prompt()
-    assert "Do not specify non-neutral base colors" in COSMOS_STYLE_PROMPT
-    assert "light-colored base" in COSMOS_STYLE_PROMPT
-    assert "dark base" in COSMOS_STYLE_PROMPT
-    # Spot-check that direct color claims like "red base" are discouraged by only appearing inside a "do not" rule.
-    assert re.search(r"\\bred base\\b", COSMOS_STYLE_PROMPT.lower()) is None
+    assert "Avoid rare/poetic color words" in COSMOS_STYLE_PROMPT
+    assert "Do not add extra objects" in COSMOS_STYLE_PROMPT
+    assert re.search(r"rare/poetic", COSMOS_STYLE_PROMPT)
