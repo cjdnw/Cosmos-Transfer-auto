@@ -14,37 +14,34 @@ from qwen_vl_utils import process_vision_info
 # =======================
 # 1) Prompts
 # =======================
-COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
-# Write ONE English paragraph describing the video as a neutral robotics demonstration.
-# Keep it simple and stable: focus on layout, key objects, and the manipulation sequence.
+COSMOS_STYLE_PROMPT = """# You are a video prompt generator. Write a single English paragraph in the same style as the example: detailed, factual, step-by-step, and descriptive.
 #
-# MUST DO:
-# - Describe the setting and major static objects first (floor/rug/table/sofa/basket).
-# - Mention the robot arms only for position (left/right) and the end-effector type (gripper).
-# - Describe the manipulated object and the action steps in time order.
-# - End with a final-state sentence describing where the manipulated object is at the end.
+# CRITICAL TEMPORAL CONSTRAINT:
+# - Do not assume the presence of any manipulated object at the beginning unless it is explicitly visible at the start.
+# - If an object appears later in the video, describe its entry as a distinct event before any interaction.
 #
-# TEMPORAL CONSISTENCY (minimal but critical):
-# - If the manipulated object is visible at the beginning, state it is present at the beginning.
-# - If it becomes visible later, introduce it once before interaction.
-# - Do not describe minor surface marks (stains/smudges/specks) unless the robot clearly interacts with them.
-# - No vague terms: do NOT use any vague or approximate words, including:
-#   - Color words ending with -ish (brownish, grayish, reddish, bluish, etc.).
-#   - Uncertain qualifiers (faint, slight, subtle, somewhat, a bit, kind of, vaguely, etc.).
-#   Use a single, specific, common descriptor instead (e.g., brown not brownish).
-# - Required initial state (containers): any container object (basket/box/bin/bowl/container/tray, etc.)
-#   must explicitly include its initial state in the SAME sentence where it first appears:
-#   "initially empty" or "initially containing <object>".
-# - Required initial state (manipulated object):
-#   - If visible at the beginning, use: "At the beginning, ... lies/sits/rests ...".
-#   - If it appears later, introduce it only once when it first becomes visible, then describe interaction.
+# Requirements:
+# - Describe static background elements first from an overhead viewpoint.
+# - Describe each static object in a separate, standalone sentence.
+# - Identify the robot arm(s), their materials, and their positions relative to the scene.
+# - Identify any container and describe its initial state (empty or occupied).
 #
-# STYLE:
-# - Avoid rare/poetic color words; use simple colors only when needed.
-# - Do not add extra objects not required to understand the manipulation.
-# - Do not mention models, frames, timestamps, or reasoning.
+# Action description rules:
+# - Use temporal phrasing (At the beginning…, As the video progresses…, Then…, Finally…).
+# - Introduce manipulated objects only when they first appear.
+# - Do not imply grasping, lifting, or containment before the object’s appearance is described.
 #
+# Do not mention models, frames, timestamps, or reasoning steps.
 # Output only the paragraph.
+#
+# Example (Correct – object presence and manipulation are temporally consistent):
+# The video is a demonstration of robotic manipulation in a controlled indoor environment. It features two robotic arms interacting with a piece of red fabric. The setting includes a beige couch in the background, providing a neutral backdrop for the activity. A yellow cushion is placed in front of the couch, and the red fabric lies flat on top of the cushion. The left robotic arm is white and equipped with a black gripper. The right robotic arm is black and fitted with a more articulated gripper. At the beginning, the fabric rests motionless on the cushion. As the video progresses, the left arm moves toward the fabric and grasps one side. The fabric is lifted slightly off the cushion. The right arm then moves in and grasps the opposite side of the fabric. Both arms coordinate to lift and hold the fabric between them, demonstrating controlled and precise manipulation.
+#
+# Counterexample (Incorrect – violates object placement and temporal introduction):
+# The video shows two robotic arms manipulating a piece of red fabric. At the beginning, the fabric is already being held between the two robotic grippers above a cushion. The arms then adjust their grip and continue lifting the fabric while the background couch remains visible.
+#
+#
+# Now generate the paragraph for the given video.
 """
 
 BRACKET_PROMPT_TEMPLATE = """You are a formatting tool.
