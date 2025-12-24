@@ -205,6 +205,17 @@ def filter_robot_descriptors(bracketed_prompt: str, window: int = 200) -> List[s
     return filtered
 
 
+def strip_robot_brackets(bracketed_prompt: str) -> str:
+    def repl(match: re.Match) -> str:
+        term = match.group(1)
+        lowered = term.lower()
+        if any(keyword in lowered for keyword in ROBOT_KEYWORDS):
+            return term
+        return match.group(0)
+
+    return re.sub(r"【(.*?)】", repl, bracketed_prompt)
+
+
 def canonicalize_robot_sentences(paragraph: str) -> str:
     sentences = [s for s in re.split(r"(?<=[.!?])\\s+", paragraph.strip()) if s]
     if not sentences:
@@ -398,7 +409,8 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
         "role": "user",
         "content": [{"type": "text", "text": BRACKET_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
     }]
-    return run_generation(model, processor, messages, 700, False, 1.0, 1.0)
+    bracketed = run_generation(model, processor, messages, 700, False, 1.0, 1.0)
+    return strip_robot_brackets(bracketed)
 
 
 def step3_generate_replacements_json(
