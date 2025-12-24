@@ -15,120 +15,53 @@ from qwen_vl_utils import process_vision_info
 # 1) Prompts
 # =======================
 COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
-# Write a single English paragraph describing the video in a natural, fluent, demonstration-style narrative.
-# The writing style should resemble an official robotics demonstration description:
-# factual, neutral in tone, continuous, and focused on clearly describing the scene, setup, and manipulation process.
-# The paragraph should read smoothly rather than like a checklist, while still remaining precise and unambiguous.
+# Write ONE English paragraph describing the video as a neutral robotics demonstration.
+# Keep it simple and stable: focus on layout, key objects, and the manipulation sequence.
 #
-# CONTROL-AGNOSTIC STABILITY RULES (strict):
-# - Never introduce any new objects that are not clearly visible in the video. If uncertain, OMIT them.
-# - Do not describe micro-artifacts, small debris, floating pieces, or incidental specks unless they are clearly salient AND persist throughout.
-# - Treat rigid scene items (e.g., sofa, basket, rug, floor, table) as stable: do NOT describe wobble, deformation, or "sudden movement" unless it is clearly visible and large.
-# - Do NOT describe lighting flicker or sudden shadow changes unless clearly visible and persistent.
-# - CONTAINER INTERIOR POLICY: For containers (basket/box/bin), do NOT describe the interior color/brightness (avoid phrases like "dark interior", "shadowy interior", "black interior", "deep inside", "pitch black"). Prefer describing only the container type/material and rim/exterior if needed.
-# - Avoid stacked darkness intensifiers everywhere ("deep black", "very dark", etc.) and avoid "dark interior" specifically.
-# - In the FINAL state sentence, ALWAYS add a stability clause like: "No additional objects appear, and the background and rigid items remain unchanged/stationary." (choose one phrasing, but ensure it is included in the final sentence).
+# MUST DO:
+# - Describe the setting and major static objects first (floor/rug/table/sofa/basket).
+# - Mention the robot arms only for position (left/right) and the end-effector type (gripper).
+# - Describe the manipulated object and the action steps in time order.
+# - End with a final-state sentence describing where the manipulated object is at the end.
 #
-# COLOR SAFETY RULES (strict, apply from the very beginning):
-# - Do NOT use stacked dark intensifiers like "deep black", "deep dark", or "dark black".
-# - Avoid vague or hedged color terms (e.g., "grayish", "dark-colored", "unsure color"); always pick a concrete, plausible color.
-# - Use only basic, standard color words (e.g., white, black, gray, silver, beige, brown, blue, green, red, orange, yellow).
-# - Do NOT use poetic/rare color terms (e.g., ebony, slate, scarlet, coppery, charcoal).
-# - Do not specify non-neutral base colors (red/orange/yellow/blue/green); use only "light-colored" or "dark" for the base when unsure.
+# TEMPORAL CONSISTENCY (minimal but critical):
+# - If the manipulated object is visible at the beginning, state it is present at the beginning.
+# - If it becomes visible later, introduce it once before interaction.
+# - Do not describe minor surface marks (stains/smudges/specks) unless the robot clearly interacts with them.
 #
-# STRICT WORDING RULES:
-# - Avoid vague intensity/uncertainty words such as: faint, slight, subtle, somewhat, a bit, lightly, vaguely, kind of.
+# STYLE:
+# - Avoid rare/poetic color words; use simple colors only when needed.
+# - Do not add extra objects not required to understand the manipulation.
+# - Do not mention models, frames, timestamps, or reasoning.
 #
-# ROBOT INVARIANCE (do not elaborate):
-# - Describe robot arms/grippers/bases/cables only for identity and placement.
-# - Keep robot color/texture descriptions minimal and stable (basic colors/materials only).
-# - Do NOT describe or invent small surface wear/finish details on the robot.
-#
-# STRUCTURE VS. TABLETOP OBJECT DISAMBIGUATION (strict):
-# - Only call something a robot "base", "mount", "pedestal", or "stand" if it is clearly rigid, physically attached to the robot, located beneath the arm (not on the table surface), and remains fixed in shape and position throughout.
-# - Any colored item on the table surface (especially red/dark red) should NOT be labeled as a robot base. Prefer describing it as a "cloth", "rag", "pad", or "towel" if it looks like a soft item.
-# - If uncertain, do NOT guess a specific base color. Use "a light-colored base" or "a dark base" at most.
-# - Keep robot descriptions minimal and do not add extra structural claims (mounted on X / fixed to Y) unless clearly visible.
-#
-# BACKGROUND MARKS POLICY:
-# - Do NOT describe incidental stains/smudges/marks on static surfaces unless:
-#   (i) they are clearly salient AND persist throughout, OR
-#   (ii) the robot explicitly interacts with them (e.g., wiping/cleaning), in which case you MUST describe the change outcome.
-#
-# CRITICAL TEMPORAL CONSTRAINT:
-# - Do not assume the presence of any manipulated object at the beginning unless it is explicitly visible at the start.
-# - If an object appears later in the video, describe its entry as a distinct event before any interaction.
-#
-# CRITICAL TEMPORAL CONSISTENCY:
-# - If you mention any object/mark at any point, you MUST maintain a lifecycle:
-#   appearance -> interactions -> final state. Do not drop it without closure.
-#
-# VISIBILITY-CHANGE VERB RESTRICTIONS (strict):
-# - Do NOT use "appears", "emerges", "shows up", "comes into view", "enters the frame/scene",
-#   "is introduced", "materializes", "pops up", "is revealed", "becomes visible", or
-#   "is seen for the first time" for any object that is already visible at the beginning.
-#   For such objects, state that they are present at the beginning.
-# - Do NOT use "disappears", "vanishes", "leaves the frame/scene", "exits", "is removed",
-#   or "is no longer visible" unless the object truly leaves the visible area or is clearly removed.
-#
-# Scene description rules:
-# - Begin with a brief overview of the setting, as if documenting a laboratory demonstration.
-# - Describe major static background elements first from an overhead or observer viewpoint; avoid trivial micro-details.
-# - Describe each major static object in a separate, standalone sentence.
-# - Identify the robot arm(s), including basic materials and colors, and their positions relative to the scene.
-# - Identify any container and clearly state its initial state (empty or occupied).
-#
-# Action description rules:
-# - Use natural temporal phrasing (At the beginning…, As the video progresses…, Then…, Finally…).
-# - Introduce manipulated objects only at the moment they first appear.
-# - Do not imply grasping, lifting, or containment before the object’s appearance is explicitly described.
-# - Describe motions and interactions in a clear, observational manner, without speculation or intent.
-# - End with a final-state sentence summarizing where the key objects are at the end.
-#
-# Do not mention models, frames, timestamps, or reasoning steps.
 # Output only the paragraph.
-#
-# Now generate the paragraph for the given video.
 """
 
 BRACKET_PROMPT_TEMPLATE = """You are a formatting tool.
-Your task is ONLY to insert Chinese corner brackets 【】 around existing spans in the paragraph.
+Insert Chinese corner brackets 【】 around existing spans in the paragraph.
 
-STRICT RULES:
-- DO NOT translate, paraphrase, rewrite, reorder, or delete ANY characters.
-- The output must be IDENTICAL to the input paragraph after removing all 【】.
-- The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
-- Only bracket spans that describe COLOR or TEXTURE.
-- Never bracket any spans that describe lighting or illumination rather than object surface properties (e.g., "well-lit", "bright", "dark", "shadowy", "shaded", "glossy due to light").
-- Never bracket any spans that refer to container interiors/insides (e.g., "interior", "inside", "in the basket", "within the basket"), and never bracket "dark interior" or similar phrases.
-- Bracket ONLY stable, surface-level color/texture descriptors of large, static objects (floor, rug, sofa, cushions, cloth, basket exterior/rim). Keep the "never bracket robot system colors/textures" rule.
-- NEVER bracket any COLOR/TEXTURE that belongs to the robot system, including:
-  robotic arm(s), gripper/end-effector, fingers, base, mount, joints, cables, wires, sensors.
-  If a color/texture appears in the same clause or sentence as any of these robot terms, leave it unbracketed.
-- If unsure whether a span fits COLOR or TEXTURE, leave it unbracketed.
+STRICT:
+- Do NOT rewrite any text. Output must be identical after removing 【】.
+- Only bracket COLOR/TEXTURE words or short phrases for NON-ROBOT objects.
+- NEVER bracket anything describing the robot (arm/gripper/base/cable/finger/joint/mount).
 
-Example:
-Input:  "a light-colored sofa with an orange cushion"
-Output: "a 【light-colored】 sofa with an 【orange】 cushion"
+Tip:
+- Prefer bracketing only the target objects for appearance change (e.g., cloth, rug, sofa, basket).
+- If unsure, do not bracket.
 
 PARAGRAPH:
 {base_prompt}
 """
 
-REPLACEMENT_JSON_PROMPT_TEMPLATE = """You are helping create prompt variations.
-For each descriptor in the list below (each is a word or short phrase describing COLOR or TEXTURE),
-propose {num_alternatives} alternative descriptors of the SAME TYPE that are plausible in a robotics manipulation scene description.
+REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
+For each descriptor below (COLOR or TEXTURE), propose {num_alternatives} short alternatives.
 
 Rules:
-- Do NOT repeat the original descriptor.
-- Keep each alternative short (1-5 words).
-- Use only basic, standard color/texture words. Avoid poetic/rare color terms (e.g., ebony, slate, scarlet, coppery, charcoal).
-- Avoid intensifiers and vague modifiers (e.g., deep, very, quite, faint, slight, subtle).
-- Never propose alternatives that imply extreme darkness or shadow (e.g., "deep black", "pitch black", "very dark", "shadowy", "dark interior").
-- Keep alternatives to basic/common color/texture words; no rare/poetic terms.
-- Do not propose alternatives that describe lighting (bright/well-lit/shadowy) instead of surface color/texture.
-- Output STRICT JSON only, exactly in this schema (each list must contain exactly {num_alternatives} items):
-  {{"replacements": {{"<src>": ["alt1", "alt2", ...], ...}}}}
+- Do NOT repeat the original.
+- Keep 1-3 words.
+- Use common, simple descriptors suitable for indoor robotics scenes.
+- Output STRICT JSON only:
+  {{"replacements": {{"<src>": ["alt1", ...], ...}}}}
 
 DESCRIPTORS:
 {descriptor_block}
@@ -153,6 +86,9 @@ ROBOT_KEYWORDS = {
     "sensor",
     "sensors",
 }
+
+ROBOT_CANONICAL_SENTENCE = "Two robotic arms with articulated grippers are positioned on the left and right sides of the container."
+ROBOT_SENTENCE_PATTERN = re.compile(r"\\b(" + "|".join(sorted(ROBOT_KEYWORDS, key=len, reverse=True)) + r")\\b", re.IGNORECASE)
 
 # =======================
 # 2) Model Options
@@ -217,6 +153,26 @@ def filter_robot_descriptors(bracketed_prompt: str, window: int = 200) -> List[s
             continue
         filtered.append(descriptor)
     return filtered
+
+
+def canonicalize_robot_sentences(paragraph: str) -> str:
+    sentences = [s for s in re.split(r"(?<=[.!?])\\s+", paragraph.strip()) if s]
+    if not sentences:
+        return paragraph.strip()
+
+    output = []
+    robot_added = False
+    for sentence in sentences:
+        if ROBOT_SENTENCE_PATTERN.search(sentence):
+            if not robot_added:
+                output.append(ROBOT_CANONICAL_SENTENCE)
+                robot_added = True
+            continue
+        output.append(sentence)
+
+    if not output:
+        return ROBOT_CANONICAL_SENTENCE
+    return " ".join(output).strip()
 
 
 def apply_random_replacements(
@@ -303,7 +259,8 @@ def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
             {"type": "text", "text": COSMOS_STYLE_PROMPT},
         ],
     }]
-    return run_generation(model, processor, messages, 500, False, 1.0, 1.0)
+    base_prompt = run_generation(model, processor, messages, 500, False, 1.0, 1.0)
+    return canonicalize_robot_sentences(base_prompt)
 
 
 def step2_bracket_base(model, processor, base_prompt: str) -> str:
