@@ -57,11 +57,12 @@ WHAT TO BRACKET:
   (e.g., floor, table, sofa, rug, basket, cloth, objects).
 - Treat the following as texture/material/finish words and bracket them when they modify an object:
   smooth, matte, glossy, textured, woven, rough, soft, hard, metallic, wooden, plastic, rubber, ceramic, glass.
+ - Include finer-grained surface descriptors when present (e.g., striped, patterned, ribbed, knitted, wrinkled).
 
 WHAT NOT TO BRACKET:
 - NEVER bracket anything describing the robot system, including: robot/robotic, arm, gripper, end-effector,
   finger(s), base, mount, joint(s), cable(s), wire(s), sensor(s).
-  If a descriptor appears in the same sentence as any robot term, do NOT bracket it.
+  Skip only the robot descriptors themselves; other non-robot descriptors in the same sentence can still be bracketed.
 
 PARAGRAPH:
 {base_prompt}
