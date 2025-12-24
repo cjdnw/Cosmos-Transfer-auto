@@ -199,6 +199,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-24：更新 `robot_video_to_prompt.py` 的 Step1 提示词与 Step2 括号规则：新增容器/操纵物体初始状态要求、禁止模糊词，并加入 Step1.5 兜底校验（容器初始状态补写与模糊词清理）。
 - 2025-12-24：在自动生成的 json spec 中增加默认 `negative_prompt` 关键词，抑制额外物体、抖动、伪影等不良现象。
 - 2025-12-24：更新 `robot_video_to_prompt.py` 的提示文本：新增控制通用稳定性规则，限制括注范围，避免生成过暗/光照相关的替换词。
 - 2025-12-24：精简 `robot_video_to_prompt.py` 三阶段提示词，并在 Step1 后加入机器人描述规范化，避免机器人外观被改写。

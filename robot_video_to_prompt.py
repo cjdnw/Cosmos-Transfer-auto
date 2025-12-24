@@ -28,6 +28,16 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 # - If the manipulated object is visible at the beginning, state it is present at the beginning.
 # - If it becomes visible later, introduce it once before interaction.
 # - Do not describe minor surface marks (stains/smudges/specks) unless the robot clearly interacts with them.
+# - No vague terms: do NOT use any vague or approximate words, including:
+#   - Color words ending with -ish (brownish, grayish, reddish, bluish, etc.).
+#   - Uncertain qualifiers (faint, slight, subtle, somewhat, a bit, kind of, vaguely, etc.).
+#   Use a single, specific, common descriptor instead (e.g., brown not brownish).
+# - Required initial state (containers): any container object (basket/box/bin/bowl/container/tray, etc.)
+#   must explicitly include its initial state in the SAME sentence where it first appears:
+#   "initially empty" or "initially containing <object>".
+# - Required initial state (manipulated object):
+#   - If visible at the beginning, use: "At the beginning, ... lies/sits/rests ...".
+#   - If it appears later, introduce it only once when it first becomes visible, then describe interaction.
 #
 # STYLE:
 # - Avoid rare/poetic color words; use simple colors only when needed.
@@ -38,16 +48,23 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator.
 """
 
 BRACKET_PROMPT_TEMPLATE = """You are a formatting tool.
-Insert Chinese corner brackets 【】 around existing spans in the paragraph.
+Your task is ONLY to insert Chinese corner brackets 【】 around existing spans in the paragraph.
 
-STRICT:
-- Do NOT rewrite any text. Output must be identical after removing 【】.
-- Only bracket COLOR/TEXTURE words or short phrases for NON-ROBOT objects.
-- NEVER bracket anything describing the robot (arm/gripper/base/cable/finger/joint/mount).
+STRICT RULES:
+- DO NOT translate, paraphrase, rewrite, reorder, or delete ANY characters.
+- The output must be IDENTICAL to the input paragraph after removing all 【】.
+- The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
 
-Tip:
-- Prefer bracketing only the target objects for appearance change (e.g., cloth, rug, sofa, basket).
-- If unsure, do not bracket.
+WHAT TO BRACKET:
+- Bracket ALL non-robot COLOR / MATERIAL / TEXTURE / SURFACE-FINISH descriptors, including for major static objects
+  (e.g., floor, table, sofa, rug, basket, cloth, objects).
+- Treat the following as texture/material/finish words and bracket them when they modify an object:
+  smooth, matte, glossy, textured, woven, rough, soft, hard, metallic, wooden, plastic, rubber, ceramic, glass.
+
+WHAT NOT TO BRACKET:
+- NEVER bracket anything describing the robot system, including: robot/robotic, arm, gripper, end-effector,
+  finger(s), base, mount, joint(s), cable(s), wire(s), sensor(s).
+  If a descriptor appears in the same sentence as any robot term, do NOT bracket it.
 
 PARAGRAPH:
 {base_prompt}
@@ -89,6 +106,41 @@ ROBOT_KEYWORDS = {
 
 ROBOT_CANONICAL_SENTENCE = "Two robotic arms with articulated grippers are positioned on the left and right sides of the container."
 ROBOT_SENTENCE_PATTERN = re.compile(r"\\b(" + "|".join(sorted(ROBOT_KEYWORDS, key=len, reverse=True)) + r")\\b", re.IGNORECASE)
+CONTAINER_KEYWORDS = {
+    "basket",
+    "box",
+    "bin",
+    "bowl",
+    "container",
+    "tray",
+}
+VAGUE_MODIFIERS = [
+    "faint",
+    "slight",
+    "subtle",
+    "somewhat",
+    "vaguely",
+]
+VAGUE_PHRASES = [
+    "a bit",
+    "kind of",
+]
+COLORISH_BASES = [
+    "brown",
+    "gray",
+    "grey",
+    "red",
+    "blue",
+    "green",
+    "yellow",
+    "pink",
+    "purple",
+    "orange",
+    "black",
+    "white",
+    "beige",
+    "tan",
+]
 
 # =======================
 # 2) Model Options
@@ -173,6 +225,86 @@ def canonicalize_robot_sentences(paragraph: str) -> str:
     if not output:
         return ROBOT_CANONICAL_SENTENCE
     return " ".join(output).strip()
+
+
+def _append_initially_empty(sentence: str) -> str:
+    match = re.search(r"([.!?])$", sentence.strip())
+    if match:
+        punctuation = match.group(1)
+        return sentence.strip()[:-1] + ", initially empty" + punctuation
+    return sentence.strip() + ", initially empty"
+
+
+def enforce_container_initial_state(paragraph: str) -> str:
+    sentences = [s for s in re.split(r"(?<=[.!?])\\s+", paragraph.strip()) if s]
+    if not sentences:
+        return paragraph.strip()
+
+    seen = set()
+    initial_phrase = re.compile(r"\\binitially\\s+(empty|containing)\\b", re.IGNORECASE)
+    output = []
+    for sentence in sentences:
+        lowered = sentence.lower()
+        found = {kw for kw in CONTAINER_KEYWORDS if re.search(rf"\\b{re.escape(kw)}\\b", lowered)}
+        first_mentions = found - seen
+        if first_mentions:
+            seen |= first_mentions
+            if not initial_phrase.search(sentence):
+                sentence = _append_initially_empty(sentence)
+        output.append(sentence)
+    return " ".join(output).strip()
+
+
+def cleanup_vague_terms(paragraph: str) -> str:
+    warnings = []
+    color_pattern = re.compile(
+        r"\\b(" + "|".join(COLORISH_BASES) + r")ish\\b",
+        re.IGNORECASE,
+    )
+
+    def color_repl(match: re.Match) -> str:
+        original = match.group(0)
+        base = match.group(1)
+        replacement = base
+        if original.isupper():
+            replacement = base.upper()
+        elif original[0].isupper():
+            replacement = base.capitalize()
+        warnings.append(f"vague color '{original}' -> '{replacement}'")
+        return replacement
+
+    cleaned = color_pattern.sub(color_repl, paragraph)
+
+    def remove_modifier(match: re.Match) -> str:
+        original = match.group(0).strip()
+        warnings.append(f"vague modifier removed '{original}'")
+        return ""
+
+    if VAGUE_MODIFIERS:
+        cleaned = re.sub(
+            r"\\b(" + "|".join(VAGUE_MODIFIERS) + r")\\b\\s+",
+            remove_modifier,
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+    if VAGUE_PHRASES:
+        cleaned = re.sub(
+            r"\\b(" + "|".join(map(re.escape, VAGUE_PHRASES)) + r")\\b\\s+",
+            remove_modifier,
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+
+    cleaned = re.sub(r"\\s{2,}", " ", cleaned).strip()
+    for warning in warnings:
+        print(f"[WARN] Step 1.5: {warning}")
+    return cleaned
+
+
+def step1_5_postprocess(paragraph: str) -> str:
+    updated = enforce_container_initial_state(paragraph)
+    updated = cleanup_vague_terms(updated)
+    return updated
 
 
 def apply_random_replacements(
@@ -406,6 +538,8 @@ def main():
 
     if args.cmd == "step1_base":
         base = step1_generate_base(model, processor, args.video, args.fps)
+        print("[INFO] Step 1.5: post-processing base prompt")
+        base = step1_5_postprocess(base)
         write_text(args.out, base)
         print("[INFO] Wrote:", args.out)
         return
@@ -450,6 +584,8 @@ def main():
             args.seed = random.randrange(2**32)
 
         base = step1_generate_base(model, processor, args.video, args.fps)
+        print("[INFO] Step 1.5: post-processing base prompt")
+        base = step1_5_postprocess(base)
         write_text(args.out_base, base)
 
         bracketed = step2_bracket_base(model, processor, base)
