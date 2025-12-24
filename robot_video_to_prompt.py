@@ -57,7 +57,8 @@ WHAT TO BRACKET:
   (e.g., floor, table, sofa, rug, basket, cloth, objects).
 - Treat the following as texture/material/finish words and bracket them when they modify an object:
   smooth, matte, glossy, textured, woven, rough, soft, hard, metallic, wooden, plastic, rubber, ceramic, glass.
- - Include finer-grained surface descriptors when present (e.g., striped, patterned, ribbed, knitted, wrinkled).
+- Include finer-grained surface descriptors when present (e.g., striped, patterned, ribbed, knitted, wrinkled).
+- Prefer bracketing the full noun phrase when possible (descriptor + noun), e.g., "orange cushion" not just "orange".
 
 WHAT NOT TO BRACKET:
 - NEVER bracket anything describing the robot system, including: robot/robotic, arm, gripper, end-effector,
@@ -338,12 +339,18 @@ def apply_random_replacements(
         k = rng.randint(min_allowed, max_allowed) if max_allowed > 0 else 0
         selected = set(rng.sample(terms, k)) if k > 0 else set()
 
+    chosen_replacements: Dict[str, str] = {}
+
     def repl(match: re.Match) -> str:
         src = match.group(1).strip()
         if src not in selected:
             return src
+        if src in chosen_replacements:
+            return chosen_replacements[src]
         choices = replacements.get(src, [])
-        return rng.choice(choices) if choices else src
+        chosen = rng.choice(choices) if choices else src
+        chosen_replacements[src] = chosen
+        return chosen
 
     out = re.sub(r"【(.*?)】", repl, bracketed_prompt)
     return out.replace("【", "").replace("】", "")
