@@ -5,7 +5,7 @@
 ## 自动化前的手动流程（现已自动化）
 1. 提供原始 mp4 路径（批量）
 2. 生成随机纹理替换的 prompt（AutoPrompt，支持 Qwen3/Qwen2.5）
-3. 生成控制信号（已实现 depth/seg/edge/blur；保留 combo 接口）
+3. 生成控制信号（已实现 depth/seg/edge/blur/多控制 combo）
 4. 生成对应的 json spec
 5. 调用 Cosmos-Transfer2.5 推理，输出最终替换版本
 
@@ -122,7 +122,7 @@ python scripts/run_batch.py \
 - `control_cache/`：depth/seg 控制信号缓存（跨 job 复用）
 - `control_cache/edge/`：edge 控制信号缓存（跨 job 复用）
 - `control_cache/blur/`：blur 控制信号缓存（跨 job 复用）
-- `control/`：非缓存控制类型（关闭控制缓存或 combo 扩展时使用）
+- `control/`：非缓存控制类型（关闭控制缓存时使用）
 - `json/`：每个视频独立的 json spec
 - `output_video/`：Transfer2.5 输出目录
 - `logs/`：每个视频一个日志文件（追加写入）
@@ -141,8 +141,49 @@ python scripts/run_batch.py \
 - blur 缓存目录按 fingerprint 划分：`control_cache/blur/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 blur 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--blur_sigma`。
 - fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
 
-## 扩展接口（combo）
-depth/seg/edge/blur 已实现；如需扩展 combo 控制信号，在 `auto_transfer_runner/steps/control.py` 中补充对应命令即可；调度、命名、并行、日志与缓存框架保持不变。
+## JSON spec 示例
+### seg 控制信号（简化格式）
+```json
+{
+    "name": "robot_seg",
+    "prompt_path": "【缓存的prompt】",
+    "video_path": "【输入视频路径】",
+    "guidance": 3,
+    "seg": {
+        "control_path": "【cache的地址】",
+        "control_weight": 1.0
+    }
+}
+```
+
+### 多控制信号（depth/edge/seg/vis）
+```json
+{
+    "name": "robot_multicontrol",
+    "prompt_path": "【缓存的prompt】",
+    "video_path": "【输入视频路径】",
+    "guidance": 3,
+    "depth": {
+        "control_path": "【控制信号路径】",
+        "control_weight": 1.0
+    },
+    "edge": {
+        "control_path": "【控制信号路径】",
+        "control_weight": 0.2
+    },
+    "seg": {
+        "control_path": "【控制信号路径】",
+        "control_weight": 1.0
+    },
+    "vis": {
+        "control_weight": 0.1,
+        "preset_blur_strength": "high"
+    }
+}
+```
+
+## 多控制信号（combo）
+depth/seg/edge/blur 已实现；`combo` 将 depth + edge + seg 合并为多控制信号，vis 使用 `preset_blur_strength=high`。如需调整各控制信号权重，使用 `--depth_control_weight`、`--edge_control_weight`、`--seg_control_weight`、`--vis_control_weight`（默认回退到 `--control_weight`）。
 
 ## 查看所有命令行参数
 ```bash
@@ -175,7 +216,8 @@ python scripts/run_batch.py \
 批处理会在 `<work_dir>/manifest.jsonl` 里追加写入每个任务的映射信息（JSON Lines）：
 - input_video / variant_idx / job_id
 - prompt_path / json_path / output_dir / log_path
-- control_vis_path（depth 控制信号最终引用的 *_vis.mp4）
+- control_vis_path（单控制模式下最终引用的控制 mp4）
+- control_paths（combo 模式下 depth/edge/seg 控制信号路径）
 
 ## Transfer2.5 默认路径（已更新）
 默认 `--transfer_root`：`/mnt/data/ganrunhe/cosmos-transfer2.5`
@@ -223,6 +265,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-25：seg json spec 简化为仅包含 `control_path`/`control_weight`；新增 combo 多控制信号（depth+edge+seg+vis preset blur），支持 `--depth_control_weight`/`--edge_control_weight`/`--seg_control_weight`/`--vis_control_weight` 调整权重。
 - 2025-12-25：新增 edge/blur 控制信号，基于 `gen_controls_cv_mp4.py` + conda 环境 `sam` 自动生成并按指纹缓存复用，CLI 支持 `--control_type edge|blur` 及相关参数。
 - 2025-12-24：Step2 括号标注提示新增“完整名词短语”要求，减少同一物体被拆成多个替换单元的情况。
 - 2025-12-24：Step3 替换同一括号术语时保持一致，避免相同颜色/描述被随机替换为不同词。

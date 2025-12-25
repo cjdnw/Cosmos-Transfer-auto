@@ -20,6 +20,9 @@ class ControlType(str, Enum):
     COMBO = "combo"
 
 
+ControlPaths = Dict[str, Path]
+
+
 def find_vis_mp4(control_dir: Path, video_path: Path) -> Optional[Path]:
     """Find a *_vis.mp4 in output directory, tolerant to naming differences."""
     if not control_dir.exists():
@@ -740,3 +743,90 @@ def generate_control(
         f"Control type '{control_type.value}' not implemented yet. "
         f"Implement it in auto_transfer_runner/steps/control.py."
     )
+
+
+def generate_controls_combo(
+    video_path: Path,
+    work_dir: Path,
+    depth_root: Path,
+    seg_root: Path,
+    cv_root: Path,
+    depth_conda_env: str,
+    seg_conda_env: str,
+    cv_conda_env: str,
+    encoder: str,
+    grayscale: bool,
+    seg_level: str,
+    seg_use_other_level: bool,
+    seg_detect_stride: int,
+    seg_save_intermediate: bool,
+    seg_save_npy: bool,
+    seg_enable_highlight: bool,
+    seg_enable_overlay: bool,
+    seg_overlay_style: str,
+    edge_low: int,
+    edge_high: int,
+    enable_cache: bool,
+    force_regen: bool,
+    fingerprint_mode: str,
+    lock_timeout_sec: int,
+    stale_lock_sec: int,
+    non_cached_output_dir: Path,
+    env: Dict[str, str],
+    log_path: Path,
+) -> ControlPaths:
+    """Generate depth/edge/seg controls for multi-control mode (reuse caches)."""
+    depth_path = ensure_cached_depth_control(
+        video_path=video_path,
+        work_dir=work_dir,
+        depth_root=depth_root,
+        conda_env=depth_conda_env,
+        encoder=encoder,
+        grayscale=grayscale,
+        env=env,
+        log_path=log_path,
+        enable_cache=enable_cache,
+        force_regen=force_regen,
+        fingerprint_mode=fingerprint_mode,
+        lock_timeout_sec=lock_timeout_sec,
+        stale_lock_sec=stale_lock_sec,
+    )
+    edge_path = ensure_cached_edge_control(
+        video_path=video_path,
+        work_dir=work_dir,
+        cv_root=cv_root,
+        conda_env=cv_conda_env,
+        low=edge_low,
+        high=edge_high,
+        env=env,
+        log_path=log_path,
+        enable_cache=enable_cache,
+        force_regen=force_regen,
+        fingerprint_mode=fingerprint_mode,
+        lock_timeout_sec=lock_timeout_sec,
+        stale_lock_sec=stale_lock_sec,
+        non_cached_output_dir=non_cached_output_dir,
+    )
+    seg_path = ensure_cached_seg_control(
+        video_path=video_path,
+        work_dir=work_dir,
+        seg_root=seg_root,
+        conda_env=seg_conda_env,
+        level=seg_level,
+        use_other_level=seg_use_other_level,
+        detect_stride=seg_detect_stride,
+        save_intermediate=seg_save_intermediate,
+        save_npy=seg_save_npy,
+        enable_highlight=seg_enable_highlight,
+        enable_overlay=seg_enable_overlay,
+        overlay_style=seg_overlay_style,
+        env=env,
+        log_path=log_path,
+        enable_cache=enable_cache,
+        force_regen=force_regen,
+        fingerprint_mode=fingerprint_mode,
+        lock_timeout_sec=lock_timeout_sec,
+        stale_lock_sec=stale_lock_sec,
+        non_cached_output_dir=non_cached_output_dir,
+    )
+    return {"depth": depth_path, "edge": edge_path, "seg": seg_path}

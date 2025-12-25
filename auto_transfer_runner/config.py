@@ -99,6 +99,10 @@ class TransferConfig:
     guidance: float = 3.0
     num_steps: int = 35
     control_weight: float = 1.0
+    depth_control_weight: float = 1.0
+    edge_control_weight: float = 1.0
+    seg_control_weight: float = 1.0
+    vis_control_weight: float = 1.0
     skip_if_output_exists: bool = True
 
 
