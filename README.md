@@ -116,6 +116,18 @@ python scripts/run_batch.py \
   --blur_sigma 10
 ```
 
+### 例 10：多控制信号（combo）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type combo \
+  --depth_control_weight 1.0 \
+  --edge_control_weight 0.2 \
+  --seg_control_weight 1.0 \
+  --vis_control_weight 0.1
+```
+
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
 - `prompt_cache/`：按视频指纹缓存的 Step1 base prompt（跨任务复用）
@@ -140,47 +152,6 @@ python scripts/run_batch.py \
 - edge 缓存目录按 fingerprint 划分：`control_cache/edge/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 canny 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--edge_low` / `--edge_high`。
 - blur 缓存目录按 fingerprint 划分：`control_cache/blur/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 blur 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--blur_sigma`。
 - fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
-
-## JSON spec 示例
-### seg 控制信号（简化格式）
-```json
-{
-    "name": "robot_seg",
-    "prompt_path": "【缓存的prompt】",
-    "video_path": "【输入视频路径】",
-    "guidance": 3,
-    "seg": {
-        "control_path": "【cache的地址】",
-        "control_weight": 1.0
-    }
-}
-```
-
-### 多控制信号（depth/edge/seg/vis）
-```json
-{
-    "name": "robot_multicontrol",
-    "prompt_path": "【缓存的prompt】",
-    "video_path": "【输入视频路径】",
-    "guidance": 3,
-    "depth": {
-        "control_path": "【控制信号路径】",
-        "control_weight": 1.0
-    },
-    "edge": {
-        "control_path": "【控制信号路径】",
-        "control_weight": 0.2
-    },
-    "seg": {
-        "control_path": "【控制信号路径】",
-        "control_weight": 1.0
-    },
-    "vis": {
-        "control_weight": 0.1,
-        "preset_blur_strength": "high"
-    }
-}
-```
 
 ## 多控制信号（combo）
 depth/seg/edge/blur 已实现；`combo` 将 depth + edge + seg 合并为多控制信号，vis 使用 `preset_blur_strength=high`。如需调整各控制信号权重，使用 `--depth_control_weight`、`--edge_control_weight`、`--seg_control_weight`、`--vis_control_weight`（默认回退到 `--control_weight`）。
