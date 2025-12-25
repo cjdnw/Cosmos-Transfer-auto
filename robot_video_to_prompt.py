@@ -426,7 +426,7 @@ def step3_generate_replacements_json(
     bracketed_prompt: str,
     alternatives_per_term: int = 6,
 ) -> Dict[str, List[str]]:
-    terms = filter_robot_descriptors(bracketed_prompt)
+    terms = extract_bracket_terms(bracketed_prompt)
     if not terms:
         return {}
 
