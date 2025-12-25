@@ -76,6 +76,9 @@ Rules:
 - Do NOT repeat the original.
 - Keep 1-3 words.
 - Use common, simple descriptors suitable for indoor robotics scenes.
+- For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
+- Avoid rare or poetic color words.
+- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle".
 - Output STRICT JSON only:
   {{"replacements": {{"<src>": ["alt1", ...], ...}}}}
 
@@ -139,6 +142,31 @@ COLORISH_BASES = [
     "white",
     "beige",
     "tan",
+]
+COLOR_BASES = [
+    "red",
+    "blue",
+    "green",
+    "yellow",
+    "orange",
+    "purple",
+    "pink",
+    "brown",
+    "black",
+    "white",
+    "gray",
+    "beige",
+    "tan",
+]
+VAGUE_COLOR_MODIFIERS = [
+    "pale",
+    "light",
+    "dark",
+    "soft",
+    "muted",
+    "faint",
+    "slight",
+    "subtle",
 ]
 
 # =======================
@@ -311,6 +339,39 @@ def cleanup_vague_terms(paragraph: str) -> str:
     return cleaned
 
 
+def _apply_color_case(color: str, original: str) -> str:
+    if original.isupper():
+        return color.upper()
+    if original[0].isupper():
+        return color.capitalize()
+    return color
+
+
+def build_color_variations(term: str, max_alternatives: int) -> List[str]:
+    pattern = re.compile(r"\\b(" + "|".join(COLOR_BASES) + r")\\b", re.IGNORECASE)
+    match = pattern.search(term)
+    if not match:
+        return []
+    original_color = match.group(1)
+    original_lower = original_color.lower()
+    replacements = []
+    for color in COLOR_BASES:
+        if color == original_lower:
+            continue
+        replacement_color = _apply_color_case(color, original_color)
+        candidate = pattern.sub(replacement_color, term, count=1)
+        if candidate != term:
+            replacements.append(candidate)
+        if len(replacements) >= max_alternatives:
+            break
+    return replacements
+
+
+def is_vague_color_phrase(text: str) -> bool:
+    pattern = re.compile(r"\\b(" + "|".join(VAGUE_COLOR_MODIFIERS) + r")\\b", re.IGNORECASE)
+    return bool(pattern.search(text))
+
+
 def step1_5_postprocess(paragraph: str) -> str:
     updated = enforce_container_initial_state(paragraph)
     updated = cleanup_vague_terms(updated)
@@ -443,7 +504,22 @@ def step3_generate_replacements_json(
     }]
 
     raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
-    return safe_parse_json(raw).get("replacements", {}) or {}
+    replacements = safe_parse_json(raw).get("replacements", {}) or {}
+
+    merged: Dict[str, List[str]] = {}
+    for term in terms:
+        model_alts = replacements.get(term, []) or []
+        color_alts = build_color_variations(term, alternatives_per_term)
+        combined = []
+        for alt in model_alts + color_alts:
+            if not alt or alt == term or alt in combined or is_vague_color_phrase(alt):
+                continue
+            combined.append(alt)
+            if len(combined) >= alternatives_per_term:
+                break
+        merged[term] = combined
+
+    return merged
 
 
 def write_text(path: str, text: str):

@@ -236,6 +236,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-25：Step3 替换候选明确禁止使用 “pale/light/dark”等模糊修饰词，并在替换合并时过滤模糊颜色短语，提升颜色替换的可控性与多样性。
 - 2025-12-25：seg json spec 简化为仅包含 `control_path`/`control_weight`；新增 combo 多控制信号（depth+edge+seg+vis preset blur），支持 `--depth_control_weight`/`--edge_control_weight`/`--seg_control_weight`/`--vis_control_weight` 调整权重。
 - 2025-12-25：新增 edge/blur 控制信号，基于 `gen_controls_cv_mp4.py` + conda 环境 `sam` 自动生成并按指纹缓存复用，CLI 支持 `--control_type edge|blur` 及相关参数。
 - 2025-12-24：Step2 括号标注提示新增“完整名词短语”要求，减少同一物体被拆成多个替换单元的情况。
