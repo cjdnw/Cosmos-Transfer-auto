@@ -120,6 +120,18 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         guidance=args.guidance,
         num_steps=args.num_steps,
         control_weight=args.control_weight,
+        depth_control_weight=(
+            args.depth_control_weight if args.depth_control_weight is not None else args.control_weight
+        ),
+        edge_control_weight=(
+            args.edge_control_weight if args.edge_control_weight is not None else args.control_weight
+        ),
+        seg_control_weight=(
+            args.seg_control_weight if args.seg_control_weight is not None else args.control_weight
+        ),
+        vis_control_weight=(
+            args.vis_control_weight if args.vis_control_weight is not None else args.control_weight
+        ),
         skip_if_output_exists=(not args.force_infer),
     )
 
@@ -221,9 +233,9 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--transfer_root", type=str, default=str(DEFAULT_TRANSFER_ROOT), help="Cosmos-Transfer2.5 repo path (contains .venv/)")
     ap.add_argument("--hf_cache", type=str, default=str(DEFAULT_HF_CACHE), help="HuggingFace cache root")
 
-    # Control type (depth/seg/edge/blur implemented; combo reserved)
+    # Control type (depth/seg/edge/blur/combo implemented)
     ap.add_argument("--control_type", type=str, default="depth", choices=["depth", "edge", "blur", "seg", "combo"],
-                    help="Control type; depth/seg/edge/blur are implemented, combo is reserved")
+                    help="Control type; depth/seg/edge/blur/combo are implemented")
 
     # Step2 (prompt)
     ap.add_argument("--qwen_env", type=str, default=PROMPT_DEFAULTS.conda_env, help="Conda env for Step2 (AutoPrompt)")
@@ -305,6 +317,30 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--guidance", type=float, default=TRANSFER_DEFAULTS.guidance, help="guidance value in json spec")
     ap.add_argument("--num_steps", type=int, default=TRANSFER_DEFAULTS.num_steps, help="num_steps in json spec (default: 35)")
     ap.add_argument("--control_weight", type=float, default=TRANSFER_DEFAULTS.control_weight, help="control_weight in json spec")
+    ap.add_argument(
+        "--depth_control_weight",
+        type=float,
+        default=None,
+        help="depth control_weight override (default: --control_weight)",
+    )
+    ap.add_argument(
+        "--edge_control_weight",
+        type=float,
+        default=None,
+        help="edge control_weight override (default: --control_weight)",
+    )
+    ap.add_argument(
+        "--seg_control_weight",
+        type=float,
+        default=None,
+        help="seg control_weight override (default: --control_weight)",
+    )
+    ap.add_argument(
+        "--vis_control_weight",
+        type=float,
+        default=None,
+        help="vis(blur) control_weight override (default: --control_weight)",
+    )
     ap.add_argument("--force_infer", action="store_true", help="Force inference even if output directory is not empty")
 
     # Depth cache

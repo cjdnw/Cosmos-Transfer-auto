@@ -59,7 +59,7 @@ def write_json_spec_depth(
     )
     spec["depth"] = {
         "control_path": str(control_path),
-        "control_weight": transfer_cfg.control_weight,
+        "control_weight": transfer_cfg.depth_control_weight,
     }
 
     with json_path.open("w", encoding="utf-8") as f:
@@ -88,10 +88,7 @@ def write_json_spec_seg(
     )
     spec["seg"] = {
         "control_path": str(control_path),
-        "control_weight": transfer_cfg.control_weight,
-        "mask_path": None,
-        "mask_prompt": None,
-        "control_prompt": None,
+        "control_weight": transfer_cfg.seg_control_weight,
     }
 
     with json_path.open("w", encoding="utf-8") as f:
@@ -120,7 +117,7 @@ def write_json_spec_edge(
     )
     spec["edge"] = {
         "control_path": str(control_path),
-        "control_weight": transfer_cfg.control_weight,
+        "control_weight": transfer_cfg.edge_control_weight,
     }
 
     with json_path.open("w", encoding="utf-8") as f:
@@ -149,7 +146,50 @@ def write_json_spec_blur(
     )
     spec["vis"] = {
         "control_path": str(control_path),
-        "control_weight": transfer_cfg.control_weight,
+        "control_weight": transfer_cfg.vis_control_weight,
+    }
+
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(spec, f, ensure_ascii=False, indent=4)
+
+
+def write_json_spec_multicontrol(
+    *,
+    json_path: Path,
+    name: str,
+    prompt_path: Path,
+    video_path: Path,
+    seed: int,
+    transfer_cfg: TransferConfig,
+    depth_path: Path,
+    edge_path: Path,
+    seg_path: Path,
+) -> None:
+    """Step4：生成多控制信号的 json spec（depth/edge/seg/vis）。"""
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    spec = _build_base_spec(
+        name=name,
+        prompt_path=prompt_path,
+        video_path=video_path,
+        seed=seed,
+        transfer_cfg=transfer_cfg,
+    )
+    spec["depth"] = {
+        "control_path": str(depth_path),
+        "control_weight": transfer_cfg.depth_control_weight,
+    }
+    spec["edge"] = {
+        "control_path": str(edge_path),
+        "control_weight": transfer_cfg.edge_control_weight,
+    }
+    spec["seg"] = {
+        "control_path": str(seg_path),
+        "control_weight": transfer_cfg.seg_control_weight,
+    }
+    spec["vis"] = {
+        "control_weight": transfer_cfg.vis_control_weight,
+        "preset_blur_strength": "high",
     }
 
     with json_path.open("w", encoding="utf-8") as f:
