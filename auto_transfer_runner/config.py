@@ -13,6 +13,7 @@ DEFAULT_WORK_DIR = Path("/mnt/data/ganrunhe/auto_transfer")
 DEFAULT_AUTOPROMPT_ROOT = REPO_ROOT
 DEFAULT_DEPTH_ROOT = Path("/mnt/data/ganrunhe/Video-Depth-Anything")
 DEFAULT_SEG_ROOT = Path("/mnt/data/ganrunhe/AutoSeg-SAM2")
+DEFAULT_CV_ROOT = REPO_ROOT
 DEFAULT_TRANSFER_ROOT = Path("/mnt/data/ganrunhe/cosmos-transfer2.5")
 DEFAULT_HF_CACHE = Path("/mnt/data/ganrunhe/hf_cache")
 
@@ -24,6 +25,7 @@ class RepoPaths:
     autoprompt_root: Path
     depth_root: Path
     seg_root: Path
+    cv_root: Path
     transfer_root: Path
     hf_cache: Path
 
@@ -63,6 +65,15 @@ class SegConfig:
     enable_highlight: bool = False
     enable_overlay: bool = True
     overlay_style: str = "mask"
+
+
+@dataclass(frozen=True)
+class CvControlConfig:
+    """Step3: edge/blur control generation config (gen_controls_cv_mp4.py)."""
+    conda_env: str = "sam"
+    blur_sigma: float = 10.0
+    canny_low: int = 80
+    canny_high: int = 160
 
 
 @dataclass(frozen=True)
@@ -127,6 +138,7 @@ class GlobalConfig:
     prompt: PromptConfig
     depth: DepthConfig
     seg: SegConfig
+    cv: CvControlConfig
     transfer: TransferConfig
     cache: CacheConfig
     cleanup: CleanupConfig
@@ -137,6 +149,7 @@ class GlobalConfig:
 PROMPT_DEFAULTS = PromptConfig()
 DEPTH_DEFAULTS = DepthConfig()
 SEG_DEFAULTS = SegConfig()
+CV_DEFAULTS = CvControlConfig()
 TRANSFER_DEFAULTS = TransferConfig()
 CACHE_DEFAULTS = CacheConfig()
 CLEANUP_DEFAULTS = CleanupConfig()

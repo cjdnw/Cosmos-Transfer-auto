@@ -8,7 +8,12 @@ from typing import Callable, Dict, TypeVar
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control
-from .steps.json_spec import write_json_spec_depth, write_json_spec_seg
+from .steps.json_spec import (
+    write_json_spec_blur,
+    write_json_spec_depth,
+    write_json_spec_edge,
+    write_json_spec_seg,
+)
 from .steps.inference import run_transfer_inference
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import make_job_paths
@@ -99,8 +104,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 work_dir=repos.work_dir,
                 depth_root=repos.depth_root,
                 seg_root=repos.seg_root,
+                cv_root=repos.cv_root,
                 depth_conda_env=cfg.depth.conda_env,
                 seg_conda_env=cfg.seg.conda_env,
+                cv_conda_env=cfg.cv.conda_env,
                 encoder=cfg.depth.encoder,
                 grayscale=cfg.depth.grayscale,
                 seg_level=cfg.seg.level,
@@ -111,6 +118,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 seg_enable_highlight=cfg.seg.enable_highlight,
                 seg_enable_overlay=cfg.seg.enable_overlay,
                 seg_overlay_style=cfg.seg.overlay_style,
+                edge_low=cfg.cv.canny_low,
+                edge_high=cfg.cv.canny_high,
+                blur_sigma=cfg.cv.blur_sigma,
                 enable_cache=cfg.cache.enable,
                 force_regen=cfg.cache.force_regen,
                 fingerprint_mode=cfg.cache.fingerprint_mode,
@@ -151,8 +161,34 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     control_path=control_path,
                 ),
             )
+        elif control_type == ControlType.EDGE:
+            _run_with_timing(
+                "STEP4 JSON",
+                lambda: write_json_spec_edge(
+                    json_path=paths.json_path,
+                    name=name,
+                    prompt_path=paths.prompt_path,
+                    video_path=job.video_path,
+                    seed=seed,
+                    transfer_cfg=cfg.transfer,
+                    control_path=control_path,
+                ),
+            )
+        elif control_type == ControlType.BLUR:
+            _run_with_timing(
+                "STEP4 JSON",
+                lambda: write_json_spec_blur(
+                    json_path=paths.json_path,
+                    name=name,
+                    prompt_path=paths.prompt_path,
+                    video_path=job.video_path,
+                    seed=seed,
+                    transfer_cfg=cfg.transfer,
+                    control_path=control_path,
+                ),
+            )
         else:
-            raise NotImplementedError("Only depth/seg json spec are implemented for now.")
+            raise NotImplementedError("Only depth/seg/edge/blur json spec are implemented for now.")
 
         append_log(paths.log_path, f"[STEP4] Wrote json: {paths.json_path}")
         console_print(f"[STEP4] json={paths.json_path.name}")
