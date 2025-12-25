@@ -1,11 +1,11 @@
 # Cosmos-Transfer2.5 全自动批处理工程
 
-面向 Cosmos-Transfer2.5 的批处理流水线，将原本手动执行的 **Step2~Step5** 串成可批量、多卡并行的自动化流程，并针对 **depth/seg 控制信号** 做缓存复用（同一输入视频仅生成一次控制信号）。
+面向 Cosmos-Transfer2.5 的批处理流水线，将原本手动执行的 **Step2~Step5** 串成可批量、多卡并行的自动化流程，并针对 **depth/seg/edge/blur 控制信号** 做缓存复用（同一输入视频仅生成一次控制信号）。
 
 ## 自动化前的手动流程（现已自动化）
 1. 提供原始 mp4 路径（批量）
 2. 生成随机纹理替换的 prompt（AutoPrompt，支持 Qwen3/Qwen2.5）
-3. 生成控制信号（目前实现 depth/seg；保留 edge/blur/combo 接口）
+3. 生成控制信号（已实现 depth/seg/edge/blur；保留 combo 接口）
 4. 生成对应的 json spec
 5. 调用 Cosmos-Transfer2.5 推理，输出最终替换版本
 
@@ -14,6 +14,7 @@
   - `qwen25vl`（默认）：用于 `AutoPrompt/robot_video_to_prompt.py`，支持 `--model_type Qwen3|Qwen2.5`
   - `depthanything`：用于 `Video-Depth-Anything/run.py`
   - `autoseg`：用于 `AutoSeg-SAM2`（seg 控制信号）
+  - `sam`：用于 `gen_controls_cv_mp4.py`（edge/blur 控制信号）
 - 若指定的 `--qwen_env` 不存在，运行时会自动回退到 `qwen25vl` 并在日志中打印警告。
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
@@ -96,11 +97,32 @@ python scripts/run_batch.py \
 ```
 说明：`--replacements_per_term` 会影响 Step3 生成的候选列表数量，并参与 prompt 缓存键；不同数量会生成独立的替换缓存。
 
+### 例 8：自动生成 edge 控制信号（缓存复用）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type edge \
+  --edge_low 80 \
+  --edge_high 160
+```
+
+### 例 9：自动生成 blur 控制信号（缓存复用）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type blur \
+  --blur_sigma 10
+```
+
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
 - `prompt_cache/`：按视频指纹缓存的 Step1 base prompt（跨任务复用）
 - `control_cache/`：depth/seg 控制信号缓存（跨 job 复用）
-- `control/`：非缓存控制类型（预留，未来 edge/... 可用）
+- `control_cache/edge/`：edge 控制信号缓存（跨 job 复用）
+- `control_cache/blur/`：blur 控制信号缓存（跨 job 复用）
+- `control/`：非缓存控制类型（关闭控制缓存或 combo 扩展时使用）
 - `json/`：每个视频独立的 json spec
 - `output_video/`：Transfer2.5 输出目录
 - `logs/`：每个视频一个日志文件（追加写入）
@@ -115,10 +137,12 @@ python scripts/run_batch.py \
 - 所有缓存层均有文件锁：Step1 以 fingerprint 目录锁定；Step2 以 base_hash 锁定；Step3 以 bracket_hash 锁定。多 worker 命中相同视频/文本时会等待同一锁，只让一个 worker 写缓存，其余直接复用，保障“同一视频只跑一次耗时步骤”的等待范式。
 - depth 缓存目录按 fingerprint 划分：`control_cache/depth/<fingerprint>/`
 - seg 缓存目录同样按 fingerprint 划分：`control_cache/seg/<fingerprint>/`。流水线会自动调用 `/mnt/data/ganrunhe/AutoSeg-SAM2`（conda 环境 `autoseg`）生成 seg 控制 mp4 并落盘缓存，命中后复用；前置会用 `ffmpeg` 抽帧到临时目录再调用 AutoSeg-SAM2（其输入需要帧目录而非 mp4），无需手动干预。可通过 CLI 覆盖参数（如 `--seg_root`、`--seg_env`、`--seg_level`、`--seg_detect_stride`、`--seg_enable_highlight`、`--seg_disable_overlay`、`--seg_overlay_style` 等）。
+- edge 缓存目录按 fingerprint 划分：`control_cache/edge/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 canny 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--edge_low` / `--edge_high`。
+- blur 缓存目录按 fingerprint 划分：`control_cache/blur/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 blur 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--blur_sigma`。
 - fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
 
-## 扩展接口（edge/blur/combo）
-seg 已实现；如需扩展其他控制信号，在 `auto_transfer_runner/steps/control.py` 中补充对应命令即可；调度、命名、并行、日志与缓存框架保持不变。
+## 扩展接口（combo）
+depth/seg/edge/blur 已实现；如需扩展 combo 控制信号，在 `auto_transfer_runner/steps/control.py` 中补充对应命令即可；调度、命名、并行、日志与缓存框架保持不变。
 
 ## 查看所有命令行参数
 ```bash
@@ -166,8 +190,8 @@ python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
 
 ## 路径与环境默认值（config.py）
 所有内置的路径与环境默认值统一集中在 `auto_transfer_runner/config.py`，CLI 会直接读取这些常量：
-- 路径：`DEFAULT_WORK_DIR`、`DEFAULT_AUTOPROMPT_ROOT`、`DEFAULT_DEPTH_ROOT`、`DEFAULT_SEG_ROOT`、`DEFAULT_TRANSFER_ROOT`、`DEFAULT_HF_CACHE`
-- 环境/模型参数：`PROMPT_DEFAULTS`（如 `conda_env`/`fps`/`model_type` 等）、`DEPTH_DEFAULTS`、`SEG_DEFAULTS`、`TRANSFER_DEFAULTS`、`CACHE_DEFAULTS`
+- 路径：`DEFAULT_WORK_DIR`、`DEFAULT_AUTOPROMPT_ROOT`、`DEFAULT_DEPTH_ROOT`、`DEFAULT_SEG_ROOT`、`DEFAULT_CV_ROOT`、`DEFAULT_TRANSFER_ROOT`、`DEFAULT_HF_CACHE`
+- 环境/模型参数：`PROMPT_DEFAULTS`（如 `conda_env`/`fps`/`model_type` 等）、`DEPTH_DEFAULTS`、`SEG_DEFAULTS`、`CV_DEFAULTS`、`TRANSFER_DEFAULTS`、`CACHE_DEFAULTS`
 
 如需修改默认路径或环境名称，有两种方式：
 1. 直接编辑 `config.py` 中上述常量/默认对象，保存后即成为新的全局默认值。
@@ -199,6 +223,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-25：新增 edge/blur 控制信号，基于 `gen_controls_cv_mp4.py` + conda 环境 `sam` 自动生成并按指纹缓存复用，CLI 支持 `--control_type edge|blur` 及相关参数。
 - 2025-12-24：Step2 括号标注提示新增“完整名词短语”要求，减少同一物体被拆成多个替换单元的情况。
 - 2025-12-24：Step3 替换同一括号术语时保持一致，避免相同颜色/描述被随机替换为不同词。
 - 2025-12-24：Step2 输出新增机器人括号清理兜底，移除机器人相关括注以确保替换安全。

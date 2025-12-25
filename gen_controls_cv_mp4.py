@@ -3,11 +3,14 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-def _auto_out(input_mp4: str, suffix: str, output: str | None):
+def _auto_out(input_mp4: str, suffix: str, output: str | None, output_dir: str | None):
     if output is not None:
         return output
     base = os.path.splitext(os.path.basename(input_mp4))[0]
-    return base + suffix + ".mp4"
+    name = base + suffix + ".mp4"
+    if output_dir:
+        return os.path.join(output_dir, name)
+    return name
 
 def _open_writer(out_path: str, fps: float, w: int, h: int, is_color=True):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -107,11 +110,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mode in ["blur", "canny"]:
+        if args.output_dir:
+            os.makedirs(args.output_dir, exist_ok=True)
         if args.mode == "blur":
-            out = _auto_out(args.input, "_blur", args.output)
+            out = _auto_out(args.input, "_blur", args.output, args.output_dir)
             gen_blur_mp4(args.input, out, sigma=args.blur_sigma)
         else:
-            out = _auto_out(args.input, "_canny", args.output)
+            out = _auto_out(args.input, "_canny", args.output, args.output_dir)
             gen_canny_mp4(args.input, out, low=args.low, high=args.high, to_3ch=True)
 
     else:  # both

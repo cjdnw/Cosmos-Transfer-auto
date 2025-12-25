@@ -12,18 +12,21 @@ from .config import (
     DEFAULT_AUTOPROMPT_ROOT,
     DEFAULT_DEPTH_ROOT,
     DEFAULT_SEG_ROOT,
+    DEFAULT_CV_ROOT,
     DEFAULT_HF_CACHE,
     DEFAULT_TRANSFER_ROOT,
     DEFAULT_WORK_DIR,
     CACHE_DEFAULTS,
     DEPTH_DEFAULTS,
     SEG_DEFAULTS,
+    CV_DEFAULTS,
     PROMPT_DEFAULTS,
     TRANSFER_DEFAULTS,
     RepoPaths,
     PromptConfig,
     DepthConfig,
     SegConfig,
+    CvControlConfig,
     TransferConfig,
     CacheConfig,
     CleanupConfig,
@@ -61,6 +64,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         autoprompt_root=Path(args.autoprompt_root),
         depth_root=Path(args.depth_root),
         seg_root=Path(args.seg_root),
+        cv_root=Path(args.cv_root),
         transfer_root=Path(args.transfer_root),
         hf_cache=Path(args.hf_cache),
     )
@@ -94,6 +98,13 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         enable_highlight=args.seg_enable_highlight,
         enable_overlay=(not args.seg_disable_overlay),
         overlay_style=args.seg_overlay_style,
+    )
+
+    cv = CvControlConfig(
+        conda_env=args.cv_env,
+        blur_sigma=args.blur_sigma,
+        canny_low=args.edge_low,
+        canny_high=args.edge_high,
     )
 
     transfer = TransferConfig(
@@ -144,6 +155,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         cache=cache,
         cleanup=cleanup,
         run=run,
+        cv=cv,
     )
 
 
@@ -174,7 +186,7 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
 def main(argv: List[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="run_batch.py",
-        description="Cosmos-Transfer2.5 batch automation (multi-GPU, cached depth/seg control).",
+        description="Cosmos-Transfer2.5 batch automation (multi-GPU, cached depth/seg/edge/blur control).",
         epilog=(
             "Examples:\n"
             "  # Batch a whole folder\n"
@@ -205,12 +217,13 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--autoprompt_root", type=str, default=str(DEFAULT_AUTOPROMPT_ROOT), help="AutoPrompt repo path")
     ap.add_argument("--depth_root", type=str, default=str(DEFAULT_DEPTH_ROOT), help="Video-Depth-Anything repo path")
     ap.add_argument("--seg_root", type=str, default=str(DEFAULT_SEG_ROOT), help="AutoSeg-SAM2 repo path")
+    ap.add_argument("--cv_root", type=str, default=str(DEFAULT_CV_ROOT), help="Path containing gen_controls_cv_mp4.py")
     ap.add_argument("--transfer_root", type=str, default=str(DEFAULT_TRANSFER_ROOT), help="Cosmos-Transfer2.5 repo path (contains .venv/)")
     ap.add_argument("--hf_cache", type=str, default=str(DEFAULT_HF_CACHE), help="HuggingFace cache root")
 
-    # Control type (depth implemented; others reserved)
+    # Control type (depth/seg/edge/blur implemented; combo reserved)
     ap.add_argument("--control_type", type=str, default="depth", choices=["depth", "edge", "blur", "seg", "combo"],
-                    help="Control type; depth & seg are implemented, others are reserved")
+                    help="Control type; depth/seg/edge/blur are implemented, combo is reserved")
 
     # Step2 (prompt)
     ap.add_argument("--qwen_env", type=str, default=PROMPT_DEFAULTS.conda_env, help="Conda env for Step2 (AutoPrompt)")
@@ -266,6 +279,12 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--seg_disable_overlay", action="store_true", help="Disable overlay in seg visualization (default: overlay on)")
     ap.add_argument("--seg_overlay_style", type=str, default=SEG_DEFAULTS.overlay_style,
                     help="Overlay style for seg visualization (passed to visulization.py)")
+
+    # Step3 (edge/blur)
+    ap.add_argument("--cv_env", type=str, default=CV_DEFAULTS.conda_env, help="Conda env for Step3 (edge/blur, sam)")
+    ap.add_argument("--blur_sigma", type=float, default=CV_DEFAULTS.blur_sigma, help="Gaussian blur sigma for blur control")
+    ap.add_argument("--edge_low", type=int, default=CV_DEFAULTS.canny_low, help="Canny low threshold for edge control")
+    ap.add_argument("--edge_high", type=int, default=CV_DEFAULTS.canny_high, help="Canny high threshold for edge control")
 
     # Step4/5 parameters
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")

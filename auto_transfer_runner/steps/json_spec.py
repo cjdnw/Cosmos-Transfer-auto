@@ -96,3 +96,61 @@ def write_json_spec_seg(
 
     with json_path.open("w", encoding="utf-8") as f:
         json.dump(spec, f, ensure_ascii=False, indent=4)
+
+
+def write_json_spec_edge(
+    *,
+    json_path: Path,
+    name: str,
+    prompt_path: Path,
+    video_path: Path,
+    seed: int,
+    transfer_cfg: TransferConfig,
+    control_path: Path,
+) -> None:
+    """Step4：生成 edge 格式的 json spec。"""
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    spec = _build_base_spec(
+        name=name,
+        prompt_path=prompt_path,
+        video_path=video_path,
+        seed=seed,
+        transfer_cfg=transfer_cfg,
+    )
+    spec["edge"] = {
+        "control_path": str(control_path),
+        "control_weight": transfer_cfg.control_weight,
+    }
+
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(spec, f, ensure_ascii=False, indent=4)
+
+
+def write_json_spec_blur(
+    *,
+    json_path: Path,
+    name: str,
+    prompt_path: Path,
+    video_path: Path,
+    seed: int,
+    transfer_cfg: TransferConfig,
+    control_path: Path,
+) -> None:
+    """Step4：生成 blur(vis) 格式的 json spec。"""
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    spec = _build_base_spec(
+        name=name,
+        prompt_path=prompt_path,
+        video_path=video_path,
+        seed=seed,
+        transfer_cfg=transfer_cfg,
+    )
+    spec["vis"] = {
+        "control_path": str(control_path),
+        "control_weight": transfer_cfg.control_weight,
+    }
+
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(spec, f, ensure_ascii=False, indent=4)

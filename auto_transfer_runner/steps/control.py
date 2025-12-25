@@ -57,6 +57,25 @@ def find_seg_mp4(control_dir: Path, video_path: Path) -> Optional[Path]:
     return target_list[0]
 
 
+def find_control_mp4(control_dir: Path, video_path: Path, suffix_hint: str | None = None) -> Optional[Path]:
+    """Find a control mp4 in output directory (prefer suffix + video stem)."""
+    if not control_dir.exists():
+        return None
+
+    candidates = list(control_dir.glob("*.mp4"))
+    if not candidates:
+        return None
+
+    stem = video_path.stem
+    name = video_path.name
+    preferred = candidates
+    if suffix_hint:
+        preferred = [p for p in candidates if suffix_hint in p.name]
+    preferred = [p for p in preferred if stem in p.name or name in p.name] or preferred
+    preferred.sort(key=lambda p: (p.stat().st_size, p.stat().st_mtime), reverse=True)
+    return preferred[0]
+
+
 def generate_control_depth(
     video_path: Path,
     output_dir: Path,
@@ -207,6 +226,103 @@ def generate_control_seg(
     return final_path
 
 
+def _edge_output_path(output_dir: Path, video_path: Path) -> Path:
+    return output_dir / f"{video_path.stem}_canny.mp4"
+
+
+def _blur_output_path(output_dir: Path, video_path: Path) -> Path:
+    return output_dir / f"{video_path.stem}_blur.mp4"
+
+
+def generate_control_edge(
+    video_path: Path,
+    output_dir: Path,
+    cv_root: Path,
+    conda_env: str,
+    low: int,
+    high: int,
+    env: Dict[str, str],
+    log_path: Path,
+) -> Path:
+    """Step3(edge): run gen_controls_cv_mp4.py (canny) and return the produced mp4."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = _edge_output_path(output_dir, video_path)
+
+    cmd = conda_run(
+        conda_env,
+        [
+            "python",
+            "gen_controls_cv_mp4.py",
+            "--input",
+            str(video_path),
+            "--mode",
+            "canny",
+            "--output-dir",
+            str(output_dir),
+            "--low",
+            str(low),
+            "--high",
+            str(high),
+        ],
+    )
+
+    run_cmd(cmd, cwd=cv_root, env=env, log_path=log_path, title="STEP3: Generate control (edge)")
+
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return output_path
+
+    fallback = find_control_mp4(output_dir, video_path, suffix_hint="canny")
+    if fallback is None or fallback.stat().st_size == 0:
+        raise FileNotFoundError(f"Edge control mp4 not found in: {output_dir}")
+    return fallback
+
+
+def generate_control_blur(
+    video_path: Path,
+    output_dir: Path,
+    cv_root: Path,
+    conda_env: str,
+    blur_sigma: float,
+    low: int,
+    high: int,
+    env: Dict[str, str],
+    log_path: Path,
+) -> Path:
+    """Step3(blur): run gen_controls_cv_mp4.py (blur) and return the produced mp4."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = _blur_output_path(output_dir, video_path)
+
+    cmd = conda_run(
+        conda_env,
+        [
+            "python",
+            "gen_controls_cv_mp4.py",
+            "--input",
+            str(video_path),
+            "--mode",
+            "blur",
+            "--output-dir",
+            str(output_dir),
+            "--blur-sigma",
+            str(blur_sigma),
+            "--low",
+            str(low),
+            "--high",
+            str(high),
+        ],
+    )
+
+    run_cmd(cmd, cwd=cv_root, env=env, log_path=log_path, title="STEP3: Generate control (blur)")
+
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return output_path
+
+    fallback = find_control_mp4(output_dir, video_path, suffix_hint="blur")
+    if fallback is None or fallback.stat().st_size == 0:
+        raise FileNotFoundError(f"Blur control mp4 not found in: {output_dir}")
+    return fallback
+
+
 def ensure_cached_depth_control(
     video_path: Path,
     work_dir: Path,
@@ -346,14 +462,172 @@ def ensure_cached_seg_control(
         return seg_mp4
 
 
+def ensure_cached_edge_control(
+    video_path: Path,
+    work_dir: Path,
+    cv_root: Path,
+    conda_env: str,
+    low: int,
+    high: int,
+    env: Dict[str, str],
+    log_path: Path,
+    enable_cache: bool,
+    force_regen: bool,
+    fingerprint_mode: str,
+    lock_timeout_sec: int,
+    stale_lock_sec: int,
+    non_cached_output_dir: Path,
+) -> Path:
+    """
+    edge cache strategy (mirrors seg):
+    - cache_dir = <work_dir>/control_cache/edge/<fingerprint>/
+    - If a valid *.mp4 already exists: reuse it (skip generation)
+    - Otherwise: lock and generate once (safe for multi-GPU concurrency)
+    - When cache is disabled, generate into per-job non_cached_output_dir
+    """
+    if enable_cache:
+        fp = video_fingerprint(video_path, mode=fingerprint_mode)
+        cache_dir = work_dir / "control_cache" / "edge" / fp
+    else:
+        cache_dir = non_cached_output_dir
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    expected = _edge_output_path(cache_dir, video_path)
+
+    if enable_cache and (not force_regen):
+        if expected.exists() and expected.stat().st_size > 0:
+            append_log(log_path, f"[CACHE HIT] edge control: {expected}")
+            console_print(f"[CACHE HIT] edge control for {video_path.name}")
+            return expected
+
+        fallback = find_control_mp4(cache_dir, video_path, suffix_hint="canny")
+        if fallback is not None and fallback.stat().st_size > 0:
+            append_log(log_path, f"[CACHE HIT] edge control: {fallback}")
+            console_print(f"[CACHE HIT] edge control for {video_path.name}")
+            return fallback
+
+    lock_path = cache_dir / ".lock"
+    lock_cfg = FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec)
+    lock_context = FileLock(lock_path, lock_cfg) if enable_cache else nullcontext()
+
+    with lock_context:
+        if enable_cache and (not force_regen):
+            if expected.exists() and expected.stat().st_size > 0:
+                append_log(log_path, f"[CACHE HIT AFTER LOCK] edge control: {expected}")
+                console_print(f"[CACHE HIT] edge control ready after lock for {video_path.name}")
+                return expected
+
+            fallback = find_control_mp4(cache_dir, video_path, suffix_hint="canny")
+            if fallback is not None and fallback.stat().st_size > 0:
+                append_log(log_path, f"[CACHE HIT AFTER LOCK] edge control: {fallback}")
+                console_print(f"[CACHE HIT] edge control ready after lock for {video_path.name}")
+                return fallback
+
+        console_print(f"[CACHE MISS] generating edge control for {video_path.name}")
+        edge_mp4 = generate_control_edge(
+            video_path=video_path,
+            output_dir=cache_dir,
+            cv_root=cv_root,
+            conda_env=conda_env,
+            low=low,
+            high=high,
+            env=env,
+            log_path=log_path,
+        )
+        append_log(log_path, f"[CACHE GENERATED] edge control: {edge_mp4}")
+        console_print(f"[CACHE GENERATED] {edge_mp4.name}")
+        return edge_mp4
+
+
+def ensure_cached_blur_control(
+    video_path: Path,
+    work_dir: Path,
+    cv_root: Path,
+    conda_env: str,
+    blur_sigma: float,
+    low: int,
+    high: int,
+    env: Dict[str, str],
+    log_path: Path,
+    enable_cache: bool,
+    force_regen: bool,
+    fingerprint_mode: str,
+    lock_timeout_sec: int,
+    stale_lock_sec: int,
+    non_cached_output_dir: Path,
+) -> Path:
+    """
+    blur cache strategy (mirrors seg):
+    - cache_dir = <work_dir>/control_cache/blur/<fingerprint>/
+    - If a valid *.mp4 already exists: reuse it (skip generation)
+    - Otherwise: lock and generate once (safe for multi-GPU concurrency)
+    - When cache is disabled, generate into per-job non_cached_output_dir
+    """
+    if enable_cache:
+        fp = video_fingerprint(video_path, mode=fingerprint_mode)
+        cache_dir = work_dir / "control_cache" / "blur" / fp
+    else:
+        cache_dir = non_cached_output_dir
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    expected = _blur_output_path(cache_dir, video_path)
+
+    if enable_cache and (not force_regen):
+        if expected.exists() and expected.stat().st_size > 0:
+            append_log(log_path, f"[CACHE HIT] blur control: {expected}")
+            console_print(f"[CACHE HIT] blur control for {video_path.name}")
+            return expected
+
+        fallback = find_control_mp4(cache_dir, video_path, suffix_hint="blur")
+        if fallback is not None and fallback.stat().st_size > 0:
+            append_log(log_path, f"[CACHE HIT] blur control: {fallback}")
+            console_print(f"[CACHE HIT] blur control for {video_path.name}")
+            return fallback
+
+    lock_path = cache_dir / ".lock"
+    lock_cfg = FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec)
+    lock_context = FileLock(lock_path, lock_cfg) if enable_cache else nullcontext()
+
+    with lock_context:
+        if enable_cache and (not force_regen):
+            if expected.exists() and expected.stat().st_size > 0:
+                append_log(log_path, f"[CACHE HIT AFTER LOCK] blur control: {expected}")
+                console_print(f"[CACHE HIT] blur control ready after lock for {video_path.name}")
+                return expected
+
+            fallback = find_control_mp4(cache_dir, video_path, suffix_hint="blur")
+            if fallback is not None and fallback.stat().st_size > 0:
+                append_log(log_path, f"[CACHE HIT AFTER LOCK] blur control: {fallback}")
+                console_print(f"[CACHE HIT] blur control ready after lock for {video_path.name}")
+                return fallback
+
+        console_print(f"[CACHE MISS] generating blur control for {video_path.name}")
+        blur_mp4 = generate_control_blur(
+            video_path=video_path,
+            output_dir=cache_dir,
+            cv_root=cv_root,
+            conda_env=conda_env,
+            blur_sigma=blur_sigma,
+            low=low,
+            high=high,
+            env=env,
+            log_path=log_path,
+        )
+        append_log(log_path, f"[CACHE GENERATED] blur control: {blur_mp4}")
+        console_print(f"[CACHE GENERATED] {blur_mp4.name}")
+        return blur_mp4
+
+
 def generate_control(
     control_type: ControlType,
     video_path: Path,
     work_dir: Path,
     depth_root: Path,
     seg_root: Path,
+    cv_root: Path,
     depth_conda_env: str,
     seg_conda_env: str,
+    cv_conda_env: str,
     encoder: str,
     grayscale: bool,
     seg_level: str,
@@ -364,6 +638,9 @@ def generate_control(
     seg_enable_highlight: bool,
     seg_enable_overlay: bool,
     seg_overlay_style: str,
+    edge_low: int,
+    edge_high: int,
+    blur_sigma: float,
     enable_cache: bool,
     force_regen: bool,
     fingerprint_mode: str,
@@ -377,7 +654,8 @@ def generate_control(
     Unified control interface:
     - depth: implemented + cached
     - seg: implemented + cached (AutoSeg-SAM2)
-    - edge/blur/combo: interfaces reserved
+    - edge/blur: implemented + cached (gen_controls_cv_mp4.py)
+    - combo: reserved
     """
     if control_type == ControlType.DEPTH:
         return ensure_cached_depth_control(
@@ -410,6 +688,43 @@ def generate_control(
             enable_highlight=seg_enable_highlight,
             enable_overlay=seg_enable_overlay,
             overlay_style=seg_overlay_style,
+            env=env,
+            log_path=log_path,
+            enable_cache=enable_cache,
+            force_regen=force_regen,
+            fingerprint_mode=fingerprint_mode,
+            lock_timeout_sec=lock_timeout_sec,
+            stale_lock_sec=stale_lock_sec,
+            non_cached_output_dir=non_cached_output_dir,
+        )
+
+    if control_type == ControlType.EDGE:
+        return ensure_cached_edge_control(
+            video_path=video_path,
+            work_dir=work_dir,
+            cv_root=cv_root,
+            conda_env=cv_conda_env,
+            low=edge_low,
+            high=edge_high,
+            env=env,
+            log_path=log_path,
+            enable_cache=enable_cache,
+            force_regen=force_regen,
+            fingerprint_mode=fingerprint_mode,
+            lock_timeout_sec=lock_timeout_sec,
+            stale_lock_sec=stale_lock_sec,
+            non_cached_output_dir=non_cached_output_dir,
+        )
+
+    if control_type == ControlType.BLUR:
+        return ensure_cached_blur_control(
+            video_path=video_path,
+            work_dir=work_dir,
+            cv_root=cv_root,
+            conda_env=cv_conda_env,
+            blur_sigma=blur_sigma,
+            low=edge_low,
+            high=edge_high,
             env=env,
             log_path=log_path,
             enable_cache=enable_cache,
