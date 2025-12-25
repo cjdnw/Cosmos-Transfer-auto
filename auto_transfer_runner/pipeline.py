@@ -7,12 +7,13 @@ from typing import Callable, Dict, TypeVar
 
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
-from .steps.control import ControlType, generate_control
+from .steps.control import ControlType, generate_control, generate_controls_combo
 from .steps.json_spec import (
     write_json_spec_blur,
     write_json_spec_depth,
     write_json_spec_edge,
     write_json_spec_seg,
+    write_json_spec_multicontrol,
 )
 from .steps.inference import run_transfer_inference
 from .utils.logging_utils import append_log, console_print
@@ -96,41 +97,78 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 
         # Step3: control
         control_type = ControlType(cfg.run.control_type)
-        control_path = _run_with_timing(
-            "STEP3 Control",
-            lambda: generate_control(
-                control_type=control_type,
-                video_path=job.video_path,
-                work_dir=repos.work_dir,
-                depth_root=repos.depth_root,
-                seg_root=repos.seg_root,
-                cv_root=repos.cv_root,
-                depth_conda_env=cfg.depth.conda_env,
-                seg_conda_env=cfg.seg.conda_env,
-                cv_conda_env=cfg.cv.conda_env,
-                encoder=cfg.depth.encoder,
-                grayscale=cfg.depth.grayscale,
-                seg_level=cfg.seg.level,
-                seg_use_other_level=cfg.seg.use_other_level,
-                seg_detect_stride=cfg.seg.detect_stride,
-                seg_save_intermediate=cfg.seg.save_intermediate,
-                seg_save_npy=cfg.seg.save_npy,
-                seg_enable_highlight=cfg.seg.enable_highlight,
-                seg_enable_overlay=cfg.seg.enable_overlay,
-                seg_overlay_style=cfg.seg.overlay_style,
-                edge_low=cfg.cv.canny_low,
-                edge_high=cfg.cv.canny_high,
-                blur_sigma=cfg.cv.blur_sigma,
-                enable_cache=cfg.cache.enable,
-                force_regen=cfg.cache.force_regen,
-                fingerprint_mode=cfg.cache.fingerprint_mode,
-                lock_timeout_sec=cfg.cache.lock_timeout_sec,
-                stale_lock_sec=cfg.cache.stale_lock_sec,
-                non_cached_output_dir=paths.control_dir,
-                env=env,
-                log_path=paths.log_path,
-            ),
-        )
+        if control_type == ControlType.COMBO:
+            control_paths = _run_with_timing(
+                "STEP3 Control",
+                lambda: generate_controls_combo(
+                    video_path=job.video_path,
+                    work_dir=repos.work_dir,
+                    depth_root=repos.depth_root,
+                    seg_root=repos.seg_root,
+                    cv_root=repos.cv_root,
+                    depth_conda_env=cfg.depth.conda_env,
+                    seg_conda_env=cfg.seg.conda_env,
+                    cv_conda_env=cfg.cv.conda_env,
+                    encoder=cfg.depth.encoder,
+                    grayscale=cfg.depth.grayscale,
+                    seg_level=cfg.seg.level,
+                    seg_use_other_level=cfg.seg.use_other_level,
+                    seg_detect_stride=cfg.seg.detect_stride,
+                    seg_save_intermediate=cfg.seg.save_intermediate,
+                    seg_save_npy=cfg.seg.save_npy,
+                    seg_enable_highlight=cfg.seg.enable_highlight,
+                    seg_enable_overlay=cfg.seg.enable_overlay,
+                    seg_overlay_style=cfg.seg.overlay_style,
+                    edge_low=cfg.cv.canny_low,
+                    edge_high=cfg.cv.canny_high,
+                    enable_cache=cfg.cache.enable,
+                    force_regen=cfg.cache.force_regen,
+                    fingerprint_mode=cfg.cache.fingerprint_mode,
+                    lock_timeout_sec=cfg.cache.lock_timeout_sec,
+                    stale_lock_sec=cfg.cache.stale_lock_sec,
+                    non_cached_output_dir=paths.control_dir,
+                    env=env,
+                    log_path=paths.log_path,
+                ),
+            )
+            control_path = None
+        else:
+            control_paths = None
+            control_path = _run_with_timing(
+                "STEP3 Control",
+                lambda: generate_control(
+                    control_type=control_type,
+                    video_path=job.video_path,
+                    work_dir=repos.work_dir,
+                    depth_root=repos.depth_root,
+                    seg_root=repos.seg_root,
+                    cv_root=repos.cv_root,
+                    depth_conda_env=cfg.depth.conda_env,
+                    seg_conda_env=cfg.seg.conda_env,
+                    cv_conda_env=cfg.cv.conda_env,
+                    encoder=cfg.depth.encoder,
+                    grayscale=cfg.depth.grayscale,
+                    seg_level=cfg.seg.level,
+                    seg_use_other_level=cfg.seg.use_other_level,
+                    seg_detect_stride=cfg.seg.detect_stride,
+                    seg_save_intermediate=cfg.seg.save_intermediate,
+                    seg_save_npy=cfg.seg.save_npy,
+                    seg_enable_highlight=cfg.seg.enable_highlight,
+                    seg_enable_overlay=cfg.seg.enable_overlay,
+                    seg_overlay_style=cfg.seg.overlay_style,
+                    edge_low=cfg.cv.canny_low,
+                    edge_high=cfg.cv.canny_high,
+                    blur_sigma=cfg.cv.blur_sigma,
+                    enable_cache=cfg.cache.enable,
+                    force_regen=cfg.cache.force_regen,
+                    fingerprint_mode=cfg.cache.fingerprint_mode,
+                    lock_timeout_sec=cfg.cache.lock_timeout_sec,
+                    stale_lock_sec=cfg.cache.stale_lock_sec,
+                    non_cached_output_dir=paths.control_dir,
+                    env=env,
+                    log_path=paths.log_path,
+                ),
+            )
 
         # Step4: json spec
         name = f"{sanitize_name(job.video_path.stem)}__{job.job_id}__{cfg.run.control_type}"
@@ -187,8 +225,25 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     control_path=control_path,
                 ),
             )
+        elif control_type == ControlType.COMBO:
+            if control_paths is None:
+                raise RuntimeError("Combo control paths were not generated.")
+            _run_with_timing(
+                "STEP4 JSON",
+                lambda: write_json_spec_multicontrol(
+                    json_path=paths.json_path,
+                    name=name,
+                    prompt_path=paths.prompt_path,
+                    video_path=job.video_path,
+                    seed=seed,
+                    transfer_cfg=cfg.transfer,
+                    depth_path=control_paths["depth"],
+                    edge_path=control_paths["edge"],
+                    seg_path=control_paths["seg"],
+                ),
+            )
         else:
-            raise NotImplementedError("Only depth/seg/edge/blur json spec are implemented for now.")
+            raise NotImplementedError("Only depth/seg/edge/blur/combo json spec are implemented for now.")
 
         append_log(paths.log_path, f"[STEP4] Wrote json: {paths.json_path}")
         console_print(f"[STEP4] json={paths.json_path.name}")
@@ -223,7 +278,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "json_path": str(paths.json_path),
                 "output_dir": str(paths.output_dir),
                 "log_path": str(paths.log_path),
-                "control_vis_path": str(control_path),
+                "control_vis_path": str(control_path) if control_path is not None else None,
+                "control_paths": (
+                    {k: str(v) for k, v in control_paths.items()} if control_paths is not None else None
+                ),
             },
         )
 
