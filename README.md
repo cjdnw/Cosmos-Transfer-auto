@@ -211,6 +211,22 @@ python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
 ## AutoPrompt 默认路径
 默认 `--autoprompt_root` 指向本仓库根目录（包含 `robot_video_to_prompt.py`），无需额外克隆独立的 AutoPrompt 仓库。
 
+## AutoSeg 默认路径（已更新）
+默认 `--seg_root`：`/mnt/data/ganrunhe/AutoSeg-SAM2`
+
+本地路径不同可通过命令行覆盖：
+```bash
+python scripts/run_batch.py ... --seg_root /your/path/to/AutoSeg-SAM2
+```
+
+## blur/canny 生成脚本位置（可覆盖）
+默认 `--cv_root` 指向本仓库根目录（包含 `gen_controls_cv_mp4.py`），无需额外克隆独立仓库。
+
+本地路径不同可通过命令行覆盖：
+```bash
+python scripts/run_batch.py ... --cv_root /your/path/to/cv-tools
+```
+
 ## 路径与环境默认值（config.py）
 所有内置的路径与环境默认值统一集中在 `auto_transfer_runner/config.py`，CLI 会直接读取这些常量：
 - 路径：`DEFAULT_WORK_DIR`、`DEFAULT_AUTOPROMPT_ROOT`、`DEFAULT_DEPTH_ROOT`、`DEFAULT_SEG_ROOT`、`DEFAULT_CV_ROOT`、`DEFAULT_TRANSFER_ROOT`、`DEFAULT_HF_CACHE`
