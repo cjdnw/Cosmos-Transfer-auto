@@ -92,6 +92,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 max_replace_terms=cfg.prompt.max_replace_terms,
                 replace_all_terms=cfg.prompt.replace_all_terms,
                 replacements_per_term=cfg.prompt.replacements_per_term,
+                interactive_replace=cfg.prompt.interactive_replace,
             ),
         )
 

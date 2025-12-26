@@ -80,6 +80,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         max_replace_terms=args.max_terms,
         replace_all_terms=args.replace_all_terms,
         replacements_per_term=args.replacements_per_term,
+        interactive_replace=args.interactive_replace,
     )
 
     depth = DepthConfig(
@@ -272,6 +273,11 @@ def main(argv: List[str] | None = None) -> None:
         type=int,
         default=PROMPT_DEFAULTS.replacements_per_term,
         help="How many alternative descriptors to generate for each bracketed term (default: 6)",
+    )
+    ap.add_argument(
+        "--interactive_replace",
+        action="store_true",
+        help="Interactively choose bracket terms and replacements instead of auto-generating candidates",
     )
 
     # Step3 (depth)
