@@ -211,6 +211,11 @@ python scripts/run_batch.py ... --transfer_root /your/path/to/cosmos-transfer2.5
 ## AutoPrompt 默认路径
 默认 `--autoprompt_root` 指向本仓库根目录（包含 `robot_video_to_prompt.py`），无需额外克隆独立的 AutoPrompt 仓库。
 
+本地路径不同可通过命令行覆盖：
+```bash
+python scripts/run_batch.py ... --autoprompt_root /your/path/to/AutoPrompt
+```
+
 ## AutoSeg 默认路径（已更新）
 默认 `--seg_root`：`/mnt/data/ganrunhe/AutoSeg-SAM2`
 
