@@ -209,7 +209,18 @@ def safe_parse_json(text: str) -> Dict[str, Any]:
 
 
 def extract_bracket_terms(text: str) -> List[str]:
-    return list({t.strip() for t in re.findall(r"【(.*?)】", text)})
+    raw_terms = [t.strip() for t in re.findall(r"【(.*?)】", text)]
+    unique_terms = list(dict.fromkeys(t for t in raw_terms if t))
+    lowered = [term.lower() for term in unique_terms]
+    filtered = []
+    for idx, term in enumerate(unique_terms):
+        if any(
+            idx != other_idx and lowered[idx] in lowered[other_idx]
+            for other_idx in range(len(unique_terms))
+        ):
+            continue
+        filtered.append(term)
+    return filtered
 
 
 def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
@@ -387,7 +398,7 @@ def apply_random_replacements(
     replace_all_terms: bool = False,
 ) -> str:
     rng = random.Random(seed)
-    terms = list({t.strip() for t in re.findall(r"【(.*?)】", bracketed_prompt)})
+    terms = extract_bracket_terms(bracketed_prompt)
 
     if not terms:
         return bracketed_prompt.replace("【", "").replace("】", "")
