@@ -266,6 +266,10 @@ python scripts/run_batch.py ... --keep_prompt --keep_json
 python scripts/run_batch.py ... --cleanup_logs
 ```
 
+## 待完成项目
+- depth 控制信号质量不佳，需研究提升方案。
+- seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
+
 ## 更新记录
 - 2025-12-25：Step2 括号术语抽取新增“长短语优先”去重策略，避免 `gray fabric` 与 `fabric` 这类同一实体被拆成两个替换单元。
 - 2025-12-25：新增交互式替换选项，可在 Step2 括号词列表中手动选择并输入替换词；启用后自动清空 Step3 替换缓存并跳过自动候选生成。
