@@ -97,7 +97,17 @@ python scripts/run_batch.py \
 ```
 说明：`--replacements_per_term` 会影响 Step3 生成的候选列表数量，并参与 prompt 缓存键；不同数量会生成独立的替换缓存。
 
-### 例 8：自动生成 edge 控制信号（缓存复用）
+### 例 8：交互式替换（快速启动）
+在 Step2 输出括号词列表后，手动选择需要替换的关键词并输入替换词：
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --interactive_replace
+```
+
+### 例 9：自动生成 edge 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -107,7 +117,7 @@ python scripts/run_batch.py \
   --edge_high 160
 ```
 
-### 例 9：自动生成 blur 控制信号（缓存复用）
+### 例 10：自动生成 blur 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -116,7 +126,7 @@ python scripts/run_batch.py \
   --blur_sigma 10
 ```
 
-### 例 10：多控制信号（combo）
+### 例 11：多控制信号（combo）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -236,6 +246,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ```
 
 ## 更新记录
+- 2025-12-25：新增交互式替换选项，可在 Step2 括号词列表中手动选择并输入替换词；启用后自动清空 Step3 替换缓存并跳过自动候选生成。
 - 2025-12-25：Step3 替换候选明确禁止使用 “pale/light/dark”等模糊修饰词，并在替换合并时过滤模糊颜色短语，提升颜色替换的可控性与多样性。
 - 2025-12-25：seg json spec 简化为仅包含 `control_path`/`control_weight`；新增 combo 多控制信号（depth+edge+seg+vis preset blur），支持 `--depth_control_weight`/`--edge_control_weight`/`--seg_control_weight`/`--vis_control_weight` 调整权重。
 - 2025-12-25：新增 edge/blur 控制信号，基于 `gen_controls_cv_mp4.py` + conda 环境 `sam` 自动生成并按指纹缓存复用，CLI 支持 `--control_type edge|blur` 及相关参数。

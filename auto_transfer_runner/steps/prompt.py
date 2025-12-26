@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Dict, List
@@ -59,6 +60,120 @@ def _symlink_for_job(src: Path, dst: Path) -> None:
     if dst.exists() or dst.is_symlink():
         dst.unlink()
     dst.symlink_to(src)
+
+
+def _write_json(path: Path, payload: Dict[str, List[str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _extract_bracket_terms(bracketed_prompt: str) -> List[str]:
+    terms = {t.strip() for t in re.findall(r"【(.*?)】", bracketed_prompt) if t.strip()}
+    return sorted(terms)
+
+
+def _collect_interactive_replacements(bracketed_prompt: str) -> Dict[str, List[str]]:
+    terms = _extract_bracket_terms(bracketed_prompt)
+    if not terms:
+        print("[INTERACTIVE] No bracketed terms found. Prompt will be left unchanged.")
+        return {}
+
+    print("[INTERACTIVE] Step2 bracketed terms:")
+    for idx, term in enumerate(terms, start=1):
+        print(f"  {idx}. {term}")
+
+    term_set = set(terms)
+    replacements: Dict[str, List[str]] = {}
+    while True:
+        raw_term = input("请输入要替换的关键词（编号/文本，直接回车结束）：").strip()
+        if not raw_term:
+            break
+        term = raw_term
+        if raw_term.isdigit():
+            idx = int(raw_term)
+            if 1 <= idx <= len(terms):
+                term = terms[idx - 1]
+            else:
+                print(f"[INTERACTIVE] 无效编号：{raw_term}")
+                continue
+        if term not in term_set:
+            print(f"[INTERACTIVE] 未找到关键词：{term}")
+            continue
+        confirm = input(f"确认替换「{term}」? [y/N]: ").strip().lower()
+        if confirm not in {"y", "yes"}:
+            print("[INTERACTIVE] 已取消该关键词。")
+            continue
+        replacement = input(f"将「{term}」替换为（直接回车跳过）：").strip()
+        if not replacement:
+            print("[INTERACTIVE] 未输入替换词，已跳过。")
+            continue
+        replacements[term] = [replacement]
+        print(f"[INTERACTIVE] 已设置：{term} -> {replacement}")
+
+    return replacements
+
+
+def _ensure_cached_bracket(
+    *,
+    base_prompt_path: Path,
+    base_hash: str,
+    work_dir: Path,
+    env_name: str,
+    autoprompt_root: Path,
+    size: str,
+    variant: str,
+    model_type: str,
+    env: Dict[str, str],
+    log_path: Path,
+    use_cache: bool,
+    lock_timeout_sec: int,
+    stale_lock_sec: int,
+) -> Path:
+    bracket_cache_root = work_dir / "prompt_cache_bracket"
+    bracket_cache_root.mkdir(parents=True, exist_ok=True)
+    bracket_cache_path = bracket_cache_root / f"{base_hash}.txt"
+    bracket_lock = FileLock(
+        bracket_cache_root / f".{base_hash}.lock",
+        FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec),
+    )
+
+    if use_cache and bracket_cache_path.exists() and bracket_cache_path.stat().st_size > 0:
+        console_print(f"[PROMPT CACHE HIT] bracket for base {base_hash}")
+        append_log(log_path, f"[PROMPT CACHE HIT] bracket={bracket_cache_path}")
+        return bracket_cache_path
+
+    with bracket_lock:
+        if use_cache and bracket_cache_path.exists() and bracket_cache_path.stat().st_size > 0:
+            console_print(f"[PROMPT CACHE HIT] bracket for base {base_hash}")
+            append_log(log_path, f"[PROMPT CACHE HIT AFTER LOCK] bracket={bracket_cache_path}")
+            return bracket_cache_path
+
+        console_print(f"[PROMPT CACHE MISS] generating step2 bracket for base {base_hash}")
+        append_log(log_path, f"[PROMPT CACHE MISS] bracket for base={base_hash}")
+
+        step2_args = [
+            "step2_bracket",
+            "--base_in",
+            str(base_prompt_path),
+            "--out",
+            str(bracket_cache_path),
+            *_model_args(size, variant, model_type),
+        ]
+        _run_prompt_step(
+            env_name=env_name,
+            autoprompt_root=autoprompt_root,
+            args=step2_args,
+            env=env,
+            log_path=log_path,
+            title="STEP2.2: Bracket base prompt (step2_bracket)",
+        )
+
+        if not bracket_cache_path.exists() or bracket_cache_path.stat().st_size == 0:
+            raise FileNotFoundError(f"Bracket prompt not found after generation: {bracket_cache_path}")
+
+        append_log(log_path, f"[PROMPT CACHE GENERATED] bracket={bracket_cache_path}")
+        console_print(f"[PROMPT CACHE GENERATED] base={base_hash}")
+        return bracket_cache_path
 
 
 def ensure_cached_base_prompt(
@@ -275,6 +390,7 @@ def generate_prompt(
     max_replace_terms: int = 3,
     replace_all_terms: bool = False,
     replacements_per_term: int = 6,
+    interactive_replace: bool = False,
 ) -> None:
     """
     Step2：调用 AutoPrompt 生成 prompt。
@@ -316,7 +432,55 @@ def generate_prompt(
         stale_lock_sec=stale_lock_sec,
     )
 
-    if use_cache:
+    if interactive_replace:
+        base_hash = text_md5(_read_text(base_prompt_path))
+        if use_cache:
+            bracket_cache_path = _ensure_cached_bracket(
+                base_prompt_path=base_prompt_path,
+                base_hash=base_hash,
+                work_dir=work_dir,
+                env_name=env_name,
+                autoprompt_root=autoprompt_root,
+                size=size,
+                variant=variant,
+                model_type=model_type,
+                env=env,
+                log_path=log_path,
+                use_cache=use_cache,
+                lock_timeout_sec=lock_timeout_sec,
+                stale_lock_sec=stale_lock_sec,
+            )
+            _symlink_for_job(bracket_cache_path, prompt_bracket_path)
+        else:
+            prompt_bracket_path.parent.mkdir(parents=True, exist_ok=True)
+            step2_args = [
+                "step2_bracket",
+                "--base_in",
+                str(base_prompt_path),
+                "--out",
+                str(prompt_bracket_path),
+                *_model_args(size, variant, model_type),
+            ]
+            _run_prompt_step(
+                env_name=env_name,
+                autoprompt_root=autoprompt_root,
+                args=step2_args,
+                env=env,
+                log_path=log_path,
+                title="STEP2.2: Bracket base prompt (step2_bracket)",
+            )
+
+        bracket_hash = text_md5(_read_text(prompt_bracket_path))
+        repl_cache_root = work_dir / "prompt_cache_replacements"
+        repl_cache_path = repl_cache_root / f"{bracket_hash}__k{replacements_per_term}.json"
+        if repl_cache_path.exists():
+            safe_unlink(repl_cache_path, log_path=log_path)
+            console_print(f"[PROMPT CACHE CLEAR] replacements for bracket {bracket_hash}")
+            append_log(log_path, f"[PROMPT CACHE CLEAR] repl={repl_cache_path}")
+
+        replacements = _collect_interactive_replacements(_read_text(prompt_bracket_path))
+        _write_json(prompt_replacements_path, {"replacements": replacements})
+    elif use_cache:
         base_hash = text_md5(_read_text(base_prompt_path))
         bracket_cache_path, bracket_hash, repl_cache_path = _ensure_cached_step23(
             base_prompt_path=base_prompt_path,
@@ -376,7 +540,7 @@ def generate_prompt(
         "--max_replace_terms",
         str(max_replace_terms),
     ]
-    if replace_all_terms:
+    if replace_all_terms or interactive_replace:
         step3b_args.append("--replace_all_terms")
     step3b_args += [
         "--out",

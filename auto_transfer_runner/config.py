@@ -43,6 +43,7 @@ class PromptConfig:
     max_replace_terms: int = 3
     replace_all_terms: bool = False
     replacements_per_term: int = 6
+    interactive_replace: bool = False
 
 
 @dataclass(frozen=True)
