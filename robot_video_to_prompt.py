@@ -77,6 +77,7 @@ Rules:
 - Keep 1-3 words.
 - Use common, simple descriptors suitable for indoor robotics scenes.
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
+- For material/texture phrases, include swaps and combinations that mix color + material or texture + material when reasonable.
 - Avoid rare or poetic color words.
 - Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle".
 - Output STRICT JSON only:
@@ -158,6 +159,31 @@ COLOR_BASES = [
     "beige",
     "tan",
 ]
+MATERIAL_BASES = [
+    "plastic",
+    "metal",
+    "metallic",
+    "wooden",
+    "glass",
+    "ceramic",
+    "rubber",
+]
+TEXTURE_BASES = [
+    "smooth",
+    "matte",
+    "glossy",
+    "textured",
+    "woven",
+    "rough",
+    "soft",
+    "hard",
+    "striped",
+    "patterned",
+    "ribbed",
+    "knitted",
+    "wrinkled",
+    "transparent",
+]
 VAGUE_COLOR_MODIFIERS = [
     "pale",
     "light",
@@ -168,6 +194,52 @@ VAGUE_COLOR_MODIFIERS = [
     "slight",
     "subtle",
 ]
+DESCRIPTOR_WORDS = sorted({
+    *COLOR_BASES,
+    "smooth",
+    "matte",
+    "glossy",
+    "textured",
+    "woven",
+    "rough",
+    "soft",
+    "hard",
+    "metallic",
+    "metal",
+    "wooden",
+    "plastic",
+    "rubber",
+    "ceramic",
+    "glass",
+    "striped",
+    "patterned",
+    "ribbed",
+    "knitted",
+    "wrinkled",
+    "transparent",
+})
+SPAN_STOPWORDS = {
+    "and",
+    "or",
+    "with",
+    "into",
+    "onto",
+    "over",
+    "above",
+    "below",
+    "under",
+    "in",
+    "on",
+    "at",
+    "to",
+    "of",
+    "from",
+    "by",
+    "for",
+    "as",
+    "while",
+    "then",
+}
 
 # =======================
 # 2) Model Options
@@ -254,6 +326,96 @@ def strip_robot_brackets(bracketed_prompt: str) -> str:
         return match.group(0)
 
     return re.sub(r"【(.*?)】", repl, bracketed_prompt)
+
+
+def _trim_descriptor_span(span: str) -> str:
+    tokens = span.split()
+    if not tokens:
+        return span
+    kept = [tokens[0]]
+    for tok in tokens[1:]:
+        clean = tok.strip(",.;:")
+        lower = clean.lower()
+        if lower in SPAN_STOPWORDS:
+            break
+        if lower in ROBOT_KEYWORDS:
+            break
+        kept.append(clean)
+        if tok != clean:
+            break
+    return " ".join(kept).strip()
+
+
+def _collect_descriptor_spans(paragraph: str, max_follow_tokens: int = 3) -> List[tuple]:
+    if not DESCRIPTOR_WORDS:
+        return []
+    pattern = re.compile(
+        r"\\b(" + "|".join(map(re.escape, DESCRIPTOR_WORDS)) + r")\\b(?:\\s+[\\w-]+){0," + str(max_follow_tokens) + r"}",
+        re.IGNORECASE,
+    )
+    spans = []
+    for match in pattern.finditer(paragraph):
+        raw = match.group(0)
+        trimmed = _trim_descriptor_span(raw)
+        if not trimmed:
+            continue
+        if _in_robot_context(trimmed, paragraph):
+            continue
+        if any(keyword in trimmed.lower().split() for keyword in ROBOT_KEYWORDS):
+            continue
+        start = match.start()
+        end = start + len(trimmed)
+        spans.append((start, end))
+    return spans
+
+
+def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
+    spans = []
+    for term in terms:
+        if not term:
+            continue
+        for match in re.finditer(re.escape(term), paragraph):
+            if _in_robot_context(term, paragraph):
+                continue
+            spans.append(match.span())
+    return spans
+
+
+def _merge_spans(spans: List[tuple]) -> List[tuple]:
+    if not spans:
+        return []
+    spans = sorted(spans, key=lambda s: (s[0], -(s[1] - s[0])))
+    merged = []
+    for span in spans:
+        overlap = False
+        for kept in merged:
+            if not (span[1] <= kept[0] or span[0] >= kept[1]):
+                overlap = True
+                break
+        if not overlap:
+            merged.append(span)
+    return merged
+
+
+def _insert_brackets(paragraph: str, spans: List[tuple]) -> str:
+    if not spans:
+        return paragraph
+    for start, end in sorted(spans, key=lambda s: s[0], reverse=True):
+        paragraph = paragraph[:end] + "】" + paragraph[end:]
+        paragraph = paragraph[:start] + "【" + paragraph[start:]
+    return paragraph
+
+
+def auto_bracket_descriptors(base_paragraph: str, bracketed_prompt: str) -> str:
+    normalized = bracketed_prompt.replace("【", "").replace("】", "")
+    if normalized != base_paragraph:
+        print("[WARN] Step 2: bracket output mismatch; falling back to base prompt for bracketing.")
+        bracketed_prompt = base_paragraph
+    existing_terms = extract_bracket_terms(bracketed_prompt)
+    spans = _collect_existing_spans(base_paragraph, existing_terms)
+    spans += _collect_descriptor_spans(base_paragraph)
+    merged = _merge_spans(spans)
+    return _insert_brackets(base_paragraph, merged)
 
 
 def canonicalize_robot_sentences(paragraph: str) -> str:
@@ -378,6 +540,136 @@ def build_color_variations(term: str, max_alternatives: int) -> List[str]:
     return replacements
 
 
+def _replace_descriptor_word(term: str, pattern: re.Pattern, replacement: str) -> str:
+    return pattern.sub(replacement, term, count=1)
+
+
+def build_material_variations(term: str, max_alternatives: int) -> List[str]:
+    pattern = re.compile(r"\\b(" + "|".join(MATERIAL_BASES) + r")\\b", re.IGNORECASE)
+    match = pattern.search(term)
+    if not match:
+        return []
+    original = match.group(1)
+    original_lower = original.lower()
+    replacements = []
+    for material in MATERIAL_BASES:
+        if material == original_lower:
+            continue
+        replacement_material = _apply_color_case(material, original)
+        candidate = _replace_descriptor_word(term, pattern, replacement_material)
+        if candidate != term:
+            replacements.append(candidate)
+        if len(replacements) >= max_alternatives:
+            break
+    return replacements
+
+
+def build_texture_variations(term: str, max_alternatives: int) -> List[str]:
+    pattern = re.compile(r"\\b(" + "|".join(TEXTURE_BASES) + r")\\b", re.IGNORECASE)
+    match = pattern.search(term)
+    if not match:
+        return []
+    original = match.group(1)
+    original_lower = original.lower()
+    replacements = []
+    for texture in TEXTURE_BASES:
+        if texture == original_lower:
+            continue
+        replacement_texture = _apply_color_case(texture, original)
+        candidate = _replace_descriptor_word(term, pattern, replacement_texture)
+        if candidate != term:
+            replacements.append(candidate)
+        if len(replacements) >= max_alternatives:
+            break
+    return replacements
+
+
+def build_color_material_combinations(term: str, max_alternatives: int) -> List[str]:
+    color_pattern = re.compile(r"\\b(" + "|".join(COLOR_BASES) + r")\\b", re.IGNORECASE)
+    material_pattern = re.compile(r"\\b(" + "|".join(MATERIAL_BASES) + r")\\b", re.IGNORECASE)
+    color_match = color_pattern.search(term)
+    material_match = material_pattern.search(term)
+    if not color_match and not material_match:
+        return []
+
+    replacements = []
+    original_color = color_match.group(1) if color_match else None
+    original_material = material_match.group(1) if material_match else None
+    colors = [c for c in COLOR_BASES if c != (original_color.lower() if original_color else None)]
+    materials = [m for m in MATERIAL_BASES if m != (original_material.lower() if original_material else None)]
+    if not colors:
+        colors = COLOR_BASES[:]
+    if not materials:
+        materials = MATERIAL_BASES[:]
+
+    for color in colors:
+        for material in materials:
+            if len(replacements) >= max_alternatives:
+                break
+            candidate = term
+            if material_match:
+                candidate = _replace_descriptor_word(
+                    candidate,
+                    material_pattern,
+                    _apply_color_case(material, original_material),
+                )
+            else:
+                candidate = f"{material} {candidate}".strip()
+            if color_match:
+                candidate = _replace_descriptor_word(
+                    candidate,
+                    color_pattern,
+                    _apply_color_case(color, original_color),
+                )
+            else:
+                candidate = f"{color} {candidate}".strip()
+            if candidate != term and candidate not in replacements:
+                replacements.append(candidate)
+        if len(replacements) >= max_alternatives:
+            break
+    return replacements
+
+
+def build_texture_material_combinations(term: str, max_alternatives: int) -> List[str]:
+    texture_pattern = re.compile(r"\\b(" + "|".join(TEXTURE_BASES) + r")\\b", re.IGNORECASE)
+    material_pattern = re.compile(r"\\b(" + "|".join(MATERIAL_BASES) + r")\\b", re.IGNORECASE)
+    texture_match = texture_pattern.search(term)
+    material_match = material_pattern.search(term)
+    if not texture_match or not material_match:
+        return []
+
+    replacements = []
+    original_texture = texture_match.group(1)
+    original_material = material_match.group(1)
+    textures = [t for t in TEXTURE_BASES if t != original_texture.lower()]
+    materials = [m for m in MATERIAL_BASES if m != original_material.lower()]
+    if not textures:
+        textures = TEXTURE_BASES[:]
+    if not materials:
+        materials = MATERIAL_BASES[:]
+
+    for texture in textures:
+        for material in materials:
+            if len(replacements) >= max_alternatives:
+                break
+            candidate = term
+            candidate = _replace_descriptor_word(
+                candidate,
+                material_pattern,
+                _apply_color_case(material, original_material),
+            )
+            candidate = _replace_descriptor_word(
+                candidate,
+                texture_pattern,
+                _apply_color_case(texture, original_texture),
+            )
+            if candidate != term and candidate not in replacements:
+                replacements.append(candidate)
+        if len(replacements) >= max_alternatives:
+            break
+    return replacements
+
+
 def is_vague_color_phrase(text: str) -> bool:
     pattern = re.compile(r"\\b(" + "|".join(VAGUE_COLOR_MODIFIERS) + r")\\b", re.IGNORECASE)
     return bool(pattern.search(text))
@@ -489,14 +781,15 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
         "content": [{"type": "text", "text": BRACKET_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
     }]
     bracketed = run_generation(model, processor, messages, 700, False, 1.0, 1.0)
-    return strip_robot_brackets(bracketed)
+    bracketed = strip_robot_brackets(bracketed)
+    return auto_bracket_descriptors(base_prompt, bracketed)
 
 
 def step3_generate_replacements_json(
     model,
     processor,
     bracketed_prompt: str,
-    alternatives_per_term: int = 6,
+    alternatives_per_term: int = 64,
 ) -> Dict[str, List[str]]:
     terms = extract_bracket_terms(bracketed_prompt)
     if not terms:
@@ -521,8 +814,12 @@ def step3_generate_replacements_json(
     for term in terms:
         model_alts = replacements.get(term, []) or []
         color_alts = build_color_variations(term, alternatives_per_term)
+        material_alts = build_material_variations(term, alternatives_per_term)
+        texture_alts = build_texture_variations(term, alternatives_per_term)
+        combo_alts = build_color_material_combinations(term, alternatives_per_term)
+        texture_combo_alts = build_texture_material_combinations(term, alternatives_per_term)
         combined = []
-        for alt in model_alts + color_alts:
+        for alt in model_alts + color_alts + material_alts + texture_alts + combo_alts + texture_combo_alts:
             if not alt or alt == term or alt in combined or is_vague_color_phrase(alt):
                 continue
             combined.append(alt)
@@ -586,14 +883,14 @@ def main():
     p23.add_argument("--base_in", required=True)
     p23.add_argument("--out_bracket", required=True)
     p23.add_argument("--out_repl_json", required=True)
-    p23.add_argument("--replacements_per_term", type=int, default=6)
+    p23.add_argument("--replacements_per_term", type=int, default=64)
 
     # step3a
     p3 = sub.add_parser("step3_replacements")
     add_model_args(p3)
     p3.add_argument("--bracket_in", required=True)
     p3.add_argument("--out_json", required=True)
-    p3.add_argument("--replacements_per_term", type=int, default=6)
+    p3.add_argument("--replacements_per_term", type=int, default=64)
 
     # step3b apply
     p4 = sub.add_parser("step3_apply")
@@ -614,7 +911,7 @@ def main():
     p5.add_argument("--min_replace_terms", type=int, default=1)
     p5.add_argument("--max_replace_terms", type=int, default=3)
     p5.add_argument("--replace_all_terms", action="store_true", help="Replace all bracketed terms instead of sampling a subset.")
-    p5.add_argument("--replacements_per_term", type=int, default=6)
+    p5.add_argument("--replacements_per_term", type=int, default=64)
     p5.add_argument("--out_base", required=True)
     p5.add_argument("--out_bracket", required=True)
     p5.add_argument("--out_repl_json", required=True)
