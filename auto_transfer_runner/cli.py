@@ -395,12 +395,14 @@ def main(argv: List[str] | None = None) -> None:
     # Build queue:
     # - First select unique videos (controlled by --num_videos and --shuffle)
     # - Then expand each video into K variants (controlled by --variants_per_video)
+    # - Queue is ordered by variant so workers pick different videos first.
     q: mp.Queue = mp.Queue()
     batch_tag = now_tag()
+    base_hashes = [short_hash(str(vp.resolve()), 8) for vp in videos]
 
-    for idx, vp in enumerate(videos):
-        base_hash = short_hash(str(vp.resolve()), 8)
-        for v in range(args.variants_per_video):
+    for v in range(args.variants_per_video):
+        for idx, vp in enumerate(videos):
+            base_hash = base_hashes[idx]
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
             q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
 
