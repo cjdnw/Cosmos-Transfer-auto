@@ -670,6 +670,45 @@ def build_texture_material_combinations(term: str, max_alternatives: int) -> Lis
     return replacements
 
 
+def build_multicolor_variations(term: str, max_alternatives: int) -> List[str]:
+    pattern = re.compile(r"\b(" + "|".join(COLOR_BASES) + r")\b", re.IGNORECASE)
+    match = pattern.search(term)
+    replacements = []
+    if match:
+        original = match.group(1)
+        original_lower = original.lower()
+        color_pairs = []
+        for color in COLOR_BASES:
+            if color == original_lower:
+                continue
+            pair = (original_lower, color)
+            if pair not in color_pairs:
+                color_pairs.append(pair)
+        for first, second in color_pairs:
+            if len(replacements) >= max_alternatives:
+                break
+            first_color = _apply_color_case(first, original)
+            candidate = pattern.sub(f"{first_color} and {second}", term, count=1)
+            if candidate != term and candidate not in replacements:
+                replacements.append(candidate)
+    else:
+        seen_pairs = set()
+        for i, first in enumerate(COLOR_BASES):
+            for second in COLOR_BASES[i + 1:]:
+                if len(replacements) >= max_alternatives:
+                    break
+                pair = (first, second)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                candidate = f"{first} and {second} {term}".strip()
+                if candidate != term and candidate not in replacements:
+                    replacements.append(candidate)
+            if len(replacements) >= max_alternatives:
+                break
+    return replacements
+
+
 def is_vague_color_phrase(text: str) -> bool:
     pattern = re.compile(r"\\b(" + "|".join(VAGUE_COLOR_MODIFIERS) + r")\\b", re.IGNORECASE)
     return bool(pattern.search(text))
@@ -818,8 +857,17 @@ def step3_generate_replacements_json(
         texture_alts = build_texture_variations(term, alternatives_per_term)
         combo_alts = build_color_material_combinations(term, alternatives_per_term)
         texture_combo_alts = build_texture_material_combinations(term, alternatives_per_term)
+        multicolor_alts = build_multicolor_variations(term, alternatives_per_term)
         combined = []
-        for alt in model_alts + color_alts + material_alts + texture_alts + combo_alts + texture_combo_alts:
+        for alt in (
+            model_alts
+            + color_alts
+            + material_alts
+            + texture_alts
+            + combo_alts
+            + texture_combo_alts
+            + multicolor_alts
+        ):
             if not alt or alt == term or alt in combined or is_vague_color_phrase(alt):
                 continue
             combined.append(alt)
