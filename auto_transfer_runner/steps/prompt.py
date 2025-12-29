@@ -389,7 +389,7 @@ def generate_prompt(
     min_replace_terms: int = 1,
     max_replace_terms: int = 3,
     replace_all_terms: bool = False,
-    replacements_per_term: int = 6,
+    replacements_per_term: int = 64,
     interactive_replace: bool = False,
 ) -> None:
     """
