@@ -66,7 +66,17 @@ python scripts/run_batch.py \
   --qwen_env qwen3vl
 ```
 
-### 例 5：随机替换改为“全部替换”
+### 例 5：sim2real 任务仅生成 Step1 prompt
+仅执行 `video_to_prompt` 的 Step1 base prompt，不做括号标注与替换：
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --sim2real_only
+```
+
+### 例 6：随机替换改为“全部替换”
 默认会在括号标注的描述中随机选择若干个词语进行替换；如需直接替换所有可替换的词，增加：
 ```bash
 python scripts/run_batch.py \
@@ -76,7 +86,7 @@ python scripts/run_batch.py \
   --replace_all_terms
 ```
 
-### 例 6：控制随机替换的上下限
+### 例 7：控制随机替换的上下限
 通过 `--min_terms` 和 `--max_terms` 控制每次随机替换的数量区间（未开启 `--replace_all_terms` 时生效）：
 ```bash
 python scripts/run_batch.py \
@@ -87,7 +97,7 @@ python scripts/run_batch.py \
   --max_terms 5
 ```
 
-### 例 7：调整每个词的替换备选数量（默认 64 个）
+### 例 8：调整每个词的替换备选数量（默认 64 个）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -97,7 +107,7 @@ python scripts/run_batch.py \
 ```
 说明：`--replacements_per_term` 会影响 Step3 生成的候选列表数量，并参与 prompt 缓存键；不同数量会生成独立的替换缓存。
 
-### 例 8：交互式替换（快速启动）
+### 例 9：交互式替换（快速启动）
 在 Step2 输出括号词列表后，手动选择需要替换的关键词并输入替换词：
 ```bash
 python scripts/run_batch.py \
@@ -107,7 +117,7 @@ python scripts/run_batch.py \
   --interactive_replace
 ```
 
-### 例 9：自动生成 edge 控制信号（缓存复用）
+### 例 10：自动生成 edge 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -117,7 +127,7 @@ python scripts/run_batch.py \
   --edge_high 160
 ```
 
-### 例 10：自动生成 blur 控制信号（缓存复用）
+### 例 11：自动生成 blur 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -126,7 +136,7 @@ python scripts/run_batch.py \
   --blur_sigma 10
 ```
 
-### 例 11：多控制信号（combo）
+### 例 12：多控制信号（combo）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -138,7 +148,7 @@ python scripts/run_batch.py \
   --vis_control_weight 0.1
 ```
 
-### 例 12：开启机械臂替换（qwen3vl + sam3）
+### 例 13：开启机械臂替换（qwen3vl + sam3）
 在 Step5 Transfer 输出完成后，自动调用 `robot_arm_swap` 生成机械臂替换版本（两个输出都会保留）。
 ```bash
 python scripts/run_batch.py \
@@ -357,6 +367,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2025-01-15：新增 sim2real 任务开关 `--sim2real_only`，Quickstart 增补 Step1-only 调用示例。
 - 2025-12-31：更新 video_to_prompt 三部曲说明，补充 Step2 子串清理、Step3 同体对齐与 step3_apply 无候选时的行为说明。
 - 2025-12-30：整理 video_to_prompt 三部曲逻辑说明，补充 Step1.5 兜底、Step2 括号反思/扩展、Step3 替换一致性与补齐策略。
 - 2025-12-30：Step2 名词同一体扩展提升优先级，允许在含机器人描述的句子中补圈共享名词短语。
