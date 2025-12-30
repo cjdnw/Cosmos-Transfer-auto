@@ -216,10 +216,6 @@ python scripts/run_batch.py \
 - prompt_path / json_path / output_dir / log_path
 - control_vis_path（单控制模式下最终引用的控制 mp4）
 
-## 更新日记
-- 2025-09-20：新增可选机械臂替换步骤（qwen3vl + sam3），支持在 Transfer 完成后自动生成机械臂替换输出并清理临时缓存目录。
-- control_paths（combo 模式下 depth/edge/seg 控制信号路径）
-
 ## Transfer2.5 默认路径（已更新）
 默认 `--transfer_root`：`/mnt/data/ganrunhe/cosmos-transfer2.5`
 
@@ -360,6 +356,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2025-12-30：新增可选机械臂替换步骤（qwen3vl + sam3），支持在 Transfer 完成后自动生成机械臂替换输出并清理临时缓存目录。
 - 2025-12-30：整理 video_to_prompt 三部曲逻辑说明，补充 Step1.5 兜底、Step2 括号反思/扩展、Step3 替换一致性与补齐策略。
 - 2025-12-30：Step2 名词同一体扩展提升优先级，允许在含机器人描述的句子中补圈共享名词短语。
 - 2025-12-30：Step2 括号清理新增机器人关键词与“background consists of …”过滤，并移除不含名词的纯形容词括注。
