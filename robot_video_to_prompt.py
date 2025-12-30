@@ -94,9 +94,10 @@ STRICT RULES:
 - The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
 - Bracket non-robot COLOR / MATERIAL / TEXTURE / SHAPE descriptors tied to objects.
 - Do NOT bracket background framing phrases (e.g., "background consists of ...").
-- If replacing a bracketed span with a single noun would make the sentence ungrammatical
-  or change the meaning, consider it over-bracketed and remove it.
-- If a descriptor phrase is missing brackets, add them.
+- First double-check if any descriptors are missing brackets, and add them.
+- Then double-check if any spans are over-bracketed; if replacing the bracketed span
+  with a single noun would make the sentence ungrammatical or change the meaning,
+  consider it over-bracketed and remove the brackets.
 - Output STRICT JSON only: {{"paragraph": "<result>"}}
 
 PARAGRAPH:
@@ -402,14 +403,13 @@ GENERIC_OBJECT_TOKENS = {
 
 def _term_object_tokens(term: str) -> List[str]:
     tokens = [t.lower() for t in re.findall(r"[A-Za-z-]+", term)]
-    filtered = []
-    for token in tokens:
+    for token in reversed(tokens):
         if token in ROBOT_KEYWORDS or token in GENERIC_OBJECT_TOKENS:
             continue
         if _descriptor_token(token):
             continue
-        filtered.append(token)
-    return filtered
+        return [token]
+    return []
 
 
 def _shared_object_groups(terms: List[str]) -> Dict[str, str]:
@@ -599,7 +599,17 @@ def _insert_brackets(paragraph: str, spans: List[tuple]) -> str:
     return paragraph
 
 
-def _reflect_brackets(model, processor, base_prompt: str, bracketed_prompt: str) -> str:
+def _strip_background_brackets(paragraph: str) -> str:
+    def repl(match: re.Match) -> str:
+        content = match.group(1)
+        if re.search(r"\bbackground\s+consists\s+of\b", content, re.IGNORECASE):
+            return content
+        return match.group(0)
+
+    return re.sub(r"【(.*?)】", repl, paragraph)
+
+
+def _run_bracket_reflection(model, processor, base_prompt: str, bracketed_prompt: str) -> str:
     messages = [{
         "role": "user",
         "content": [{
@@ -619,7 +629,13 @@ def _reflect_brackets(model, processor, base_prompt: str, bracketed_prompt: str)
     original = base_prompt.replace(" ", "")
     if normalized != original:
         return bracketed_prompt
-    return paragraph
+    return _strip_background_brackets(paragraph)
+
+
+def _reflect_brackets(model, processor, base_prompt: str, bracketed_prompt: str) -> str:
+    first_pass = _run_bracket_reflection(model, processor, base_prompt, bracketed_prompt)
+    second_pass = _run_bracket_reflection(model, processor, base_prompt, first_pass)
+    return second_pass
 
 
 def _expand_shared_noun_phrases(paragraph: str, bracketed_prompt: str) -> str:
@@ -1160,7 +1176,8 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
     merged = _merge_spans(spans)
     bracketed = _insert_brackets(base_prompt, merged)
     bracketed = _reflect_brackets(model, processor, base_prompt, bracketed)
-    return _expand_shared_noun_phrases(base_prompt, bracketed)
+    expanded = _expand_shared_noun_phrases(base_prompt, bracketed)
+    return _strip_background_brackets(expanded)
 
 
 def step3_generate_replacements_json(
