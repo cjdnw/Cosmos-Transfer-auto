@@ -245,9 +245,9 @@ python scripts/run_batch.py ... --cv_root /your/path/to/cv-tools
 默认行为：**每个任务成功完成推理后**，自动清理中间文件：
 - prompt 文件（`prompt/*.txt`）
 - json spec（`json/*.json`）
-- 非缓存 control 目录（`control/<type>/<job_id>/`，主要为未来 edge/seg/... 预留）
 不会清理：
-- depth 控制缓存（`control_cache/`）
+- control 缓存（`control_cache/`）
+- step1-3 prompt缓存
 - 最终输出（`output_video/`）
 - `manifest.jsonl`
 
@@ -270,7 +270,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - depth 控制信号质量不佳，需研究提升方案。
 - seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
 
-## Step2 词表维护说明（为什么用词表而不是全靠大模型）
+## Step2 词表维护说明（仅针对非换臂场景，如果开启机器人换臂则可忽略）
 Step2 需要稳定、可控地“尽可能多圈非机器人描述”，同时保证后续替换安全。完全依赖大模型生成替换有三个问题：  
 1. **不稳定**：同一视频多次生成的替换词会漂移，影响缓存命中与结果复现。  
 2. **不可控**：模型容易引入机器人相关描述或模糊词（pale/light/dark 等），违背“只替换非机器人外观描述”的约束。  
