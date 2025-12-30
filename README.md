@@ -330,33 +330,34 @@ python scripts/run_batch.py ... --cleanup_logs
 **入口命令**：`step2_bracket` 或 `step23`  
 **核心流程**：
 1. 模型根据 `DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE` 提取非机器人相关的颜色/材质/纹理等描述短语。
-2. `step2_bracket_base` 校验短语必须是原文子串，并过滤机器人相关词与背景框架语句。
+2. `step2_bracket_base` 校验短语必须是原文子串，清理尾部标点，并过滤机器人相关词与背景框架语句。
 3. 将短语插入 `【】` 进行初始标注，并调用 `_reflect_brackets` 进行括号反思校验（确保文本不变，仅修正括号）。
 4. `_expand_shared_noun_phrases` 扩展同一实体的名词短语（如已有 table surface 会补圈 white table）。
-5. `expand_bracketed_prompt` 再次扩展括注的名词修饰片段，确保替换时覆盖完整名词短语。
+5. `expand_bracketed_prompt` 扩展名词修饰片段，保证替换时覆盖完整名词短语。
 
 **输出**：`bracket.txt`（带 `【】` 的标注描述）
 
 ### Step 3：生成替换候选 + 随机替换
 **入口命令**：`step3_replacements` / `step23` / `step3_apply`  
 **候选生成流程**（`step3_generate_replacements_json`）：
-1. 读取 `bracket.txt` 并去重术语，按共享名词建立同体分组。
+1. 读取 `bracket.txt` 并去重术语，按共享名词建立同体分组（含母串/子串与共享名词对齐）。
 2. 调用大模型生成替换候选，并做严格过滤：
    - 去重、拒绝原词、移除模糊颜色/纹理词、排除机器人相关词。
-   - ` _ensure_materials` 强制保留原始材质词（如 plastic/metal）。
+   - `_ensure_materials` 强制保留原始材质词（如 plastic/metal）。
    - 若候选数量不足，触发 `_retry_replacements_for_term` 重新补齐。
-3. 对同一物体（母串/子串或共享名词）做一致性对齐，避免前后替换冲突。
+3. 对同一物体的替换候选做一致性对齐，避免前后替换冲突。
 4. 结果写入 `prompt_cache/step3_llm_cache`，按内容与候选数量缓存复用。
 
 **随机替换流程**（`apply_random_replacements` / `step3_apply`）：
-- 在括注短语中随机抽取若干个（或 `--replace_all_terms` 全部替换），从候选列表中随机挑选替换词并输出最终 prompt。
+- 默认随机抽取 `min_terms ~ max_terms` 个括注短语进行替换；启用 `--replace_all_terms` 则全部替换。
+- 若 `step3_apply` 未传 `--repl_json`，仅去掉括号，不做替换。
 
 **输出**：
 - `replacements.json`（每个术语的替换候选列表）
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
-- 2025-12-30：新增可选机械臂替换步骤（qwen3vl + sam3），支持在 Transfer 完成后自动生成机械臂替换输出并清理临时缓存目录。
+- 2025-12-31：更新 video_to_prompt 三部曲说明，补充 Step2 子串清理、Step3 同体对齐与 step3_apply 无候选时的行为说明。
 - 2025-12-30：整理 video_to_prompt 三部曲逻辑说明，补充 Step1.5 兜底、Step2 括号反思/扩展、Step3 替换一致性与补齐策略。
 - 2025-12-30：Step2 名词同一体扩展提升优先级，允许在含机器人描述的句子中补圈共享名词短语。
 - 2025-12-30：Step2 括号清理新增机器人关键词与“background consists of …”过滤，并移除不含名词的纯形容词括注。
