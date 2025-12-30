@@ -386,6 +386,7 @@ def generate_prompt(
     lock_timeout_sec: int,
     stale_lock_sec: int,
     seed: int,
+    sim2real_only: bool = False,
     min_replace_terms: int = 1,
     max_replace_terms: int = 3,
     replace_all_terms: bool = False,
@@ -431,6 +432,13 @@ def generate_prompt(
         lock_timeout_sec=lock_timeout_sec,
         stale_lock_sec=stale_lock_sec,
     )
+
+    if sim2real_only:
+        out_prompt.write_text(_read_text(base_prompt_path), encoding="utf-8")
+        append_log(log_path, f"[STEP2 DONE] sim2real prompt={out_prompt}")
+        safe_unlink(prompt_bracket_path, log_path=log_path)
+        safe_unlink(prompt_replacements_path, log_path=log_path)
+        return
 
     if interactive_replace:
         base_hash = text_md5(_read_text(base_prompt_path))

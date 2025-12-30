@@ -81,6 +81,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         variant=args.prompt_variant,
         model_type=args.prompt_model_type,
         reuse_if_exists=args.reuse_prompt,
+        sim2real_only=args.sim2real_only,
         min_replace_terms=args.min_terms,
         max_replace_terms=args.max_terms,
         replace_all_terms=args.replace_all_terms,
@@ -269,6 +270,11 @@ def main(argv: List[str] | None = None) -> None:
         help="Model family for robot_video_to_prompt.py (Qwen3 or Qwen2.5)",
     )
     ap.add_argument("--reuse_prompt", action="store_true", help="Reuse prompt file if it already exists (default: no)")
+    ap.add_argument(
+        "--sim2real_only",
+        action="store_true",
+        help="Sim2Real task: only run step1_base and skip bracket/replacement steps",
+    )
     ap.add_argument(
         "--min_terms",
         type=int,
