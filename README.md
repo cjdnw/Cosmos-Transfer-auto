@@ -138,6 +138,23 @@ python scripts/run_batch.py \
   --vis_control_weight 0.1
 ```
 
+### 例 12：开启机械臂替换（qwen3vl + sam3）
+在 Step5 Transfer 输出完成后，自动调用 `robot_arm_swap` 生成机械臂替换版本（两个输出都会保留）。
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --enable_arm_swap \
+  --arm_swap_root /mnt/data/ganrunhe/robot_arm_swap_project \
+  --arm_swap_env robot_arm_swap \
+  --arm_swap_output_root /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm \
+  --arm_swap_workdir_root /mnt/data/ganrunhe/auto_transfer/arm_swap_cache \
+  --arm_swap_fps 30 \
+  --arm_swap_width 1280 \
+  --arm_swap_prompt "robotic arm"
+```
+
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
 - `prompt_cache/`：按视频指纹缓存的 Step1 base prompt（跨任务复用）
@@ -198,7 +215,6 @@ python scripts/run_batch.py \
 - input_video / variant_idx / job_id
 - prompt_path / json_path / output_dir / log_path
 - control_vis_path（单控制模式下最终引用的控制 mp4）
-- control_paths（combo 模式下 depth/edge/seg 控制信号路径）
 
 ## Transfer2.5 默认路径（已更新）
 默认 `--transfer_root`：`/mnt/data/ganrunhe/cosmos-transfer2.5`

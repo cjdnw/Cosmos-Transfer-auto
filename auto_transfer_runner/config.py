@@ -16,6 +16,9 @@ DEFAULT_SEG_ROOT = Path("/mnt/data/ganrunhe/AutoSeg-SAM2")
 DEFAULT_CV_ROOT = REPO_ROOT
 DEFAULT_TRANSFER_ROOT = Path("/mnt/data/ganrunhe/cosmos-transfer2.5")
 DEFAULT_HF_CACHE = Path("/mnt/data/ganrunhe/hf_cache")
+DEFAULT_ARM_SWAP_ROOT = Path("/mnt/data/ganrunhe/robot_arm_swap_project")
+DEFAULT_ARM_SWAP_OUTPUT_ROOT = Path("/mnt/data/ganrunhe/auto_transfer/output_video_mask_arm")
+DEFAULT_ARM_SWAP_WORKDIR_ROOT = Path("/mnt/data/ganrunhe/auto_transfer/arm_swap_cache")
 
 
 @dataclass(frozen=True)
@@ -108,6 +111,20 @@ class TransferConfig:
 
 
 @dataclass(frozen=True)
+class ArmSwapConfig:
+    """Step6: robot arm swap config (qwen3vl + sam3)."""
+    enable: bool = False
+    project_root: Path = DEFAULT_ARM_SWAP_ROOT
+    conda_env: str = "robot_arm_swap"
+    output_root: Path = DEFAULT_ARM_SWAP_OUTPUT_ROOT
+    workdir_root: Path = DEFAULT_ARM_SWAP_WORKDIR_ROOT
+    fps: int = 30
+    width: int = 1280
+    qwen_prompt: str = "robotic arm"
+    skip_if_output_exists: bool = True
+
+
+@dataclass(frozen=True)
 class CacheConfig:
     """Cache strategy (control signals + base prompt)."""
     enable: bool = True
@@ -145,6 +162,7 @@ class GlobalConfig:
     seg: SegConfig
     cv: CvControlConfig
     transfer: TransferConfig
+    arm_swap: ArmSwapConfig
     cache: CacheConfig
     cleanup: CleanupConfig
     run: RunConfig
@@ -156,6 +174,7 @@ DEPTH_DEFAULTS = DepthConfig()
 SEG_DEFAULTS = SegConfig()
 CV_DEFAULTS = CvControlConfig()
 TRANSFER_DEFAULTS = TransferConfig()
+ARM_SWAP_DEFAULTS = ArmSwapConfig()
 CACHE_DEFAULTS = CacheConfig()
 CLEANUP_DEFAULTS = CleanupConfig()
 RUN_DEFAULTS = RunConfig(control_type="depth", gpus=None, shuffle=False, num_videos=0)
