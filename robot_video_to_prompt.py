@@ -264,15 +264,8 @@ def extract_bracket_terms(text: str) -> List[str]:
 
 
 def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+", paragraph.strip()) if s]
     lowered_span = span.lower()
-    for sentence in sentences:
-        lowered_sentence = sentence.lower()
-        if lowered_span not in lowered_sentence:
-            continue
-        if any(keyword in lowered_sentence for keyword in ROBOT_KEYWORDS):
-            return True
-    return False
+    return any(keyword in lowered_span for keyword in ROBOT_KEYWORDS)
 
 
 def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
