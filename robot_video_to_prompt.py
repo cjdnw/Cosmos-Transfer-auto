@@ -677,6 +677,14 @@ _BRACKET_FRAMING_PATTERNS = [
     re.compile(r"^((?:the\s+)?environment\s+(?:includes|contains|features)\s+)(.+)$", re.IGNORECASE),
 ]
 
+# Pre-rewrite for cases where the model brackets the whole framing phrase.
+# Example: 【background consists of smooth, light-gray walls】  ->  background consists of 【smooth, light-gray walls】
+_FRAMING_BRACKET_REWRITE = re.compile(
+    r"【\s*((?:the\s+)?background\s+(?:consists\s+of|includes|contains|features|shows|is\s+(?:made|composed)\s+of)\s+)([\s\S]*?)\s*】",
+    re.IGNORECASE,
+)
+
+
 _BRACKET_COPULA_PATTERN = re.compile(
     r"^((?:is|are|was|were|seems|seem|appears|appear)\b(?:\s+(?:a|an|the)\b)?\s+)(.+)$",
     re.IGNORECASE,
@@ -686,45 +694,67 @@ _BRACKET_COPULA_PATTERN = re.compile(
 def _rewrite_bracket_span(term: str) -> str:
     """Rewrite a single bracket span while preserving original text.
 
+    Goal: prevent *framing phrases* (e.g., 'background consists of ...') and
+    *predicate-only spans* (e.g., 'is silver') from being treated as replaceable units.
+
     Cases handled:
     - Framing: 'background consists of X'  ->  'background consists of 【X】'
     - Copula:  'is a wooden box'          ->  'is a 【wooden box】'
               (but drops brackets entirely if the remainder has no object token, e.g., 'is silver')
-    - Invalid multi-line spans: drop brackets (keep text).
+    - Multiline spans: normalize whitespace and retry; if still not keepable, drop brackets.
     """
-    if "\n" in term or "\r" in term:
-        return term
+    raw = term
+    term = term.strip()
+    if not term:
+        return raw
+
+    # Normalize internal whitespace for matching (handles hidden newlines/spaces from LLM output).
+    term_norm = re.sub(r"\s+", " ", term).strip()
+
+    # Helper: keep trailing punctuation outside the inner bracket.
+    def _split_trailing_punct(s: str) -> tuple[str, str]:
+        m = re.match(r"^(.*?)([\.,;:!?]+)?$", s.strip())
+        if not m:
+            return s.strip(), ""
+        core = (m.group(1) or "").rstrip()
+        punct = m.group(2) or ""
+        return core, punct
 
     # 1) Framing phrases: move brackets inward to cover only the object phrase.
     for pat in _BRACKET_FRAMING_PATTERNS:
-        m = pat.match(term)
+        m = pat.match(term_norm)
         if not m:
             continue
         prefix, rest = m.group(1), m.group(2)
-        if _should_keep_bracket(rest):
-            return f"{prefix}【{rest}】"
+        rest_core, rest_punct = _split_trailing_punct(rest)
+        if _should_keep_bracket(rest_core):
+            return f"{prefix}【{rest_core}】{rest_punct}"
         return prefix + rest
 
     # 2) Copula/aux prefixes: avoid bracket terms like 'is silver' / 'is also silver'.
-    m = _BRACKET_COPULA_PATTERN.match(term.strip())
+    m = _BRACKET_COPULA_PATTERN.match(term_norm)
     if m:
         prefix, rest = m.group(1), m.group(2)
-        if _should_keep_bracket(rest):
-            return f"{prefix}【{rest}】"
+        rest_core, rest_punct = _split_trailing_punct(rest)
+        if _should_keep_bracket(rest_core):
+            return f"{prefix}【{rest_core}】{rest_punct}"
         return prefix + rest
 
-    # 3) Default: keep or drop as-is.
-    return f"【{term}】" if _should_keep_bracket(term) else term
-
+    # 3) Default: keep or drop as-is (use normalized text to avoid multiline leakage).
+    return f"【{term_norm}】" if _should_keep_bracket(term_norm) else term_norm
 
 def _cleanup_bracketed_prompt(bracketed_prompt: str) -> str:
+    # First, rewrite whole-framing brackets into inner-object brackets.
+    bracketed_prompt = _FRAMING_BRACKET_REWRITE.sub(
+        lambda m: f"{m.group(1)}【{m.group(2).strip()}】",
+        bracketed_prompt,
+    )
+
     def repl(match: re.Match) -> str:
         term = match.group(1)
         return _rewrite_bracket_span(term)
 
     return re.sub(r"【([\s\S]*?)】", repl, bracketed_prompt)
-
-
 
 def _reflect_brackets(model, processor, base_prompt: str, bracketed_prompt: str) -> str:
     messages = [{
