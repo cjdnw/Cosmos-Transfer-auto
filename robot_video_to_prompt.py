@@ -568,8 +568,6 @@ def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
         if re.search(r"\bbackground\s+consists\s+of\b", term, re.IGNORECASE):
             continue
         for match in re.finditer(re.escape(term), paragraph):
-            if _in_robot_context(term, paragraph):
-                continue
             spans.append(match.span())
     return spans
 
@@ -1170,14 +1168,12 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
         term = descriptor.strip()
         if not term or term not in base_prompt:
             continue
-        if _in_robot_context(term, clause_context):
-            continue
         cleaned.append(term)
     cleaned = list(dict.fromkeys(cleaned))
 
     spans = _collect_existing_spans(base_prompt, cleaned)
     merged = _merge_spans(spans)
-    bracketed = _insert_brackets(base_prompt, merged)
+    bracketed = _cleanup_bracketed_prompt(_insert_brackets(base_prompt, merged))
     bracketed = _reflect_brackets(model, processor, base_prompt, bracketed)
     return _expand_shared_noun_phrases(base_prompt, bracketed)
 

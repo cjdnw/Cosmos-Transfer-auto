@@ -297,6 +297,7 @@ python scripts/run_batch.py ... --cleanup_logs
    - 若出现误圈/漏圈，优先检查提示词与机器人过滤规则是否需调整。  
 
 ## 更新记录
+- 2025-12-30：Step2 移除“同句包含机器人则不括”的限制，改为先括注再通过机器人关键词清理。
 - 2025-12-30：Step2 名词同一体扩展提升优先级，允许在含机器人描述的句子中补圈共享名词短语。
 - 2025-12-30：Step2 括号清理新增机器人关键词与“background consists of …”过滤，并移除不含名词的纯形容词括注。
 - 2025-12-30：Step2 新增括号反思校验与名词同一体扩展（如已有 table surface 会补圈 white table），并过滤 “background consists of …” 类背景短语。
