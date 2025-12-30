@@ -83,6 +83,20 @@ PARAGRAPH:
 {base_prompt}
 """
 
+PRE2_SPLIT_PROMPT_TEMPLATE = """You are a formatting tool.
+Insert commas to separate robot-related clauses from non-robot clauses when they appear in the same sentence.
+
+STRICT RULES:
+- DO NOT translate, paraphrase, reorder, or delete ANY characters.
+- You may ONLY insert commas and spaces.
+- Output must be identical to the input paragraph after removing the commas you inserted.
+- If no change is needed, return the original paragraph.
+- Output STRICT JSON only: {{"paragraph": "<result>"}}
+
+PARAGRAPH:
+{base_prompt}
+"""
+
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
 For each descriptor below (COLOR or TEXTURE), propose {num_alternatives} short alternatives.
 
@@ -265,7 +279,19 @@ def extract_bracket_terms(text: str) -> List[str]:
 
 def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
     lowered_span = span.lower()
-    return any(keyword in lowered_span for keyword in ROBOT_KEYWORDS)
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", paragraph.strip()) if s]
+    for sentence in sentences:
+        lowered_sentence = sentence.lower()
+        if lowered_span not in lowered_sentence:
+            continue
+        clauses = [c.strip() for c in sentence.split(",") if c.strip()]
+        for clause in clauses:
+            lowered_clause = clause.lower()
+            if lowered_span not in lowered_clause:
+                continue
+            if any(keyword in lowered_clause for keyword in ROBOT_KEYWORDS):
+                return True
+    return False
 
 
 def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
@@ -701,7 +727,25 @@ def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
     return canonicalize_robot_sentences(base_prompt)
 
 
+def step2_prepare_clause_context(model, processor, base_prompt: str) -> str:
+    messages = [{
+        "role": "user",
+        "content": [{"type": "text", "text": PRE2_SPLIT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
+    }]
+    raw = run_generation(model, processor, messages, 400, False, 1.0, 1.0)
+    parsed = safe_parse_json(raw)
+    paragraph = parsed.get("paragraph") if isinstance(parsed, dict) else None
+    if not isinstance(paragraph, str):
+        return base_prompt
+    normalized = paragraph.replace(",", "").replace(" ", "")
+    original = base_prompt.replace(",", "").replace(" ", "")
+    if normalized != original:
+        return base_prompt
+    return paragraph
+
+
 def step2_bracket_base(model, processor, base_prompt: str) -> str:
+    clause_context = step2_prepare_clause_context(model, processor, base_prompt)
     messages = [{
         "role": "user",
         "content": [{"type": "text", "text": DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
@@ -716,7 +760,7 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
         term = descriptor.strip()
         if not term or term not in base_prompt:
             continue
-        if _in_robot_context(term, base_prompt):
+        if _in_robot_context(term, clause_context):
             continue
         cleaned.append(term)
     cleaned = list(dict.fromkeys(cleaned))
