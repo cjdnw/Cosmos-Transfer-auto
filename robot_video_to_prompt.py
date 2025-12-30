@@ -130,7 +130,7 @@ Rules:
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
 - Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
 - Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
-- Output STRICT JSON only: {"alternatives": ["alt1", ...]}.
+- Output STRICT JSON only: {{"alternatives": ["alt1", ...]}}.
 
 PHRASE:
 {term}
