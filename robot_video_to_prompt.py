@@ -3,6 +3,7 @@ import re
 import json
 import random
 import argparse
+import hashlib
 from typing import Dict, List, Any
 
 import torch
@@ -69,22 +70,70 @@ PARAGRAPH:
 {base_prompt}
 """
 
+DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE = """Extract all non-robot COLOR / MATERIAL / TEXTURE / SURFACE-FINISH descriptors from the paragraph.
+
+STRICT RULES:
+- Output STRICT JSON only: {{"descriptors": ["..."]}}.
+- Each descriptor must be an exact, verbatim substring copied from the paragraph.
+- Prefer full noun phrases (descriptor + noun), e.g., "orange cushion" not just "orange".
+- Do NOT include any robot-system descriptors (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
+- If a descriptor applies to a robot component, exclude it.
+- Do NOT add explanations.
+
+PARAGRAPH:
+{base_prompt}
+"""
+
+PRE2_SPLIT_PROMPT_TEMPLATE = """You are a formatting tool.
+Insert commas to separate robot-related clauses from non-robot clauses when they appear in the same sentence.
+
+STRICT RULES:
+- DO NOT translate, paraphrase, reorder, or delete ANY characters.
+- You may ONLY insert commas and spaces.
+- Output must be identical to the input paragraph after removing the commas you inserted.
+- If no change is needed, return the original paragraph.
+- Output STRICT JSON only: {{"paragraph": "<result>"}}
+
+PARAGRAPH:
+{base_prompt}
+"""
+
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
-For each descriptor below (COLOR or TEXTURE), propose {num_alternatives} short alternatives.
+For each phrase below, propose {num_alternatives} short alternatives that keep the same object/category
+and stay grounded in indoor robotics scenes.
 
 Rules:
 - Do NOT repeat the original.
 - Keep 1-3 words.
 - Use common, simple descriptors suitable for indoor robotics scenes.
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
-- For material/texture phrases, include swaps and combinations that mix color + material or texture + material when reasonable.
 - Avoid rare or poetic color words.
-- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle".
+- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
+- Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
 - Output STRICT JSON only:
   {{"replacements": {{"<src>": ["alt1", ...], ...}}}}
 
 DESCRIPTORS:
 {descriptor_block}
+"""
+
+REPLACEMENT_RETRY_PROMPT_TEMPLATE = """Regenerate replacements for the phrase below.
+
+Issues to fix:
+{issues}
+
+Rules:
+- Provide {num_alternatives} alternatives.
+- Do NOT repeat the original.
+- Keep 1-3 words.
+- Use common, simple descriptors suitable for indoor robotics scenes.
+- For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
+- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
+- Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
+- Output STRICT JSON only: {{"alternatives": ["alt1", ...]}}.
+
+PHRASE:
+{term}
 """
 
 ROBOT_KEYWORDS = {
@@ -172,8 +221,17 @@ TEXTURE_BASES = [
     "smooth",
     "matte",
     "glossy",
+    "satin",
+    "polished",
+    "brushed",
+    "grainy",
+    "speckled",
+    "pebbled",
+    "bumpy",
     "textured",
     "woven",
+    "felted",
+    "velvety",
     "rough",
     "soft",
     "hard",
@@ -194,52 +252,14 @@ VAGUE_COLOR_MODIFIERS = [
     "slight",
     "subtle",
 ]
-DESCRIPTOR_WORDS = sorted({
-    *COLOR_BASES,
+VAGUE_TEXTURE_MODIFIERS = [
     "smooth",
-    "matte",
-    "glossy",
-    "textured",
-    "woven",
-    "rough",
     "soft",
     "hard",
-    "metallic",
-    "metal",
-    "wooden",
-    "plastic",
-    "rubber",
-    "ceramic",
-    "glass",
-    "striped",
-    "patterned",
-    "ribbed",
-    "knitted",
-    "wrinkled",
-    "transparent",
-})
-SPAN_STOPWORDS = {
-    "and",
-    "or",
-    "with",
-    "into",
-    "onto",
-    "over",
-    "above",
-    "below",
-    "under",
-    "in",
-    "on",
-    "at",
-    "to",
-    "of",
-    "from",
-    "by",
-    "for",
-    "as",
-    "while",
-    "then",
-}
+    "textured",
+    "matte",
+    "glossy",
+]
 
 # =======================
 # 2) Model Options
@@ -295,78 +315,101 @@ def extract_bracket_terms(text: str) -> List[str]:
     return filtered
 
 
-def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
-    for match in re.finditer(re.escape(span), paragraph):
-        start, end = match.span()
-        ctx_start = max(0, start - window)
-        ctx_end = min(len(paragraph), end + window)
-        context = paragraph[ctx_start:ctx_end].lower()
-        if any(keyword in context for keyword in ROBOT_KEYWORDS):
+def normalize_term_key(term: str) -> str:
+    cleaned = re.sub(r"[^\w\s-]", "", term.lower())
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _descriptor_token(token: str) -> bool:
+    lower = token.lower().strip(",.;:")
+    if not lower:
+        return False
+    if lower in ROBOT_KEYWORDS:
+        return False
+    if lower in COLOR_BASES or lower in MATERIAL_BASES or lower in TEXTURE_BASES:
+        return True
+    if "-" in lower:
+        parts = [p for p in lower.split("-") if p]
+        if any(part in COLOR_BASES for part in parts):
             return True
+    if any(base in lower for base in COLOR_BASES):
+        return True
     return False
 
 
-def filter_robot_descriptors(bracketed_prompt: str, window: int = 200) -> List[str]:
-    base_paragraph = bracketed_prompt.replace("【", "").replace("】", "")
-    descriptors = extract_bracket_terms(bracketed_prompt)
-    filtered = []
-    for descriptor in descriptors:
-        if _in_robot_context(descriptor, base_paragraph, window):
-            continue
-        filtered.append(descriptor)
-    return filtered
+def _noun_modifier_token(token: str) -> bool:
+    return bool(re.match(r"^[A-Za-z-]+$", token))
 
 
-def strip_robot_brackets(bracketed_prompt: str) -> str:
-    def repl(match: re.Match) -> str:
-        term = match.group(1)
-        lowered = term.lower()
-        if any(keyword in lowered for keyword in ROBOT_KEYWORDS):
-            return term
-        return match.group(0)
+def expand_bracketed_prompt(paragraph: str) -> str:
+    base = paragraph.replace("【", "").replace("】", "")
+    terms = extract_bracket_terms(paragraph)
+    if not terms:
+        return paragraph
 
-    return re.sub(r"【(.*?)】", repl, bracketed_prompt)
-
-
-def _trim_descriptor_span(span: str) -> str:
-    tokens = span.split()
-    if not tokens:
-        return span
-    kept = [tokens[0]]
-    for tok in tokens[1:]:
-        clean = tok.strip(",.;:")
-        lower = clean.lower()
-        if lower in SPAN_STOPWORDS:
-            break
-        if lower in ROBOT_KEYWORDS:
-            break
-        kept.append(clean)
-        if tok != clean:
-            break
-    return " ".join(kept).strip()
-
-
-def _collect_descriptor_spans(paragraph: str, max_follow_tokens: int = 3) -> List[tuple]:
-    if not DESCRIPTOR_WORDS:
-        return []
-    pattern = re.compile(
-        r"\\b(" + "|".join(map(re.escape, DESCRIPTOR_WORDS)) + r")\\b(?:\\s+[\\w-]+){0," + str(max_follow_tokens) + r"}",
-        re.IGNORECASE,
-    )
+    token_spans = [(m.group(0), m.start(), m.end()) for m in re.finditer(r"\b[\w-]+\b", base)]
+    stopwords = {"a", "an", "the", "and", "or", "with", "to", "from", "on", "in", "at", "by", "near", "toward"}
+    verbs = {
+        "move", "moves", "moving",
+        "grasp", "grasps", "grasping",
+        "lift", "lifts", "lifting",
+        "hold", "holds", "holding",
+        "place", "places", "placed", "placing",
+        "extend", "extends", "extended", "extending",
+        "reach", "reaches", "reached", "reaching",
+    }
     spans = []
-    for match in pattern.finditer(paragraph):
-        raw = match.group(0)
-        trimmed = _trim_descriptor_span(raw)
-        if not trimmed:
+
+    for term in terms:
+        for match in re.finditer(re.escape(term), base):
+            span_start, span_end = match.span()
+            token_index = next(
+                (idx for idx, (_, start, _) in enumerate(token_spans) if start == span_start),
+                None,
+            )
+            if token_index is None:
+                spans.append((span_start, span_end))
+                continue
+            expanded_start = span_start
+            idx = token_index - 1
+            while idx >= 0:
+                token, start, end = token_spans[idx]
+                gap = base[end:expanded_start]
+                if any(ch in gap for ch in ",;:.!?"):
+                    break
+                lower = token.lower()
+                if lower in stopwords or lower in VAGUE_MODIFIERS or lower in verbs:
+                    break
+                if any(keyword in lower for keyword in ROBOT_KEYWORDS):
+                    break
+                if not _descriptor_token(token) and not _noun_modifier_token(token):
+                    break
+                expanded_start = start
+                idx -= 1
+            spans.append((expanded_start, span_end))
+
+    merged = _merge_spans(spans)
+    return _insert_brackets(base, merged)
+
+
+def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
+    lowered_span = span.lower()
+    if any(keyword in lowered_span for keyword in ROBOT_KEYWORDS):
+        return True
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", paragraph.strip()) if s]
+    for sentence in sentences:
+        lowered_sentence = sentence.lower()
+        if lowered_span not in lowered_sentence:
             continue
-        if _in_robot_context(trimmed, paragraph):
-            continue
-        if any(keyword in trimmed.lower().split() for keyword in ROBOT_KEYWORDS):
-            continue
-        start = match.start()
-        end = start + len(trimmed)
-        spans.append((start, end))
-    return spans
+        clauses = [c.strip() for c in sentence.split(",") if c.strip()]
+        for clause in clauses:
+            lowered_clause = clause.lower()
+            if lowered_span not in lowered_clause:
+                continue
+            if any(keyword in lowered_clause for keyword in ROBOT_KEYWORDS):
+                return True
+    return False
 
 
 def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
@@ -404,18 +447,6 @@ def _insert_brackets(paragraph: str, spans: List[tuple]) -> str:
         paragraph = paragraph[:end] + "】" + paragraph[end:]
         paragraph = paragraph[:start] + "【" + paragraph[start:]
     return paragraph
-
-
-def auto_bracket_descriptors(base_paragraph: str, bracketed_prompt: str) -> str:
-    normalized = bracketed_prompt.replace("【", "").replace("】", "")
-    if normalized != base_paragraph:
-        print("[WARN] Step 2: bracket output mismatch; falling back to base prompt for bracketing.")
-        bracketed_prompt = base_paragraph
-    existing_terms = extract_bracket_terms(bracketed_prompt)
-    spans = _collect_existing_spans(base_paragraph, existing_terms)
-    spans += _collect_descriptor_spans(base_paragraph)
-    merged = _merge_spans(spans)
-    return _insert_brackets(base_paragraph, merged)
 
 
 def canonicalize_robot_sentences(paragraph: str) -> str:
@@ -714,6 +745,74 @@ def is_vague_color_phrase(text: str) -> bool:
     return bool(pattern.search(text))
 
 
+def _normalize_replacement_phrase(text: str) -> str:
+    if not text:
+        return text
+    cleaned = text
+    colorish_pattern = re.compile(
+        r"\\b(" + "|".join(COLORISH_BASES) + r")ish\\b",
+        re.IGNORECASE,
+    )
+
+    def colorish_repl(match: re.Match) -> str:
+        base = match.group(1)
+        if match.group(0).isupper():
+            return base.upper()
+        if match.group(0)[0].isupper():
+            return base.capitalize()
+        return base
+
+    cleaned = colorish_pattern.sub(colorish_repl, cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+,", ",", cleaned)
+    cleaned = re.sub(r",\s+", ", ", cleaned)
+    return cleaned.strip(" ,")
+
+
+def _contains_vague_modifier(text: str) -> bool:
+    pattern = re.compile(
+        r"\\b(" + "|".join(VAGUE_MODIFIERS + VAGUE_COLOR_MODIFIERS + VAGUE_TEXTURE_MODIFIERS) + r")\\b",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(text))
+
+
+def _retry_replacements_for_term(
+    model,
+    processor,
+    term: str,
+    needed: int,
+    issues: List[str],
+) -> List[str]:
+    issue_block = "\n".join(f"- {issue}" for issue in issues) if issues else "- Prior output did not meet constraints."
+    messages = [{
+        "role": "user",
+        "content": [{
+            "type": "text",
+            "text": REPLACEMENT_RETRY_PROMPT_TEMPLATE.format(
+                term=term,
+                num_alternatives=needed,
+                issues=issue_block,
+            ),
+        }],
+    }]
+    raw = run_generation(model, processor, messages, 500, True, 0.9, 0.95)
+    parsed = safe_parse_json(raw)
+    alts = parsed.get("alternatives", []) if isinstance(parsed, dict) else []
+    return [alt for alt in alts if isinstance(alt, str)]
+
+
+def _split_color_bias(term: str, candidates: List[str]) -> List[str]:
+    pattern = re.compile(r"\\b(" + "|".join(COLOR_BASES) + r")\\b", re.IGNORECASE)
+    match = pattern.search(term)
+    if not match:
+        return candidates
+    original_color = match.group(1).lower()
+    without = [c for c in candidates if original_color not in c.lower()]
+    with_original = [c for c in candidates if original_color in c.lower()]
+    return without + with_original
+
+
 def step1_5_postprocess(paragraph: str) -> str:
     updated = enforce_container_initial_state(paragraph)
     updated = cleanup_vague_terms(updated)
@@ -729,6 +828,7 @@ def apply_random_replacements(
     replace_all_terms: bool = False,
 ) -> str:
     rng = random.Random(seed)
+    bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
 
     if not terms:
@@ -814,14 +914,47 @@ def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
     return canonicalize_robot_sentences(base_prompt)
 
 
-def step2_bracket_base(model, processor, base_prompt: str) -> str:
+def step2_prepare_clause_context(model, processor, base_prompt: str) -> str:
     messages = [{
         "role": "user",
-        "content": [{"type": "text", "text": BRACKET_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
+        "content": [{"type": "text", "text": PRE2_SPLIT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
     }]
-    bracketed = run_generation(model, processor, messages, 700, False, 1.0, 1.0)
-    bracketed = strip_robot_brackets(bracketed)
-    return auto_bracket_descriptors(base_prompt, bracketed)
+    raw = run_generation(model, processor, messages, 400, False, 1.0, 1.0)
+    parsed = safe_parse_json(raw)
+    paragraph = parsed.get("paragraph") if isinstance(parsed, dict) else None
+    if not isinstance(paragraph, str):
+        return base_prompt
+    normalized = paragraph.replace(",", "").replace(" ", "")
+    original = base_prompt.replace(",", "").replace(" ", "")
+    if normalized != original:
+        return base_prompt
+    return paragraph
+
+
+def step2_bracket_base(model, processor, base_prompt: str) -> str:
+    clause_context = step2_prepare_clause_context(model, processor, base_prompt)
+    messages = [{
+        "role": "user",
+        "content": [{"type": "text", "text": DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
+    }]
+    raw = run_generation(model, processor, messages, 500, False, 1.0, 1.0)
+    parsed = safe_parse_json(raw)
+    descriptors = parsed.get("descriptors", []) if isinstance(parsed, dict) else []
+    cleaned = []
+    for descriptor in descriptors or []:
+        if not isinstance(descriptor, str):
+            continue
+        term = descriptor.strip()
+        if not term or term not in base_prompt:
+            continue
+        if _in_robot_context(term, clause_context):
+            continue
+        cleaned.append(term)
+    cleaned = list(dict.fromkeys(cleaned))
+
+    spans = _collect_existing_spans(base_prompt, cleaned)
+    merged = _merge_spans(spans)
+    return _insert_brackets(base_prompt, merged)
 
 
 def step3_generate_replacements_json(
@@ -830,50 +963,109 @@ def step3_generate_replacements_json(
     bracketed_prompt: str,
     alternatives_per_term: int = 64,
 ) -> Dict[str, List[str]]:
+    bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
+    terms = [t for t in terms if not any(keyword in t.lower() for keyword in ROBOT_KEYWORDS)]
     if not terms:
         return {}
 
-    block = "\n".join([f"- {t}" for t in terms])
-    messages = [{
-        "role": "user",
-        "content": [{
-            "type": "text",
-            "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
-                descriptor_block=block,
-                num_alternatives=alternatives_per_term,
-            ),
-        }],
-    }]
+    normalized_terms = {normalize_term_key(t): t for t in terms}
+    canonical_terms = list(normalized_terms.values())
+    block = "\n".join([f"- {t}" for t in canonical_terms])
+    cache_path = _step3_cache_path(block, alternatives_per_term)
+    if os.path.exists(cache_path):
+        cached = read_json(cache_path)
+        replacements = cached.get("replacements", {}) if isinstance(cached, dict) else {}
+    else:
+        messages = [{
+            "role": "user",
+            "content": [{
+                "type": "text",
+                "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
+                    descriptor_block=block,
+                    num_alternatives=alternatives_per_term,
+                ),
+            }],
+        }]
 
-    raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
-    replacements = safe_parse_json(raw).get("replacements", {}) or {}
+        raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
+        replacements = safe_parse_json(raw).get("replacements", {}) or {}
+        write_json(cache_path, {"replacements": replacements})
+
+    ordered_keys = sorted(normalized_terms.keys(), key=len, reverse=True)
+    parent_map: Dict[str, str] = {}
+    for key in ordered_keys:
+        for other_key in ordered_keys:
+            if key == other_key:
+                continue
+            if key in other_key:
+                parent_map[key] = other_key
+                break
 
     merged: Dict[str, List[str]] = {}
-    for term in terms:
+    for key in ordered_keys:
+        term = normalized_terms[key]
         model_alts = replacements.get(term, []) or []
-        color_alts = build_color_variations(term, alternatives_per_term)
-        material_alts = build_material_variations(term, alternatives_per_term)
-        texture_alts = build_texture_variations(term, alternatives_per_term)
-        combo_alts = build_color_material_combinations(term, alternatives_per_term)
-        texture_combo_alts = build_texture_material_combinations(term, alternatives_per_term)
-        multicolor_alts = build_multicolor_variations(term, alternatives_per_term)
-        combined = []
-        for alt in (
-            model_alts
-            + color_alts
-            + material_alts
-            + texture_alts
-            + combo_alts
-            + texture_combo_alts
-            + multicolor_alts
-        ):
-            if not alt or alt == term or alt in combined or is_vague_color_phrase(alt):
+        cleaned_alts = []
+        issues = set()
+        for alt in model_alts:
+            if not isinstance(alt, str):
                 continue
-            combined.append(alt)
-            if len(combined) >= alternatives_per_term:
+            normalized = _normalize_replacement_phrase(alt.strip())
+            if not normalized or normalized == term or normalized in cleaned_alts:
+                if normalized == term:
+                    issues.add("Some outputs repeated the original phrase.")
+                continue
+            if is_vague_color_phrase(normalized):
+                issues.add("Some outputs contained vague color modifiers.")
+                continue
+            if _contains_vague_modifier(normalized):
+                issues.add("Some outputs contained vague texture/modifier terms (e.g., smooth/soft/hard).")
+                continue
+            if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
+                issues.add("Some outputs included robot-related terms.")
+                continue
+            cleaned_alts.append(normalized)
+            if len(cleaned_alts) >= alternatives_per_term:
                 break
-        merged[term] = combined
+
+        cleaned_alts = _split_color_bias(term, cleaned_alts)
+        if len(cleaned_alts) < alternatives_per_term:
+            needed = alternatives_per_term - len(cleaned_alts)
+            retry_alts = _retry_replacements_for_term(model, processor, term, needed, sorted(issues))
+            for alt in retry_alts:
+                normalized = _normalize_replacement_phrase(alt.strip())
+                if not normalized or normalized == term or normalized in cleaned_alts:
+                    continue
+                if is_vague_color_phrase(normalized) or _contains_vague_modifier(normalized):
+                    continue
+                if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
+                    continue
+                cleaned_alts.append(normalized)
+                if len(cleaned_alts) >= alternatives_per_term:
+                    break
+
+        if not cleaned_alts:
+            fallback = _normalize_replacement_phrase(term) or term
+            cleaned_alts = [fallback]
+
+        parent_key = parent_map.get(key)
+        if parent_key and parent_key in merged:
+            parent_alts = merged[parent_key]
+            child_tokens = term.split()
+            aligned = []
+            for alt in parent_alts:
+                alt_tokens = alt.split()
+                if len(alt_tokens) >= len(child_tokens):
+                    aligned.append(" ".join(alt_tokens[-len(child_tokens):]))
+                else:
+                    aligned.append(alt)
+            cleaned_alts = aligned
+
+        merged[term] = cleaned_alts[:alternatives_per_term]
+
+    if not os.path.exists(cache_path) or replacements != merged:
+        write_json(cache_path, {"replacements": merged})
 
     return merged
 
@@ -898,6 +1090,11 @@ def write_json(path: str, obj: Any):
 def read_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _step3_cache_path(term_block: str, alternatives_per_term: int) -> str:
+    digest = hashlib.sha1(f"{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
+    return os.path.join("prompt_cache", "step3_llm_cache", f"{digest}.json")
 
 
 # =======================
@@ -1003,6 +1200,7 @@ def main():
     if args.cmd == "step23":
         base = read_text(args.base_in)
         bracketed = step2_bracket_base(model, processor, base)
+        bracketed = expand_bracketed_prompt(bracketed)
         write_text(args.out_bracket, bracketed)
 
         repl = step3_generate_replacements_json(
@@ -1038,6 +1236,7 @@ def main():
         write_text(args.out_base, base)
 
         bracketed = step2_bracket_base(model, processor, base)
+        bracketed = expand_bracketed_prompt(bracketed)
         write_text(args.out_bracket, bracketed)
 
         repl = step3_generate_replacements_json(
