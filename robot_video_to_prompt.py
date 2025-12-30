@@ -84,6 +84,28 @@ PARAGRAPH:
 {base_prompt}
 """
 
+BRACKET_REFLECTION_PROMPT_TEMPLATE = """You are a formatting tool.
+Review the bracketed paragraph and fix any missing or extra brackets.
+
+STRICT RULES:
+- DO NOT translate, paraphrase, reorder, or delete ANY characters.
+- You may ONLY add or remove Chinese corner brackets 【】.
+- The output must be IDENTICAL to the input paragraph after removing all 【】.
+- The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
+- Bracket non-robot COLOR / MATERIAL / TEXTURE / SHAPE descriptors tied to objects.
+- Do NOT bracket background framing phrases (e.g., "background consists of ...").
+- If replacing a bracketed span with a single noun would make the sentence ungrammatical
+  or change the meaning, consider it over-bracketed and remove it.
+- If a descriptor phrase is missing brackets, add them.
+- Output STRICT JSON only: {{"paragraph": "<result>"}}
+
+PARAGRAPH:
+{base_prompt}
+
+CURRENT:
+{bracketed_prompt}
+"""
+
 PRE2_SPLIT_PROMPT_TEMPLATE = """You are a formatting tool.
 Insert commas to separate robot-related clauses from non-robot clauses when they appear in the same sentence.
 
@@ -248,6 +270,21 @@ TEXTURE_BASES = [
     "wrinkled",
     "transparent",
 ]
+SHAPE_BASES = [
+    "rectangular",
+    "square",
+    "round",
+    "circular",
+    "oval",
+    "triangular",
+    "long",
+    "short",
+    "wide",
+    "narrow",
+    "large",
+    "small",
+    "big",
+]
 VAGUE_COLOR_MODIFIERS = [
     "pale",
     "light",
@@ -333,7 +370,7 @@ def _descriptor_token(token: str) -> bool:
         return False
     if lower in ROBOT_KEYWORDS:
         return False
-    if lower in COLOR_BASES or lower in MATERIAL_BASES or lower in TEXTURE_BASES:
+    if lower in COLOR_BASES or lower in MATERIAL_BASES or lower in TEXTURE_BASES or lower in SHAPE_BASES:
         return True
     if "-" in lower:
         parts = [p for p in lower.split("-") if p]
@@ -528,6 +565,8 @@ def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
     for term in terms:
         if not term:
             continue
+        if re.search(r"\bbackground\s+consists\s+of\b", term, re.IGNORECASE):
+            continue
         for match in re.finditer(re.escape(term), paragraph):
             if _in_robot_context(term, paragraph):
                 continue
@@ -558,6 +597,60 @@ def _insert_brackets(paragraph: str, spans: List[tuple]) -> str:
         paragraph = paragraph[:end] + "】" + paragraph[end:]
         paragraph = paragraph[:start] + "【" + paragraph[start:]
     return paragraph
+
+
+def _reflect_brackets(model, processor, base_prompt: str, bracketed_prompt: str) -> str:
+    messages = [{
+        "role": "user",
+        "content": [{
+            "type": "text",
+            "text": BRACKET_REFLECTION_PROMPT_TEMPLATE.format(
+                base_prompt=base_prompt,
+                bracketed_prompt=bracketed_prompt,
+            ),
+        }],
+    }]
+    raw = run_generation(model, processor, messages, 500, False, 1.0, 1.0)
+    parsed = safe_parse_json(raw)
+    paragraph = parsed.get("paragraph") if isinstance(parsed, dict) else None
+    if not isinstance(paragraph, str):
+        return bracketed_prompt
+    normalized = paragraph.replace("【", "").replace("】", "").replace(" ", "")
+    original = base_prompt.replace(" ", "")
+    if normalized != original:
+        return bracketed_prompt
+    return paragraph
+
+
+def _expand_shared_noun_phrases(paragraph: str, bracketed_prompt: str) -> str:
+    base = paragraph.replace("【", "").replace("】", "")
+    terms = extract_bracket_terms(bracketed_prompt)
+    if not terms:
+        return bracketed_prompt
+    noun_tokens = sorted({token for term in terms for token in _term_object_tokens(term)})
+    if not noun_tokens:
+        return bracketed_prompt
+
+    spans = []
+    for term in terms:
+        for match in re.finditer(re.escape(term), base):
+            spans.append(match.span())
+    for noun in noun_tokens:
+        pattern = re.compile(rf"\\b([A-Za-z-]+(?:\\s+[A-Za-z-]+){{0,4}})\\s+{re.escape(noun)}\\b")
+        for match in pattern.finditer(base):
+            full_span = match.span()
+            phrase = match.group(0)
+            tokens = [t for t in re.findall(r"[A-Za-z-]+", match.group(1))]
+            if not any(_descriptor_token(token) for token in tokens):
+                continue
+            if re.search(r"\bbackground\s+consists\s+of\b", phrase, re.IGNORECASE):
+                continue
+            if _in_robot_context(phrase, base):
+                continue
+            spans.append(full_span)
+
+    merged = _merge_spans(spans)
+    return _insert_brackets(base, merged) if merged else bracketed_prompt
 
 
 def canonicalize_robot_sentences(paragraph: str) -> str:
@@ -1065,7 +1158,9 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
 
     spans = _collect_existing_spans(base_prompt, cleaned)
     merged = _merge_spans(spans)
-    return _insert_brackets(base_prompt, merged)
+    bracketed = _insert_brackets(base_prompt, merged)
+    bracketed = _reflect_brackets(model, processor, base_prompt, bracketed)
+    return _expand_shared_noun_phrases(base_prompt, bracketed)
 
 
 def step3_generate_replacements_json(
