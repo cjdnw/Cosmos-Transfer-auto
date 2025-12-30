@@ -45,30 +45,6 @@ COSMOS_STYLE_PROMPT = """# You are a video prompt generator. Write a single Engl
 # Now generate the paragraph for the given video.
 """
 
-BRACKET_PROMPT_TEMPLATE = """You are a formatting tool.
-Your task is ONLY to insert Chinese corner brackets 【】 around existing spans in the paragraph.
-
-STRICT RULES:
-- DO NOT translate, paraphrase, rewrite, reorder, or delete ANY characters.
-- The output must be IDENTICAL to the input paragraph after removing all 【】.
-- The text inside each 【】 MUST be an exact, verbatim substring copied from the paragraph.
-
-WHAT TO BRACKET:
-- Bracket ALL non-robot COLOR / MATERIAL / TEXTURE / SURFACE-FINISH descriptors, including for major static objects
-  (e.g., floor, table, sofa, rug, basket, cloth, objects).
-- Treat the following as texture/material/finish words and bracket them when they modify an object:
-  smooth, matte, glossy, textured, woven, rough, soft, hard, metallic, wooden, plastic, rubber, ceramic, glass.
-- Include finer-grained surface descriptors when present (e.g., striped, patterned, ribbed, knitted, wrinkled).
-- Prefer bracketing the full noun phrase when possible (descriptor + noun), e.g., "orange cushion" not just "orange".
-
-WHAT NOT TO BRACKET:
-- NEVER bracket anything describing the robot system, including: robot/robotic, arm, gripper, end-effector,
-  finger(s), base, mount, joint(s), cable(s), wire(s), sensor(s).
-  Skip only the robot descriptors themselves; other non-robot descriptors in the same sentence can still be bracketed.
-
-PARAGRAPH:
-{base_prompt}
-"""
 
 DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE = """Extract all non-robot COLOR / MATERIAL / TEXTURE / SURFACE-FINISH descriptors from the paragraph.
 
@@ -106,19 +82,6 @@ CURRENT:
 {bracketed_prompt}
 """
 
-PRE2_SPLIT_PROMPT_TEMPLATE = """You are a formatting tool.
-Insert commas to separate robot-related clauses from non-robot clauses when they appear in the same sentence.
-
-STRICT RULES:
-- DO NOT translate, paraphrase, reorder, or delete ANY characters.
-- You may ONLY insert commas and spaces.
-- Output must be identical to the input paragraph after removing the commas you inserted.
-- If no change is needed, return the original paragraph.
-- Output STRICT JSON only: {{"paragraph": "<result>"}}
-
-PARAGRAPH:
-{base_prompt}
-"""
 
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
 For each phrase below, propose {num_alternatives} short alternatives that keep the same object/category
@@ -522,54 +485,20 @@ def expand_bracketed_prompt(paragraph: str) -> str:
     return _insert_brackets(base, merged)
 
 
-def _split_on_commas_excluding_ranges(sentence: str, ranges: List[tuple]) -> List[str]:
-    if not ranges:
-        return [c.strip() for c in sentence.split(",") if c.strip()]
-    clauses = []
-    last = 0
-    for idx, ch in enumerate(sentence):
-        if ch != ",":
-            continue
-        if any(start <= idx < end for start, end in ranges):
-            continue
-        clause = sentence[last:idx].strip()
-        if clause:
-            clauses.append(clause)
-        last = idx + 1
-    tail = sentence[last:].strip()
-    if tail:
-        clauses.append(tail)
-    return clauses
-
-
-def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
-    lowered_span = span.lower()
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+", paragraph.strip()) if s]
-    for sentence in sentences:
-        lowered_sentence = sentence.lower()
-        if lowered_span not in lowered_sentence:
-            continue
-        span_ranges = [match.span() for match in re.finditer(re.escape(span), sentence)]
-        clauses = _split_on_commas_excluding_ranges(sentence, span_ranges)
-        for clause in clauses:
-            lowered_clause = clause.lower()
-            if lowered_span not in lowered_clause:
-                continue
-            if any(keyword in lowered_clause for keyword in ROBOT_KEYWORDS):
-                return True
-    return False
-
 
 def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
     spans = []
     for term in terms:
+        term = term.strip()
         if not term:
             continue
-        if re.search(r"\bbackground\s+consists\s+of\b", term, re.IGNORECASE):
+        # Keep span filtering consistent with the final bracket cleanup.
+        # This intentionally does NOT use sentence-level "robot context" heuristics; those heuristics
+        # tend to over-filter legitimate non-robot descriptors that co-occur with robot mentions
+        # (e.g., "white rectangular table" in the same sentence as "robotic arms").
+        if not _should_keep_bracket(term):
             continue
         for match in re.finditer(re.escape(term), paragraph):
-            if _in_robot_context(term, paragraph):
-                continue
             spans.append(match.span())
     return spans
 
@@ -600,7 +529,7 @@ def _insert_brackets(paragraph: str, spans: List[tuple]) -> str:
 
 
 def _should_keep_bracket(term: str) -> bool:
-    if re.search(r"\bbackground\s+consists\s+of\b", term, re.IGNORECASE):
+    if re.search(r"\bbackground\b\s+(?:consists\s+of|includes|features|contains|has)\b", term, re.IGNORECASE):
         return False
     if any(keyword in term.lower() for keyword in ROBOT_KEYWORDS):
         return False
@@ -633,8 +562,8 @@ def _reflect_brackets(model, processor, base_prompt: str, bracketed_prompt: str)
     paragraph = parsed.get("paragraph") if isinstance(parsed, dict) else None
     if not isinstance(paragraph, str):
         return bracketed_prompt
-    normalized = paragraph.replace("【", "").replace("】", "").replace(" ", "")
-    original = base_prompt.replace(" ", "")
+    normalized = re.sub(r"\s+", "", paragraph.replace("【", "").replace("】", ""))
+    original = re.sub(r"\s+", "", base_prompt)
     if normalized != original:
         return bracketed_prompt
     return _cleanup_bracketed_prompt(paragraph)
@@ -654,14 +583,14 @@ def _expand_shared_noun_phrases(paragraph: str, bracketed_prompt: str) -> str:
         for match in re.finditer(re.escape(term), base):
             spans.append(match.span())
     for noun in noun_tokens:
-        pattern = re.compile(rf"\\b([A-Za-z-]+(?:\\s+[A-Za-z-]+){{0,4}})\\s+{re.escape(noun)}\\b")
+        pattern = re.compile(rf"\\b([A-Za-z-]+(?:\\s+[A-Za-z-]+){{0,4}})\\s+{re.escape(noun)}\\b", flags=re.IGNORECASE)
         for match in pattern.finditer(base):
             full_span = match.span()
             phrase = match.group(0)
             tokens = [t for t in re.findall(r"[A-Za-z-]+", match.group(1))]
             if not any(_descriptor_token(token) for token in tokens):
                 continue
-            if re.search(r"\bbackground\s+consists\s+of\b", phrase, re.IGNORECASE):
+            if re.search(r"\bbackground\b\s+(?:consists\s+of|includes|features|contains|has)\b", phrase, re.IGNORECASE):
                 continue
             spans.append(full_span)
 
@@ -1137,25 +1066,8 @@ def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
     return canonicalize_robot_sentences(base_prompt)
 
 
-def step2_prepare_clause_context(model, processor, base_prompt: str) -> str:
-    messages = [{
-        "role": "user",
-        "content": [{"type": "text", "text": PRE2_SPLIT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
-    }]
-    raw = run_generation(model, processor, messages, 400, False, 1.0, 1.0)
-    parsed = safe_parse_json(raw)
-    paragraph = parsed.get("paragraph") if isinstance(parsed, dict) else None
-    if not isinstance(paragraph, str):
-        return base_prompt
-    normalized = paragraph.replace(",", "").replace(" ", "")
-    original = base_prompt.replace(",", "").replace(" ", "")
-    if normalized != original:
-        return base_prompt
-    return paragraph
-
 
 def step2_bracket_base(model, processor, base_prompt: str) -> str:
-    clause_context = step2_prepare_clause_context(model, processor, base_prompt)
     messages = [{
         "role": "user",
         "content": [{"type": "text", "text": DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
@@ -1163,16 +1075,31 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
     raw = run_generation(model, processor, messages, 500, False, 1.0, 1.0)
     parsed = safe_parse_json(raw)
     descriptors = parsed.get("descriptors", []) if isinstance(parsed, dict) else []
-    cleaned = []
+
+    cleaned: List[str] = []
     for descriptor in descriptors or []:
         if not isinstance(descriptor, str):
             continue
-        term = descriptor.strip()
+
+        raw_term = descriptor.strip()
+        if not raw_term:
+            continue
+
+        # The extractor is instructed to return verbatim substrings, but in practice it can
+        # sometimes include trailing punctuation. We normalize conservatively.
+        term = raw_term
+        if term not in base_prompt:
+            term = re.sub(r"[\s,.;:]+$", "", term).strip()
         if not term or term not in base_prompt:
             continue
-        if _in_robot_context(term, clause_context):
+
+        # IMPORTANT: do NOT drop a term just because it appears in a sentence that mentions robots.
+        # Doing so incorrectly removes legitimate non-robot descriptors (e.g., "white rectangular table").
+        if not _should_keep_bracket(term):
             continue
+
         cleaned.append(term)
+
     cleaned = list(dict.fromkeys(cleaned))
 
     spans = _collect_existing_spans(base_prompt, cleaned)
