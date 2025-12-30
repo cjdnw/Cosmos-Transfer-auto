@@ -72,7 +72,7 @@ PARAGRAPH:
 DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE = """Extract all non-robot COLOR / MATERIAL / TEXTURE / SURFACE-FINISH descriptors from the paragraph.
 
 STRICT RULES:
-- Output STRICT JSON only: {"descriptors": ["..."]}.
+- Output STRICT JSON only: {{"descriptors": ["..."]}}.
 - Each descriptor must be an exact, verbatim substring copied from the paragraph.
 - Prefer full noun phrases (descriptor + noun), e.g., "orange cushion" not just "orange".
 - Do NOT include any robot-system descriptors (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
