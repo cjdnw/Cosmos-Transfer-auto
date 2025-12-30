@@ -16,18 +16,23 @@ from .config import (
     DEFAULT_HF_CACHE,
     DEFAULT_TRANSFER_ROOT,
     DEFAULT_WORK_DIR,
+    DEFAULT_ARM_SWAP_ROOT,
+    DEFAULT_ARM_SWAP_OUTPUT_ROOT,
+    DEFAULT_ARM_SWAP_WORKDIR_ROOT,
     CACHE_DEFAULTS,
     DEPTH_DEFAULTS,
     SEG_DEFAULTS,
     CV_DEFAULTS,
     PROMPT_DEFAULTS,
     TRANSFER_DEFAULTS,
+    ARM_SWAP_DEFAULTS,
     RepoPaths,
     PromptConfig,
     DepthConfig,
     SegConfig,
     CvControlConfig,
     TransferConfig,
+    ArmSwapConfig,
     CacheConfig,
     CleanupConfig,
     RunConfig,
@@ -136,6 +141,18 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         skip_if_output_exists=(not args.force_infer),
     )
 
+    arm_swap = ArmSwapConfig(
+        enable=args.enable_arm_swap,
+        project_root=Path(args.arm_swap_root),
+        conda_env=args.arm_swap_env,
+        output_root=Path(args.arm_swap_output_root),
+        workdir_root=Path(args.arm_swap_workdir_root),
+        fps=args.arm_swap_fps,
+        width=args.arm_swap_width,
+        qwen_prompt=args.arm_swap_prompt,
+        skip_if_output_exists=(not args.arm_swap_force),
+    )
+
     cache = CacheConfig(
         enable=(not args.no_cache_control),
         force_regen=args.force_regen_control,
@@ -165,6 +182,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         depth=depth,
         seg=seg,
         transfer=transfer,
+        arm_swap=arm_swap,
         cache=cache,
         cleanup=cleanup,
         run=run,
@@ -348,6 +366,26 @@ def main(argv: List[str] | None = None) -> None:
         help="vis(blur) control_weight override (default: --control_weight)",
     )
     ap.add_argument("--force_infer", action="store_true", help="Force inference even if output directory is not empty")
+
+    # Step6: robot arm swap (qwen3vl + sam3)
+    ap.add_argument("--enable_arm_swap", action="store_true",
+                    help="Enable robot arm swap after transfer (qwen3vl + sam3)")
+    ap.add_argument("--arm_swap_root", type=str, default=str(DEFAULT_ARM_SWAP_ROOT),
+                    help="Robot arm swap project root (contains robot_arm_swap module)")
+    ap.add_argument("--arm_swap_env", type=str, default=ARM_SWAP_DEFAULTS.conda_env,
+                    help="Conda env for robot arm swap (default: robot_arm_swap)")
+    ap.add_argument("--arm_swap_output_root", type=str, default=str(DEFAULT_ARM_SWAP_OUTPUT_ROOT),
+                    help="Output root for arm swap videos")
+    ap.add_argument("--arm_swap_workdir_root", type=str, default=str(DEFAULT_ARM_SWAP_WORKDIR_ROOT),
+                    help="Workdir root for arm swap cache (per-job dir will be cleaned after output)")
+    ap.add_argument("--arm_swap_fps", type=int, default=ARM_SWAP_DEFAULTS.fps,
+                    help="FPS for robot arm swap (default: 30)")
+    ap.add_argument("--arm_swap_width", type=int, default=ARM_SWAP_DEFAULTS.width,
+                    help="Width for robot arm swap (default: 1280)")
+    ap.add_argument("--arm_swap_prompt", type=str, default=ARM_SWAP_DEFAULTS.qwen_prompt,
+                    help="Qwen prompt for robot arm swap (default: 'robotic arm')")
+    ap.add_argument("--arm_swap_force", action="store_true",
+                    help="Force rerun arm swap even if output already exists")
 
     # Depth cache
     ap.add_argument("--no_cache_control", action="store_true", help="Disable depth control cache (default: enabled)")
