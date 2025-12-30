@@ -87,7 +87,7 @@ python scripts/run_batch.py \
   --max_terms 5
 ```
 
-### 例 7：调整每个词的替换备选数量（默认 6 个）
+### 例 7：调整每个词的替换备选数量（默认 64 个）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -270,7 +270,43 @@ python scripts/run_batch.py ... --cleanup_logs
 - depth 控制信号质量不佳，需研究提升方案。
 - seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
 
+## Step2 词表维护说明（为什么用词表而不是全靠大模型）
+Step2 需要稳定、可控地“尽可能多圈非机器人描述”，同时保证后续替换安全。完全依赖大模型生成替换有三个问题：  
+1. **不稳定**：同一视频多次生成的替换词会漂移，影响缓存命中与结果复现。  
+2. **不可控**：模型容易引入机器人相关描述或模糊词（pale/light/dark 等），违背“只替换非机器人外观描述”的约束。  
+3. **难维护**：出现不合规词时，规则无法单点修复。词表可以快速、明确地增删修订。  
+
+因此 Step2/Step3 使用“词表 + 规则”作为底座：模型输出作为参考，但最终括号与替换由词表兜底，保证稳定与可控。
+
+### 需要维护的词表（含义与用途）
+这些词表集中在 `robot_video_to_prompt.py` 顶部常量区：
+- **`COLOR_BASES`**：可替换的基础颜色词（Step3 颜色替换与组合）。
+- **`MATERIAL_BASES`**：可替换的材质词（Step3 材质替换与组合）。
+- **`TEXTURE_BASES`**：可替换的纹理/表面质感词（Step3 纹理替换与组合）。
+- **`COLORISH_BASES`**：用于清理 “bluish/greyish” 这类模糊色的根词（Step1.5 模糊词清理）。
+- **`VAGUE_MODIFIERS` / `VAGUE_PHRASES`**：用于清理 “subtle/a bit” 等模糊修饰（Step1.5）。
+- **`VAGUE_COLOR_MODIFIERS`**：用于过滤 “pale/light/dark” 等模糊颜色短语（Step3）。
+- **`DESCRIPTOR_WORDS`**：Step2 规则补圈的关键词集合（颜色/材质/纹理/透明度等），由多组词汇组合而成。
+- **`SPAN_STOPWORDS`**：Step2 规则补圈时用于截断短语边界的停止词（避免跨越过长句子）。
+- **`ROBOT_KEYWORDS`**：机器人相关词汇，用于过滤机器人描述，避免括号与替换误触机器人外观。
+
+### 人工维护更新流程
+1. **定位词表**：打开 `robot_video_to_prompt.py`，在常量区找到上述列表。  
+2. **更新词条**：  
+   - 词条尽量使用**小写英文单词**（与现有规则匹配方式一致）。  
+   - 新增颜色/材质/纹理时，优先补到 `COLOR_BASES` / `MATERIAL_BASES` / `TEXTURE_BASES`。  
+   - 若是“模糊词”或“应禁止词”，补到 `VAGUE_*` 列表。  
+3. **保持同步**：  
+   - `DESCRIPTOR_WORDS` 应包含新增的颜色/材质/纹理关键词，否则 Step2 可能不会补圈。  
+   - 如果新增了机器人相关词（如新的部件名称），请同步到 `ROBOT_KEYWORDS`。  
+4. **最小验证**：  
+   - 运行一次 `robot_video_to_prompt.py step2` 或完整 `step23`，观察括号是否覆盖新增词。  
+   - 若出现误圈/漏圈，优先调整 `DESCRIPTOR_WORDS`、`SPAN_STOPWORDS` 或 `ROBOT_KEYWORDS`。  
+
 ## 更新记录
+- 2025-12-29：修正 Step2 机器人上下文判定为按句过滤，避免非机器人描述被整体跳过导致无括号输出。
+- 2025-12-29：Step3 替换新增多色组合候选，支持“多种颜色拼接”的描述以提升多样性。
+- 2025-12-29：增强 Step2 的括号标注逻辑，基于规则补充更多非机器人颜色/材质/纹理短语，减少漏标，提升可替换描述的多样性。
 - 2025-12-29：多卡批处理队列按 variant 轮询视频顺序入队，优先让不同 GPU 处理不同视频，减少同视频变体并发导致的缓存争用。
 - 2025-12-25：Step2 括号术语抽取新增“长短语优先”去重策略，避免 `gray fabric` 与 `fabric` 这类同一实体被拆成两个替换单元。
 - 2025-12-25：新增交互式替换选项，可在 Step2 括号词列表中手动选择并输入替换词；启用后自动清空 Step3 替换缓存并跳过自动候选生成。
@@ -293,7 +329,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - 2025-12-23：集成 seg 控制信号自动化，使用 AutoSeg-SAM2 在 `control_cache/seg/` 按指纹落盘并复用，CLI 直接通过 `--control_type seg` 调用。
 - 2025-12-23：调整 Step1 base prompt 文案为官方演示叙事风格；Step2 括号替换限定为颜色/纹理描述，Step3 只生成颜色或纹理的替换词。
 - 2025-12-23：新增 `--replace_all_terms` 参数，可直接替换所有括号标注的描述（跳过随机抽样逻辑）。
-- 2025-12-23：新增 `--replacements_per_term` 参数，可调整每个括号术语生成的替换候选数量（默认 6），并对缓存进行区分。
+- 2025-12-23：新增 `--replacements_per_term` 参数，可调整每个括号术语生成的替换候选数量（默认 64），并对缓存进行区分。
 - 2025-12-22：`--min_terms` / `--max_terms` 支持快速设置随机替换数量区间（默认 1~3），便于控制改写力度。
 - 2025-12-22：将路径与环境默认值集中到 `config.py`（CLI 统一读取），并在 README 增补路径修改指引。
 - 2025-12-22：新增 Step2+Step3 合并的 `step23` 子命令与三层 prompt 缓存（fingerprint/base_hash/bracket_hash），同一视频/文本多 worker 会被文件锁串行化，仅 Step3_apply 在换肤时毫秒级复用。
