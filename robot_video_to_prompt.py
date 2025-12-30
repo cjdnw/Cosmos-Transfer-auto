@@ -3,6 +3,7 @@ import re
 import json
 import random
 import argparse
+import hashlib
 from typing import Dict, List, Any
 
 import torch
@@ -98,16 +99,17 @@ PARAGRAPH:
 """
 
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
-For each descriptor below (COLOR or TEXTURE), propose {num_alternatives} short alternatives.
+For each phrase below, propose {num_alternatives} short alternatives that keep the same object/category
+and stay grounded in indoor robotics scenes.
 
 Rules:
 - Do NOT repeat the original.
 - Keep 1-3 words.
 - Use common, simple descriptors suitable for indoor robotics scenes.
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
-- For material/texture phrases, include swaps and combinations that mix color + material or texture + material when reasonable.
 - Avoid rare or poetic color words.
-- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle".
+- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
+- Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
 - Output STRICT JSON only:
   {{"replacements": {{"<src>": ["alt1", ...], ...}}}}
 
@@ -222,6 +224,9 @@ VAGUE_COLOR_MODIFIERS = [
     "slight",
     "subtle",
 ]
+VAGUE_TEXTURE_MODIFIERS = [
+    "smooth",
+]
 
 # =======================
 # 2) Model Options
@@ -275,6 +280,84 @@ def extract_bracket_terms(text: str) -> List[str]:
             continue
         filtered.append(term)
     return filtered
+
+
+def normalize_term_key(term: str) -> str:
+    cleaned = re.sub(r"[^\w\s-]", "", term.lower())
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _descriptor_token(token: str) -> bool:
+    lower = token.lower().strip(",.;:")
+    if not lower:
+        return False
+    if lower in ROBOT_KEYWORDS:
+        return False
+    if lower in COLOR_BASES or lower in MATERIAL_BASES or lower in TEXTURE_BASES:
+        return True
+    if "-" in lower:
+        parts = [p for p in lower.split("-") if p]
+        if any(part in COLOR_BASES for part in parts):
+            return True
+    if any(base in lower for base in COLOR_BASES):
+        return True
+    return False
+
+
+def _noun_modifier_token(token: str) -> bool:
+    return bool(re.match(r"^[A-Za-z-]+$", token))
+
+
+def expand_bracketed_prompt(paragraph: str) -> str:
+    base = paragraph.replace("【", "").replace("】", "")
+    terms = extract_bracket_terms(paragraph)
+    if not terms:
+        return paragraph
+
+    token_spans = [(m.group(0), m.start(), m.end()) for m in re.finditer(r"\b[\w-]+\b", base)]
+    stopwords = {"a", "an", "the", "and", "or", "with", "to", "from", "on", "in", "at", "by", "near", "toward"}
+    verbs = {
+        "move", "moves", "moving",
+        "grasp", "grasps", "grasping",
+        "lift", "lifts", "lifting",
+        "hold", "holds", "holding",
+        "place", "places", "placed", "placing",
+        "extend", "extends", "extended", "extending",
+        "reach", "reaches", "reached", "reaching",
+    }
+    spans = []
+
+    for term in terms:
+        for match in re.finditer(re.escape(term), base):
+            span_start, span_end = match.span()
+            token_index = next(
+                (idx for idx, (_, start, _) in enumerate(token_spans) if start == span_start),
+                None,
+            )
+            if token_index is None:
+                spans.append((span_start, span_end))
+                continue
+            expanded_start = span_start
+            idx = token_index - 1
+            while idx >= 0:
+                token, start, end = token_spans[idx]
+                gap = base[end:expanded_start]
+                if any(ch in gap for ch in ",;:.!?"):
+                    break
+                lower = token.lower()
+                if lower in stopwords or lower in VAGUE_MODIFIERS or lower in verbs:
+                    break
+                if any(keyword in lower for keyword in ROBOT_KEYWORDS):
+                    break
+                if not _descriptor_token(token) and not _noun_modifier_token(token):
+                    break
+                expanded_start = start
+                idx -= 1
+            spans.append((expanded_start, span_end))
+
+    merged = _merge_spans(spans)
+    return _insert_brackets(base, merged)
 
 
 def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
@@ -627,6 +710,46 @@ def is_vague_color_phrase(text: str) -> bool:
     return bool(pattern.search(text))
 
 
+def _normalize_replacement_phrase(text: str) -> str:
+    if not text:
+        return text
+    cleaned = text
+    colorish_pattern = re.compile(
+        r"\\b(" + "|".join(COLORISH_BASES) + r")ish\\b",
+        re.IGNORECASE,
+    )
+
+    def colorish_repl(match: re.Match) -> str:
+        base = match.group(1)
+        if match.group(0).isupper():
+            return base.upper()
+        if match.group(0)[0].isupper():
+            return base.capitalize()
+        return base
+
+    cleaned = colorish_pattern.sub(colorish_repl, cleaned)
+    vague_pattern = re.compile(
+        r"\\b(" + "|".join(VAGUE_MODIFIERS + VAGUE_COLOR_MODIFIERS + VAGUE_TEXTURE_MODIFIERS) + r")\\b",
+        re.IGNORECASE,
+    )
+    cleaned = vague_pattern.sub("", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+,", ",", cleaned)
+    cleaned = re.sub(r",\s+", ", ", cleaned)
+    return cleaned.strip(" ,")
+
+
+def _split_color_bias(term: str, candidates: List[str]) -> List[str]:
+    pattern = re.compile(r"\\b(" + "|".join(COLOR_BASES) + r")\\b", re.IGNORECASE)
+    match = pattern.search(term)
+    if not match:
+        return candidates
+    original_color = match.group(1).lower()
+    without = [c for c in candidates if original_color not in c.lower()]
+    with_original = [c for c in candidates if original_color in c.lower()]
+    return without + with_original
+
+
 def step1_5_postprocess(paragraph: str) -> str:
     updated = enforce_container_initial_state(paragraph)
     updated = cleanup_vague_terms(updated)
@@ -642,6 +765,7 @@ def apply_random_replacements(
     replace_all_terms: bool = False,
 ) -> str:
     rng = random.Random(seed)
+    bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
 
     if not terms:
@@ -776,50 +900,83 @@ def step3_generate_replacements_json(
     bracketed_prompt: str,
     alternatives_per_term: int = 64,
 ) -> Dict[str, List[str]]:
+    bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
+    terms = [t for t in terms if not any(keyword in t.lower() for keyword in ROBOT_KEYWORDS)]
     if not terms:
         return {}
 
-    block = "\n".join([f"- {t}" for t in terms])
-    messages = [{
-        "role": "user",
-        "content": [{
-            "type": "text",
-            "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
-                descriptor_block=block,
-                num_alternatives=alternatives_per_term,
-            ),
-        }],
-    }]
+    normalized_terms = {normalize_term_key(t): t for t in terms}
+    canonical_terms = list(normalized_terms.values())
+    block = "\n".join([f"- {t}" for t in canonical_terms])
+    cache_path = _step3_cache_path(block, alternatives_per_term)
+    if os.path.exists(cache_path):
+        cached = read_json(cache_path)
+        replacements = cached.get("replacements", {}) if isinstance(cached, dict) else {}
+    else:
+        messages = [{
+            "role": "user",
+            "content": [{
+                "type": "text",
+                "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
+                    descriptor_block=block,
+                    num_alternatives=alternatives_per_term,
+                ),
+            }],
+        }]
 
-    raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
-    replacements = safe_parse_json(raw).get("replacements", {}) or {}
+        raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
+        replacements = safe_parse_json(raw).get("replacements", {}) or {}
+        write_json(cache_path, {"replacements": replacements})
+
+    ordered_keys = sorted(normalized_terms.keys(), key=len, reverse=True)
+    parent_map: Dict[str, str] = {}
+    for key in ordered_keys:
+        for other_key in ordered_keys:
+            if key == other_key:
+                continue
+            if key in other_key:
+                parent_map[key] = other_key
+                break
 
     merged: Dict[str, List[str]] = {}
-    for term in terms:
+    for key in ordered_keys:
+        term = normalized_terms[key]
         model_alts = replacements.get(term, []) or []
-        color_alts = build_color_variations(term, alternatives_per_term)
-        material_alts = build_material_variations(term, alternatives_per_term)
-        texture_alts = build_texture_variations(term, alternatives_per_term)
-        combo_alts = build_color_material_combinations(term, alternatives_per_term)
-        texture_combo_alts = build_texture_material_combinations(term, alternatives_per_term)
-        multicolor_alts = build_multicolor_variations(term, alternatives_per_term)
-        combined = []
-        for alt in (
-            model_alts
-            + color_alts
-            + material_alts
-            + texture_alts
-            + combo_alts
-            + texture_combo_alts
-            + multicolor_alts
-        ):
-            if not alt or alt == term or alt in combined or is_vague_color_phrase(alt):
+        cleaned_alts = []
+        for alt in model_alts:
+            if not isinstance(alt, str):
                 continue
-            combined.append(alt)
-            if len(combined) >= alternatives_per_term:
+            normalized = _normalize_replacement_phrase(alt.strip())
+            if not normalized or normalized == term or normalized in cleaned_alts:
+                continue
+            if is_vague_color_phrase(normalized):
+                continue
+            if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
+                continue
+            cleaned_alts.append(normalized)
+            if len(cleaned_alts) >= alternatives_per_term:
                 break
-        merged[term] = combined
+
+        cleaned_alts = _split_color_bias(term, cleaned_alts)
+        if not cleaned_alts:
+            fallback = _normalize_replacement_phrase(term) or term
+            cleaned_alts = [fallback]
+
+        parent_key = parent_map.get(key)
+        if parent_key and parent_key in merged:
+            parent_alts = merged[parent_key]
+            child_tokens = term.split()
+            aligned = []
+            for alt in parent_alts:
+                alt_tokens = alt.split()
+                if len(alt_tokens) >= len(child_tokens):
+                    aligned.append(" ".join(alt_tokens[-len(child_tokens):]))
+                else:
+                    aligned.append(alt)
+            cleaned_alts = aligned
+
+        merged[term] = cleaned_alts[:alternatives_per_term]
 
     return merged
 
@@ -844,6 +1001,11 @@ def write_json(path: str, obj: Any):
 def read_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _step3_cache_path(term_block: str, alternatives_per_term: int) -> str:
+    digest = hashlib.sha1(f"{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
+    return os.path.join("prompt_cache", "step3_llm_cache", f"{digest}.json")
 
 
 # =======================
@@ -949,6 +1111,7 @@ def main():
     if args.cmd == "step23":
         base = read_text(args.base_in)
         bracketed = step2_bracket_base(model, processor, base)
+        bracketed = expand_bracketed_prompt(bracketed)
         write_text(args.out_bracket, bracketed)
 
         repl = step3_generate_replacements_json(
@@ -984,6 +1147,7 @@ def main():
         write_text(args.out_base, base)
 
         bracketed = step2_bracket_base(model, processor, base)
+        bracketed = expand_bracketed_prompt(bracketed)
         write_text(args.out_bracket, bracketed)
 
         repl = step3_generate_replacements_json(

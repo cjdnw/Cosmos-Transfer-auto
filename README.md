@@ -278,6 +278,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - **`COLORISH_BASES`**：用于清理 “bluish/greyish” 这类模糊色的根词（Step1.5 模糊词清理）。
 - **`VAGUE_MODIFIERS` / `VAGUE_PHRASES`**：用于清理 “subtle/a bit” 等模糊修饰（Step1.5）。
 - **`VAGUE_COLOR_MODIFIERS`**：用于过滤 “pale/light/dark” 等模糊颜色短语（Step3）。
+- **`VAGUE_TEXTURE_MODIFIERS`**：用于过滤模糊纹理词（Step3），目前包含 `smooth`。
 - **`ROBOT_KEYWORDS`**：机器人相关词汇，用于过滤机器人描述，避免括号与替换误触机器人外观。
 
 ### 人工维护更新流程
@@ -286,13 +287,17 @@ python scripts/run_batch.py ... --cleanup_logs
    - 词条尽量使用**小写英文单词**（与现有规则匹配方式一致）。  
    - 新增颜色/材质/纹理时，优先补到 `COLOR_BASES` / `MATERIAL_BASES` / `TEXTURE_BASES`。  
    - 若是“模糊词”或“应禁止词”，补到 `VAGUE_*` 列表。  
-3. **保持同步**：  
+3. **优先级建议**：  
+   - **去模糊词优先**：`COLORISH_BASES` / `VAGUE_*` 先做归一化或移除，再做替换。  
+   - **替换一致性优先**：同一物体（母串/子串）保持一致替换，避免前后冲突。  
+4. **保持同步**：  
    - 如果新增了机器人相关词（如新的部件名称），请同步到 `ROBOT_KEYWORDS`。  
-4. **最小验证**：  
+5. **最小验证**：  
    - 运行一次 `robot_video_to_prompt.py step2` 或完整 `step23`，观察括号是否覆盖新增词。  
    - 若出现误圈/漏圈，优先检查提示词与机器人过滤规则是否需调整。  
 
 ## 更新记录
+- 2025-12-30：Step3 改为模型生成替换词，并在替换后进行模糊词纠正（含 smooth 归类）与母串/子串一致性对齐。
 - 2025-12-30：Step2 新增句内逗号切分上下文（pre_2.0），避免与机器人同句时误过滤非机器人描述。
 - 2025-12-30：Step2 改为基于模型抽取描述短语并用机器人上下文过滤，移除规则化补圈与相关词表依赖。
 - 2025-12-29：Step3 替换新增多色组合候选，支持“多种颜色拼接”的描述以提升多样性。
