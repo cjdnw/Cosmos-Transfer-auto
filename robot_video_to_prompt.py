@@ -69,6 +69,20 @@ PARAGRAPH:
 {base_prompt}
 """
 
+DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE = """Extract all non-robot COLOR / MATERIAL / TEXTURE / SURFACE-FINISH descriptors from the paragraph.
+
+STRICT RULES:
+- Output STRICT JSON only: {{"descriptors": ["..."]}}.
+- Each descriptor must be an exact, verbatim substring copied from the paragraph.
+- Prefer full noun phrases (descriptor + noun), e.g., "orange cushion" not just "orange".
+- Do NOT include any robot-system descriptors (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
+- If a descriptor applies to a robot component, exclude it.
+- Do NOT add explanations.
+
+PARAGRAPH:
+{base_prompt}
+"""
+
 REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
 For each descriptor below (COLOR or TEXTURE), propose {num_alternatives} short alternatives.
 
@@ -194,52 +208,6 @@ VAGUE_COLOR_MODIFIERS = [
     "slight",
     "subtle",
 ]
-DESCRIPTOR_WORDS = sorted({
-    *COLOR_BASES,
-    "smooth",
-    "matte",
-    "glossy",
-    "textured",
-    "woven",
-    "rough",
-    "soft",
-    "hard",
-    "metallic",
-    "metal",
-    "wooden",
-    "plastic",
-    "rubber",
-    "ceramic",
-    "glass",
-    "striped",
-    "patterned",
-    "ribbed",
-    "knitted",
-    "wrinkled",
-    "transparent",
-})
-SPAN_STOPWORDS = {
-    "and",
-    "or",
-    "with",
-    "into",
-    "onto",
-    "over",
-    "above",
-    "below",
-    "under",
-    "in",
-    "on",
-    "at",
-    "to",
-    "of",
-    "from",
-    "by",
-    "for",
-    "as",
-    "while",
-    "then",
-}
 
 # =======================
 # 2) Model Options
@@ -296,77 +264,15 @@ def extract_bracket_terms(text: str) -> List[str]:
 
 
 def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
-    for match in re.finditer(re.escape(span), paragraph):
-        start, end = match.span()
-        ctx_start = max(0, start - window)
-        ctx_end = min(len(paragraph), end + window)
-        context = paragraph[ctx_start:ctx_end].lower()
-        if any(keyword in context for keyword in ROBOT_KEYWORDS):
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", paragraph.strip()) if s]
+    lowered_span = span.lower()
+    for sentence in sentences:
+        lowered_sentence = sentence.lower()
+        if lowered_span not in lowered_sentence:
+            continue
+        if any(keyword in lowered_sentence for keyword in ROBOT_KEYWORDS):
             return True
     return False
-
-
-def filter_robot_descriptors(bracketed_prompt: str, window: int = 200) -> List[str]:
-    base_paragraph = bracketed_prompt.replace("【", "").replace("】", "")
-    descriptors = extract_bracket_terms(bracketed_prompt)
-    filtered = []
-    for descriptor in descriptors:
-        if _in_robot_context(descriptor, base_paragraph, window):
-            continue
-        filtered.append(descriptor)
-    return filtered
-
-
-def strip_robot_brackets(bracketed_prompt: str) -> str:
-    def repl(match: re.Match) -> str:
-        term = match.group(1)
-        lowered = term.lower()
-        if any(keyword in lowered for keyword in ROBOT_KEYWORDS):
-            return term
-        return match.group(0)
-
-    return re.sub(r"【(.*?)】", repl, bracketed_prompt)
-
-
-def _trim_descriptor_span(span: str) -> str:
-    tokens = span.split()
-    if not tokens:
-        return span
-    kept = [tokens[0]]
-    for tok in tokens[1:]:
-        clean = tok.strip(",.;:")
-        lower = clean.lower()
-        if lower in SPAN_STOPWORDS:
-            break
-        if lower in ROBOT_KEYWORDS:
-            break
-        kept.append(clean)
-        if tok != clean:
-            break
-    return " ".join(kept).strip()
-
-
-def _collect_descriptor_spans(paragraph: str, max_follow_tokens: int = 3) -> List[tuple]:
-    if not DESCRIPTOR_WORDS:
-        return []
-    pattern = re.compile(
-        r"\\b(" + "|".join(map(re.escape, DESCRIPTOR_WORDS)) + r")\\b(?:\\s+[\\w-]+){0," + str(max_follow_tokens) + r"}",
-        re.IGNORECASE,
-    )
-    spans = []
-    for match in pattern.finditer(paragraph):
-        raw = match.group(0)
-        trimmed = _trim_descriptor_span(raw)
-        if not trimmed:
-            continue
-        if _in_robot_context(trimmed, paragraph):
-            continue
-        if any(keyword in trimmed.lower().split() for keyword in ROBOT_KEYWORDS):
-            continue
-        start = match.start()
-        end = start + len(trimmed)
-        spans.append((start, end))
-    return spans
 
 
 def _collect_existing_spans(paragraph: str, terms: List[str]) -> List[tuple]:
@@ -404,18 +310,6 @@ def _insert_brackets(paragraph: str, spans: List[tuple]) -> str:
         paragraph = paragraph[:end] + "】" + paragraph[end:]
         paragraph = paragraph[:start] + "【" + paragraph[start:]
     return paragraph
-
-
-def auto_bracket_descriptors(base_paragraph: str, bracketed_prompt: str) -> str:
-    normalized = bracketed_prompt.replace("【", "").replace("】", "")
-    if normalized != base_paragraph:
-        print("[WARN] Step 2: bracket output mismatch; falling back to base prompt for bracketing.")
-        bracketed_prompt = base_paragraph
-    existing_terms = extract_bracket_terms(bracketed_prompt)
-    spans = _collect_existing_spans(base_paragraph, existing_terms)
-    spans += _collect_descriptor_spans(base_paragraph)
-    merged = _merge_spans(spans)
-    return _insert_brackets(base_paragraph, merged)
 
 
 def canonicalize_robot_sentences(paragraph: str) -> str:
@@ -817,11 +711,26 @@ def step1_generate_base(model, processor, video_path: str, fps: float) -> str:
 def step2_bracket_base(model, processor, base_prompt: str) -> str:
     messages = [{
         "role": "user",
-        "content": [{"type": "text", "text": BRACKET_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
+        "content": [{"type": "text", "text": DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
     }]
-    bracketed = run_generation(model, processor, messages, 700, False, 1.0, 1.0)
-    bracketed = strip_robot_brackets(bracketed)
-    return auto_bracket_descriptors(base_prompt, bracketed)
+    raw = run_generation(model, processor, messages, 500, False, 1.0, 1.0)
+    parsed = safe_parse_json(raw)
+    descriptors = parsed.get("descriptors", []) if isinstance(parsed, dict) else []
+    cleaned = []
+    for descriptor in descriptors or []:
+        if not isinstance(descriptor, str):
+            continue
+        term = descriptor.strip()
+        if not term or term not in base_prompt:
+            continue
+        if _in_robot_context(term, base_prompt):
+            continue
+        cleaned.append(term)
+    cleaned = list(dict.fromkeys(cleaned))
+
+    spans = _collect_existing_spans(base_prompt, cleaned)
+    merged = _merge_spans(spans)
+    return _insert_brackets(base_prompt, merged)
 
 
 def step3_generate_replacements_json(
