@@ -16,6 +16,7 @@ from .steps.json_spec import (
     write_json_spec_multicontrol,
 )
 from .steps.inference import run_transfer_inference
+from .steps.arm_swap import run_arm_swap
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import make_job_paths
 from .utils.text import sanitize_name
@@ -62,6 +63,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     console_print(f"[JOB START] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
     job_start = perf_counter()
     job_success = False
+    arm_swap_output: Path | None = None
 
     try:
         # Step2: prompt
@@ -266,6 +268,28 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         append_log(paths.log_path, f"[DONE] output_dir={paths.output_dir}")
         console_print(f"[JOB DONE]  out={paths.output_dir}")
 
+        if cfg.arm_swap.enable:
+            arm_swap_workdir = cfg.arm_swap.workdir_root / paths.output_dir.name
+            arm_swap_output = _run_with_timing(
+                "STEP6 Arm Swap",
+                lambda: run_arm_swap(
+                    project_root=cfg.arm_swap.project_root,
+                    conda_env=cfg.arm_swap.conda_env,
+                    output_dir=paths.output_dir,
+                    output_root=cfg.arm_swap.output_root,
+                    workdir=arm_swap_workdir,
+                    orig_video=job.video_path,
+                    fps=cfg.arm_swap.fps,
+                    width=cfg.arm_swap.width,
+                    qwen_prompt=cfg.arm_swap.qwen_prompt,
+                    env=env,
+                    log_path=paths.log_path,
+                    skip_if_output_exists=cfg.arm_swap.skip_if_output_exists,
+                ),
+            )
+            append_log(paths.log_path, f"[DONE] arm_swap_output={arm_swap_output}")
+            console_print(f"[ARM SWAP DONE] out={arm_swap_output}")
+
         # Manifest (success)
         append_manifest(
             repos.work_dir,
@@ -278,6 +302,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "prompt_path": str(paths.prompt_path),
                 "json_path": str(paths.json_path),
                 "output_dir": str(paths.output_dir),
+                "arm_swap_output": str(arm_swap_output) if arm_swap_output is not None else None,
                 "log_path": str(paths.log_path),
                 "control_vis_path": str(control_path) if control_path is not None else None,
                 "control_paths": (
@@ -320,6 +345,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "prompt_path": str(paths.prompt_path),
                 "json_path": str(paths.json_path),
                 "output_dir": str(paths.output_dir),
+                "arm_swap_output": str(arm_swap_output) if arm_swap_output is not None else None,
                 "log_path": str(paths.log_path),
                 "error": repr(e),
             },
