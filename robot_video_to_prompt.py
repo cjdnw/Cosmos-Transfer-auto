@@ -104,9 +104,13 @@ and stay grounded in indoor robotics scenes.
 
 Rules:
 - Do NOT repeat the original.
-- Keep 1-3 words.
+- Keep 1-4 words (or match the original length when needed).
 - Use common, simple descriptors suitable for indoor robotics scenes.
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
+- Preserve any MATERIAL words from the original phrase (e.g., keep "plastic" if present).
+- Keep the core object noun; you may vary shape/size adjectives to increase diversity.
+- If multiple phrases share the same object noun (e.g., "table" and "table surface"),
+  keep their color/material/shape changes consistent across those phrases.
 - Avoid rare or poetic color words.
 - Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
 - Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
@@ -125,9 +129,11 @@ Issues to fix:
 Rules:
 - Provide {num_alternatives} alternatives.
 - Do NOT repeat the original.
-- Keep 1-3 words.
+- Keep 1-4 words (or match the original length when needed).
 - Use common, simple descriptors suitable for indoor robotics scenes.
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
+- Preserve any MATERIAL words from the original phrase (e.g., keep "plastic" if present).
+- Keep the core object noun; you may vary shape/size adjectives to increase diversity.
 - Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
 - Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
 - Output STRICT JSON only: {{"alternatives": ["alt1", ...]}}.
@@ -341,6 +347,92 @@ def _descriptor_token(token: str) -> bool:
 def _noun_modifier_token(token: str) -> bool:
     return bool(re.match(r"^[A-Za-z-]+$", token))
 
+
+GENERIC_OBJECT_TOKENS = {
+    "surface",
+    "top",
+    "side",
+    "edge",
+    "front",
+    "back",
+    "center",
+    "middle",
+    "bottom",
+    "upper",
+    "lower",
+}
+
+
+def _term_object_tokens(term: str) -> List[str]:
+    tokens = [t.lower() for t in re.findall(r"[A-Za-z-]+", term)]
+    filtered = []
+    for token in tokens:
+        if token in ROBOT_KEYWORDS or token in GENERIC_OBJECT_TOKENS:
+            continue
+        if _descriptor_token(token):
+            continue
+        filtered.append(token)
+    return filtered
+
+
+def _shared_object_groups(terms: List[str]) -> Dict[str, str]:
+    freq: Dict[str, int] = {}
+    term_tokens: Dict[str, List[str]] = {}
+    for term in terms:
+        tokens = _term_object_tokens(term)
+        term_tokens[term] = tokens
+        for token in set(tokens):
+            freq[token] = freq.get(token, 0) + 1
+
+    mapping: Dict[str, str] = {}
+    for term, tokens in term_tokens.items():
+        shared = [t for t in tokens if freq.get(t, 0) >= 2]
+        if not shared:
+            continue
+        shared.sort(key=lambda t: (freq[t], len(t)), reverse=True)
+        mapping[term] = shared[0]
+    return mapping
+
+
+def _required_materials(term: str) -> List[str]:
+    materials = []
+    for material in MATERIAL_BASES:
+        if re.search(rf"\\b{re.escape(material)}\\b", term, re.IGNORECASE):
+            materials.append(material)
+    return materials
+
+
+def _ensure_materials(term: str, alt: str) -> str:
+    materials = _required_materials(term)
+    if not materials:
+        return alt
+    missing = [m for m in materials if not re.search(rf"\\b{re.escape(m)}\\b", alt, re.IGNORECASE)]
+    if not missing:
+        return alt
+    tokens = alt.split()
+    if not tokens:
+        return alt
+    insert_at = max(len(tokens) - 1, 0)
+    for material in missing:
+        tokens.insert(insert_at, material)
+        insert_at += 1
+    return " ".join(tokens)
+
+
+def _align_term_with_anchor(term: str, anchor_alt: str, shared_token: str) -> str:
+    term_tokens = term.split()
+    anchor_tokens = anchor_alt.split()
+    if not term_tokens or not anchor_tokens:
+        return anchor_alt
+    if shared_token not in [t.lower() for t in term_tokens]:
+        return anchor_alt
+    aligned = []
+    for token in term_tokens:
+        if token.lower() == shared_token:
+            aligned.extend(anchor_tokens)
+        else:
+            aligned.append(token)
+    return " ".join(aligned)
 
 def expand_bracketed_prompt(paragraph: str) -> str:
     base = paragraph.replace("【", "").replace("】", "")
@@ -990,6 +1082,7 @@ def step3_generate_replacements_json(
 
     normalized_terms = {normalize_term_key(t): t for t in terms}
     canonical_terms = list(normalized_terms.values())
+    shared_groups = _shared_object_groups(canonical_terms)
     block = "\n".join([f"- {t}" for t in canonical_terms])
     cache_path = _step3_cache_path(block, alternatives_per_term)
     if os.path.exists(cache_path):
@@ -1021,6 +1114,15 @@ def step3_generate_replacements_json(
                 parent_map[key] = other_key
                 break
 
+    group_anchor: Dict[str, str] = {}
+    for term in canonical_terms:
+        group_key = shared_groups.get(term)
+        if not group_key:
+            continue
+        current = group_anchor.get(group_key)
+        if current is None or len(term.split()) > len(current.split()):
+            group_anchor[group_key] = term
+
     merged: Dict[str, List[str]] = {}
     for key in ordered_keys:
         term = normalized_terms[key]
@@ -1031,6 +1133,7 @@ def step3_generate_replacements_json(
             if not isinstance(alt, str):
                 continue
             normalized = _normalize_replacement_phrase(alt.strip())
+            normalized = _ensure_materials(term, normalized)
             if not normalized or normalized == term or normalized in cleaned_alts:
                 if normalized == term:
                     issues.add("Some outputs repeated the original phrase.")
@@ -1054,6 +1157,7 @@ def step3_generate_replacements_json(
             retry_alts = _retry_replacements_for_term(model, processor, term, needed, sorted(issues))
             for alt in retry_alts:
                 normalized = _normalize_replacement_phrase(alt.strip())
+                normalized = _ensure_materials(term, normalized)
                 if not normalized or normalized == term or normalized in cleaned_alts:
                     continue
                 if is_vague_color_phrase(normalized) or _contains_vague_modifier(normalized):
@@ -1080,6 +1184,15 @@ def step3_generate_replacements_json(
                 else:
                     aligned.append(alt)
             cleaned_alts = aligned
+        else:
+            group_key = shared_groups.get(term)
+            anchor_term = group_anchor.get(group_key) if group_key else None
+            if anchor_term and anchor_term != term and anchor_term in merged:
+                anchor_alts = merged[anchor_term]
+                cleaned_alts = [
+                    _ensure_materials(term, _align_term_with_anchor(term, alt, group_key))
+                    for alt in anchor_alts
+                ]
 
         merged[term] = cleaned_alts[:alternatives_per_term]
 
