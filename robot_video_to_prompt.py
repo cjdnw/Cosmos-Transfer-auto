@@ -117,6 +117,25 @@ DESCRIPTORS:
 {descriptor_block}
 """
 
+REPLACEMENT_RETRY_PROMPT_TEMPLATE = """Regenerate replacements for the phrase below.
+
+Issues to fix:
+{issues}
+
+Rules:
+- Provide {num_alternatives} alternatives.
+- Do NOT repeat the original.
+- Keep 1-3 words.
+- Use common, simple descriptors suitable for indoor robotics scenes.
+- For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
+- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
+- Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
+- Output STRICT JSON only: {"alternatives": ["alt1", ...]}.
+
+PHRASE:
+{term}
+"""
+
 ROBOT_KEYWORDS = {
     "robot",
     "robotic",
@@ -742,15 +761,43 @@ def _normalize_replacement_phrase(text: str) -> str:
         return base
 
     cleaned = colorish_pattern.sub(colorish_repl, cleaned)
-    vague_pattern = re.compile(
-        r"\\b(" + "|".join(VAGUE_MODIFIERS + VAGUE_COLOR_MODIFIERS + VAGUE_TEXTURE_MODIFIERS) + r")\\b",
-        re.IGNORECASE,
-    )
-    cleaned = vague_pattern.sub("", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"\s+,", ",", cleaned)
     cleaned = re.sub(r",\s+", ", ", cleaned)
     return cleaned.strip(" ,")
+
+
+def _contains_vague_modifier(text: str) -> bool:
+    pattern = re.compile(
+        r"\\b(" + "|".join(VAGUE_MODIFIERS + VAGUE_COLOR_MODIFIERS + VAGUE_TEXTURE_MODIFIERS) + r")\\b",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(text))
+
+
+def _retry_replacements_for_term(
+    model,
+    processor,
+    term: str,
+    needed: int,
+    issues: List[str],
+) -> List[str]:
+    issue_block = "\n".join(f"- {issue}" for issue in issues) if issues else "- Prior output did not meet constraints."
+    messages = [{
+        "role": "user",
+        "content": [{
+            "type": "text",
+            "text": REPLACEMENT_RETRY_PROMPT_TEMPLATE.format(
+                term=term,
+                num_alternatives=needed,
+                issues=issue_block,
+            ),
+        }],
+    }]
+    raw = run_generation(model, processor, messages, 500, True, 0.9, 0.95)
+    parsed = safe_parse_json(raw)
+    alts = parsed.get("alternatives", []) if isinstance(parsed, dict) else []
+    return [alt for alt in alts if isinstance(alt, str)]
 
 
 def _split_color_bias(term: str, candidates: List[str]) -> List[str]:
@@ -958,21 +1005,44 @@ def step3_generate_replacements_json(
         term = normalized_terms[key]
         model_alts = replacements.get(term, []) or []
         cleaned_alts = []
+        issues = set()
         for alt in model_alts:
             if not isinstance(alt, str):
                 continue
             normalized = _normalize_replacement_phrase(alt.strip())
             if not normalized or normalized == term or normalized in cleaned_alts:
+                if normalized == term:
+                    issues.add("Some outputs repeated the original phrase.")
                 continue
             if is_vague_color_phrase(normalized):
+                issues.add("Some outputs contained vague color modifiers.")
+                continue
+            if _contains_vague_modifier(normalized):
+                issues.add("Some outputs contained vague texture/modifier terms (e.g., smooth/soft/hard).")
                 continue
             if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
+                issues.add("Some outputs included robot-related terms.")
                 continue
             cleaned_alts.append(normalized)
             if len(cleaned_alts) >= alternatives_per_term:
                 break
 
         cleaned_alts = _split_color_bias(term, cleaned_alts)
+        if len(cleaned_alts) < alternatives_per_term:
+            needed = alternatives_per_term - len(cleaned_alts)
+            retry_alts = _retry_replacements_for_term(model, processor, term, needed, sorted(issues))
+            for alt in retry_alts:
+                normalized = _normalize_replacement_phrase(alt.strip())
+                if not normalized or normalized == term or normalized in cleaned_alts:
+                    continue
+                if is_vague_color_phrase(normalized) or _contains_vague_modifier(normalized):
+                    continue
+                if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
+                    continue
+                cleaned_alts.append(normalized)
+                if len(cleaned_alts) >= alternatives_per_term:
+                    break
+
         if not cleaned_alts:
             fallback = _normalize_replacement_phrase(term) or term
             cleaned_alts = [fallback]
@@ -991,6 +1061,9 @@ def step3_generate_replacements_json(
             cleaned_alts = aligned
 
         merged[term] = cleaned_alts[:alternatives_per_term]
+
+    if not os.path.exists(cache_path) or replacements != merged:
+        write_json(cache_path, {"replacements": merged})
 
     return merged
 
