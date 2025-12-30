@@ -393,6 +393,26 @@ def expand_bracketed_prompt(paragraph: str) -> str:
     return _insert_brackets(base, merged)
 
 
+def _split_on_commas_excluding_ranges(sentence: str, ranges: List[tuple]) -> List[str]:
+    if not ranges:
+        return [c.strip() for c in sentence.split(",") if c.strip()]
+    clauses = []
+    last = 0
+    for idx, ch in enumerate(sentence):
+        if ch != ",":
+            continue
+        if any(start <= idx < end for start, end in ranges):
+            continue
+        clause = sentence[last:idx].strip()
+        if clause:
+            clauses.append(clause)
+        last = idx + 1
+    tail = sentence[last:].strip()
+    if tail:
+        clauses.append(tail)
+    return clauses
+
+
 def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
     lowered_span = span.lower()
     sentences = [s for s in re.split(r"(?<=[.!?])\s+", paragraph.strip()) if s]
@@ -400,7 +420,8 @@ def _in_robot_context(span: str, paragraph: str, window: int = 200) -> bool:
         lowered_sentence = sentence.lower()
         if lowered_span not in lowered_sentence:
             continue
-        clauses = [c.strip() for c in sentence.split(",") if c.strip()]
+        span_ranges = [match.span() for match in re.finditer(re.escape(span), sentence)]
+        clauses = _split_on_commas_excluding_ranges(sentence, span_ranges)
         for clause in clauses:
             lowered_clause = clause.lower()
             if lowered_span not in lowered_clause:
