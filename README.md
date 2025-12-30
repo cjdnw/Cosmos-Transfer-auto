@@ -245,9 +245,9 @@ python scripts/run_batch.py ... --cv_root /your/path/to/cv-tools
 默认行为：**每个任务成功完成推理后**，自动清理中间文件：
 - prompt 文件（`prompt/*.txt`）
 - json spec（`json/*.json`）
-- 非缓存 control 目录（`control/<type>/<job_id>/`，主要为未来 edge/seg/... 预留）
 不会清理：
-- depth 控制缓存（`control_cache/`）
+- control 缓存（`control_cache/`）
+- step1-3 prompt缓存
 - 最终输出（`output_video/`）
 - `manifest.jsonl`
 
