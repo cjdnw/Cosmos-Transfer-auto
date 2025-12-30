@@ -202,8 +202,17 @@ TEXTURE_BASES = [
     "smooth",
     "matte",
     "glossy",
+    "satin",
+    "polished",
+    "brushed",
+    "grainy",
+    "speckled",
+    "pebbled",
+    "bumpy",
     "textured",
     "woven",
+    "felted",
+    "velvety",
     "rough",
     "soft",
     "hard",
@@ -226,6 +235,11 @@ VAGUE_COLOR_MODIFIERS = [
 ]
 VAGUE_TEXTURE_MODIFIERS = [
     "smooth",
+    "soft",
+    "hard",
+    "textured",
+    "matte",
+    "glossy",
 ]
 
 # =======================

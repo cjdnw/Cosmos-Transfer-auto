@@ -271,14 +271,14 @@ python scripts/run_batch.py ... --cleanup_logs
 - seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
 
 ## 词表维护说明
-这些词表集中在 `robot_video_to_prompt.py` 顶部常量区：
-- **`COLOR_BASES`**：可替换的基础颜色词（Step3 颜色替换与组合）。
-- **`MATERIAL_BASES`**：可替换的材质词（Step3 材质替换与组合）。
-- **`TEXTURE_BASES`**：可替换的纹理/表面质感词（Step3 纹理替换与组合）。
-- **`COLORISH_BASES`**：用于清理 “bluish/greyish” 这类模糊色的根词（Step1.5 模糊词清理）。
-- **`VAGUE_MODIFIERS` / `VAGUE_PHRASES`**：用于清理 “subtle/a bit” 等模糊修饰（Step1.5）。
-- **`VAGUE_COLOR_MODIFIERS`**：用于过滤 “pale/light/dark” 等模糊颜色短语（Step3）。
-- **`VAGUE_TEXTURE_MODIFIERS`**：用于过滤模糊纹理词（Step3），目前包含 `smooth`。
+这些词表集中在 `robot_video_to_prompt.py` 顶部常量区。即使 Step3 使用大模型生成替换词，词表仍承担“约束、纠正、扩展”的控制层职责：
+- **`COLOR_BASES`**：用于识别颜色词与短语扩展（Step3 括号合并与一致性处理），并作为颜色偏置校正与替换候选生成的基础集合。
+- **`MATERIAL_BASES`**：用于识别材质词（Step3 括号合并、替换一致性与候选过滤的判定依据）。
+- **`TEXTURE_BASES`**：用于识别纹理/质感词（Step3 括号合并与替换候选的判定依据）。
+- **`COLORISH_BASES`**：用于把 “bluish/greyish” 等模糊色归一化为明确颜色（Step1.5/Step3 纠正）。
+- **`VAGUE_MODIFIERS` / `VAGUE_PHRASES`**：用于清理 “subtle/a bit” 等模糊修饰（Step1.5/Step3 纠正）。
+- **`VAGUE_COLOR_MODIFIERS`**：用于过滤 “pale/light/dark” 等模糊颜色短语（Step3 纠正）。
+- **`VAGUE_TEXTURE_MODIFIERS`**：用于过滤模糊纹理词（Step3 纠正），目前包含 `smooth`。
 - **`ROBOT_KEYWORDS`**：机器人相关词汇，用于过滤机器人描述，避免括号与替换误触机器人外观。
 
 ### 人工维护更新流程
