@@ -18,7 +18,7 @@ from .steps.json_spec import (
 from .steps.inference import run_transfer_inference
 from .steps.arm_swap import run_arm_swap
 from .utils.logging_utils import append_log, console_print
-from .utils.paths import make_job_paths
+from .utils.paths import make_job_paths, make_output_dir
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates
@@ -34,12 +34,21 @@ class Job:
     video_path: Path
     job_id: str
     variant_idx: int = 0
+    input_root: Path | None = None
 
 
 def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     """Run the full pipeline for a single video: Step2 -> Step5."""
     repos = cfg.repos
-    paths = make_job_paths(repos.work_dir, job.video_path, job.job_id, cfg.run.control_type)
+    input_root = job.input_root or job.video_path.parent
+    paths = make_job_paths(
+        repos.work_dir,
+        job.video_path,
+        job.job_id,
+        cfg.run.control_type,
+        input_root=input_root,
+        variant_idx=job.variant_idx,
+    )
 
     def _log_duration(step_label: str, duration_sec: float) -> None:
         msg = f"[{step_label}] 耗时 {duration_sec:.2f}s"
@@ -175,7 +184,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             )
 
         # Step4: json spec
-        name = f"{sanitize_name(job.video_path.stem)}__{job.job_id}__{cfg.run.control_type}"
+        name = sanitize_name(job.video_path.stem)
         seed = cfg.transfer.seed if cfg.transfer.seed is not None else int(short_hash(job.job_id, 8), 16)
         if control_type == ControlType.DEPTH:
             _run_with_timing(
@@ -271,13 +280,19 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 
         if cfg.arm_swap.enable:
             arm_swap_workdir = cfg.arm_swap.workdir_root / paths.output_dir.name
+            arm_swap_output_base_dir = make_output_dir(
+                cfg.arm_swap.output_root,
+                input_root=input_root,
+                video_path=job.video_path,
+                variant_idx=job.variant_idx,
+            )
             arm_swap_output = _run_with_timing(
                 "STEP6 Arm Swap",
                 lambda: run_arm_swap(
                     project_root=cfg.arm_swap.project_root,
                     conda_env=cfg.arm_swap.conda_env,
                     output_dir=paths.output_dir,
-                    output_root=cfg.arm_swap.output_root,
+                    output_base_dir=arm_swap_output_base_dir,
                     workdir=arm_swap_workdir,
                     orig_video=job.video_path,
                     fps=cfg.arm_swap.fps,

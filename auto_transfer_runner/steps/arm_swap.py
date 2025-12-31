@@ -27,7 +27,7 @@ def run_arm_swap(
     project_root: Path,
     conda_env: str,
     output_dir: Path,
-    output_root: Path,
+    output_base_dir: Path,
     workdir: Path,
     orig_video: Path,
     fps: int,
@@ -44,11 +44,11 @@ def run_arm_swap(
       python -m robot_arm_swap --orig <input> --skin <transfer_output> --workdir <dir>
         --fps <fps> --width <width> --qwen-prompt "<prompt>" --out <output>
     """
-    output_root.mkdir(parents=True, exist_ok=True)
+    output_base_dir.mkdir(parents=True, exist_ok=True)
     workdir.parent.mkdir(parents=True, exist_ok=True)
 
     transfer_mp4 = _find_transfer_output_mp4(output_dir)
-    output_path = output_root / transfer_mp4.name
+    output_path = output_base_dir / transfer_mp4.name
 
     if skip_if_output_exists and output_path.exists() and output_path.stat().st_size > 0:
         append_log(log_path, f"[SKIP] arm swap output exists: {output_path}")

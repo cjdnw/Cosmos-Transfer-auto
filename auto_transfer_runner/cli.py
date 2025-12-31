@@ -48,8 +48,8 @@ def now_tag() -> str:
 
 
 def pick_videos(input_dir: Path, num_videos: int, shuffle: bool) -> List[Path]:
-    """Select unique input videos from a folder (non-recursive)."""
-    videos = sorted([p for p in input_dir.glob("*.mp4") if p.is_file()])
+    """Select unique input videos from a folder tree (recursive)."""
+    videos = sorted([p for p in input_dir.rglob("*.mp4") if p.is_file()])
     if shuffle:
         random.shuffle(videos)
     if num_videos and num_videos > 0:
@@ -207,6 +207,7 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
             video_path=Path(item["video_path"]),
             job_id=item["job_id"],
             variant_idx=item.get("variant_idx", 0),
+            input_root=Path(item["input_root"]),
         )
         try:
             run_job(job, cfg, env)
@@ -234,7 +235,7 @@ def main(argv: List[str] | None = None) -> None:
     )
 
     # Basic inputs
-    ap.add_argument("--input_dir", required=True, help="Directory that contains source .mp4 files")
+    ap.add_argument("--input_dir", required=True, help="Directory that contains source .mp4 files (recursive)")
     ap.add_argument("--num_videos", type=int, default=0, help="How many unique input videos to process; 0 = all")
     ap.add_argument("--shuffle", action="store_true", help="Shuffle videos before selecting the first N")
     ap.add_argument("--gpus", type=str, default="", help="GPU list, e.g. 0,1,2,3; empty = 0")
@@ -448,7 +449,14 @@ def main(argv: List[str] | None = None) -> None:
         for idx, vp in enumerate(videos):
             base_hash = base_hashes[idx]
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
-            q.put({"video_path": str(vp), "job_id": job_id, "variant_idx": v})
+            q.put(
+                {
+                    "video_path": str(vp),
+                    "job_id": job_id,
+                    "variant_idx": v,
+                    "input_root": str(input_dir),
+                }
+            )
 
     # Start one worker per GPU
     procs: List[mp.Process] = []
