@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -48,6 +49,37 @@ def _run_prompt_step(
 ) -> None:
     cmd = conda_run(env_name, ["python", "robot_video_to_prompt.py"] + args)
     run_cmd(cmd, cwd=autoprompt_root, env=env, log_path=log_path, title=title)
+
+
+def _log_contains_pyav_error(log_path: Path) -> bool:
+    if not log_path.exists():
+        return False
+    log_text = log_path.read_text(encoding="utf-8", errors="ignore")
+    return "PyAV is not installed" in log_text or "ImportError: PyAV" in log_text
+
+
+def _transcode_video_for_torchvision(video_path: Path, log_path: Path, env: Dict[str, str]) -> None:
+    tmp_path = video_path.with_name(f"{video_path.stem}__ffmpeg_tmp{video_path.suffix}")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        str(tmp_path),
+    ]
+    run_cmd(
+        cmd,
+        cwd=None,
+        env=env or dict(os.environ),
+        log_path=log_path,
+        title="STEP2.1: ffmpeg transcode for PyAV fallback",
+    )
+    tmp_path.replace(video_path)
+    append_log(log_path, f"[STEP2.1] ffmpeg transcode complete: {video_path}")
 
 
 def _read_text(path: Path) -> str:
@@ -221,14 +253,29 @@ def ensure_cached_base_prompt(
             str(base_prompt),
             *_model_args(size, variant, model_type),
         ]
-        _run_prompt_step(
-            env_name=env_name,
-            autoprompt_root=autoprompt_root,
-            args=args,
-            env=env,
-            log_path=log_path,
-            title="STEP2.1: Generate base prompt (step1_base)",
-        )
+        try:
+            _run_prompt_step(
+                env_name=env_name,
+                autoprompt_root=autoprompt_root,
+                args=args,
+                env=env,
+                log_path=log_path,
+                title="STEP2.1: Generate base prompt (step1_base)",
+            )
+        except RuntimeError:
+            if not _log_contains_pyav_error(log_path):
+                raise
+            append_log(log_path, "[WARN] PyAV missing. Running ffmpeg transcode and retrying step1_base.")
+            console_print("[WARN] PyAV missing. Running ffmpeg transcode and retrying step1_base.")
+            _transcode_video_for_torchvision(video_path, log_path, env)
+            _run_prompt_step(
+                env_name=env_name,
+                autoprompt_root=autoprompt_root,
+                args=args,
+                env=env,
+                log_path=log_path,
+                title="STEP2.1: Generate base prompt (step1_base, retry after ffmpeg)",
+            )
 
         if not base_prompt.exists() or base_prompt.stat().st_size == 0:
             raise FileNotFoundError(f"Base prompt not found after generation: {base_prompt}")
