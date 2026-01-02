@@ -219,6 +219,7 @@ python scripts/run_batch.py \
 - 总任务数 = 选中的输入视频数量 * K
 - depth 控制信号会被缓存复用：同一输入视频的首次生成 depth，其余 K-1 次直接命中缓存
 - 每个 variant 都会生成不同的 prompt、json spec、输出目录、日志文件
+- 队列按 variant 分层排队：先把所有视频的 variant=0 任务入队，再入队 variant=1...，因此 GPU 会优先处理不同视频的同一轮 variant；下一轮 variant 任务只会在上一轮全部出队后才开始被分发（可能与上一轮未完成任务并行运行）
 
 ## manifest.jsonl（输入-输出映射表）
 批处理会在 `<work_dir>/manifest.jsonl` 里追加写入每个任务的映射信息（JSON Lines）：
