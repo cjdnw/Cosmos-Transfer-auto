@@ -41,6 +41,13 @@ from .config import (
 from .pipeline import Job, run_job
 from .utils.hashing import short_hash
 from .utils.logging_utils import format_console_line
+from .utils.paths import make_output_dir
+from .utils.checkpoints import (
+    CHECKPOINT_DIRNAME,
+    checkpoint_dir_for_job,
+    clear_checkpoint_dir,
+    job_done_marker_path,
+)
 
 
 def now_tag() -> str:
@@ -471,6 +478,28 @@ def main(argv: List[str] | None = None) -> None:
 
     for p in procs:
         p.join()
+
+    expected_jobs = len(videos) * args.variants_per_video
+    output_root = cfg.repos.work_dir / "output_video"
+    checkpoint_root = cfg.repos.work_dir / CHECKPOINT_DIRNAME
+    job_checkpoint_dirs = []
+    completed_jobs = 0
+    for v in range(args.variants_per_video):
+        for vp in videos:
+            output_dir = make_output_dir(
+                output_root,
+                input_root=input_dir,
+                video_path=vp,
+                variant_idx=v,
+            )
+            checkpoint_dir = checkpoint_dir_for_job(cfg.repos.work_dir, output_dir)
+            job_checkpoint_dirs.append(checkpoint_dir)
+            if job_done_marker_path(checkpoint_dir).exists():
+                completed_jobs += 1
+
+    if expected_jobs > 0 and completed_jobs == expected_jobs:
+        for checkpoint_dir in job_checkpoint_dirs:
+            clear_checkpoint_dir(checkpoint_dir, root=checkpoint_root)
 
     print(format_console_line("All jobs finished."))
     print(format_console_line(f"work_dir={cfg.repos.work_dir}"))
