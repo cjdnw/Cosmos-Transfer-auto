@@ -372,6 +372,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         fps=cfg.arm_swap.fps,
                         width=cfg.arm_swap.width,
                         qwen_prompt=cfg.arm_swap.qwen_prompt,
+                        split_process=cfg.arm_swap.split_process,
                         env=env,
                         log_path=paths.log_path,
                         skip_if_output_exists=cfg.arm_swap.skip_if_output_exists,

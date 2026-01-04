@@ -33,12 +33,14 @@ def run_arm_swap(
     fps: int,
     width: int,
     qwen_prompt: str,
+    split_process: bool,
     env: Dict[str, str],
     log_path: Path,
     skip_if_output_exists: bool,
 ) -> Path:
     """
     Step6: run robot arm swap (qwen3vl + sam3).
+    When split_process is enabled, run Qwen3 and SAM3 in separate processes to reduce GPU memory pressure.
 
     Command:
       python -m robot_arm_swap --orig <input> --skin <transfer_output> --workdir <dir>
@@ -58,29 +60,86 @@ def run_arm_swap(
 
     workdir.mkdir(parents=True, exist_ok=True)
 
-    cmd = conda_run(
-        conda_env,
-        [
-            "python",
-            "-m",
-            "robot_arm_swap",
-            "--orig",
-            str(orig_video),
-            "--skin",
-            str(transfer_mp4),
-            "--workdir",
-            str(workdir),
-            "--fps",
-            str(fps),
-            "--width",
-            str(width),
-            "--qwen-prompt",
-            qwen_prompt,
-            "--out",
-            str(output_path),
-        ],
-    )
-    run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap (qwen3vl + sam3)")
+    if split_process:
+        bbox_json = workdir / "qwen_bboxes.json"
+        qwen_cmd = conda_run(
+            conda_env,
+            [
+                "python",
+                "-m",
+                "robot_arm_swap",
+                "--orig",
+                str(orig_video),
+                "--skin",
+                str(transfer_mp4),
+                "--workdir",
+                str(workdir),
+                "--fps",
+                str(fps),
+                "--width",
+                str(width),
+                "--qwen-prompt",
+                qwen_prompt,
+                "--out",
+                str(output_path),
+                "--qwen-only",
+                "--bbox-json",
+                str(bbox_json),
+            ],
+        )
+        run_cmd(qwen_cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap (Qwen3 only)")
+
+        if not bbox_json.exists() or bbox_json.stat().st_size == 0:
+            raise FileNotFoundError(f"Qwen bbox json not found after run: {bbox_json}")
+
+        sam_cmd = conda_run(
+            conda_env,
+            [
+                "python",
+                "-m",
+                "robot_arm_swap",
+                "--orig",
+                str(orig_video),
+                "--skin",
+                str(transfer_mp4),
+                "--workdir",
+                str(workdir),
+                "--fps",
+                str(fps),
+                "--width",
+                str(width),
+                "--out",
+                str(output_path),
+                "--sam-only",
+                "--bbox-json",
+                str(bbox_json),
+            ],
+        )
+        run_cmd(sam_cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap (SAM3 only)")
+    else:
+        cmd = conda_run(
+            conda_env,
+            [
+                "python",
+                "-m",
+                "robot_arm_swap",
+                "--orig",
+                str(orig_video),
+                "--skin",
+                str(transfer_mp4),
+                "--workdir",
+                str(workdir),
+                "--fps",
+                str(fps),
+                "--width",
+                str(width),
+                "--qwen-prompt",
+                qwen_prompt,
+                "--out",
+                str(output_path),
+            ],
+        )
+        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap (qwen3vl + sam3)")
 
     if not output_path.exists() or output_path.stat().st_size == 0:
         raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")

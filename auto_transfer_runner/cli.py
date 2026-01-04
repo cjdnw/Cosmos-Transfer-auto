@@ -155,6 +155,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         conda_env=args.arm_swap_env,
         output_root=Path(args.arm_swap_output_root),
         workdir_root=Path(args.arm_swap_workdir_root),
+        split_process=(not args.arm_swap_no_split),
         fps=args.arm_swap_fps,
         width=args.arm_swap_width,
         qwen_prompt=args.arm_swap_prompt,
@@ -392,6 +393,8 @@ def main(argv: List[str] | None = None) -> None:
                     help="Output root for arm swap videos")
     ap.add_argument("--arm_swap_workdir_root", type=str, default=str(DEFAULT_ARM_SWAP_WORKDIR_ROOT),
                     help="Workdir root for arm swap cache (per-job dir will be cleaned after output)")
+    ap.add_argument("--arm_swap_no_split", action="store_true",
+                    help="Disable split-process arm swap (run Qwen3 + SAM3 in one process)")
     ap.add_argument("--arm_swap_fps", type=int, default=ARM_SWAP_DEFAULTS.fps,
                     help="FPS for robot arm swap (default: 30)")
     ap.add_argument("--arm_swap_width", type=int, default=ARM_SWAP_DEFAULTS.width,

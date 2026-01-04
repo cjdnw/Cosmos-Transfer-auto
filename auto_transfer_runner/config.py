@@ -119,6 +119,7 @@ class ArmSwapConfig:
     conda_env: str = "robot_arm_swap"
     output_root: Path = DEFAULT_ARM_SWAP_OUTPUT_ROOT
     workdir_root: Path = DEFAULT_ARM_SWAP_WORKDIR_ROOT
+    split_process: bool = True
     fps: int = 30
     width: int = 1280
     qwen_prompt: str = "robotic arm"
