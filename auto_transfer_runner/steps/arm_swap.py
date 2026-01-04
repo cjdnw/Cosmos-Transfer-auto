@@ -34,6 +34,7 @@ def run_arm_swap(
     width: int,
     qwen_prompt: str,
     split_process: bool,
+    sam3_auto_scale: bool,
     env: Dict[str, str],
     log_path: Path,
     skip_if_output_exists: bool,
@@ -62,6 +63,7 @@ def run_arm_swap(
 
     if split_process:
         bbox_json = workdir / "qwen_bboxes.json"
+        sam3_scale_args = ["--sam3-auto-scale"] if sam3_auto_scale else ["--no-sam3-auto-scale"]
         qwen_cmd = conda_run(
             conda_env,
             [
@@ -113,10 +115,12 @@ def run_arm_swap(
                 "--sam-only",
                 "--bbox-json",
                 str(bbox_json),
+                *sam3_scale_args,
             ],
         )
         run_cmd(sam_cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap (SAM3 only)")
     else:
+        sam3_scale_args = ["--sam3-auto-scale"] if sam3_auto_scale else ["--no-sam3-auto-scale"]
         cmd = conda_run(
             conda_env,
             [
@@ -137,6 +141,7 @@ def run_arm_swap(
                 qwen_prompt,
                 "--out",
                 str(output_path),
+                *sam3_scale_args,
             ],
         )
         run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap (qwen3vl + sam3)")
