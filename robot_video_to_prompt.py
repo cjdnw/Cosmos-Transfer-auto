@@ -1139,6 +1139,11 @@ def _contains_vague_modifier(text: str) -> bool:
     return bool(pattern.search(text))
 
 
+def _contains_copula(text: str) -> bool:
+    pattern = re.compile(r"\\b(" + "|".join(["am", "is", "are", "was", "were", "be", "being", "been"]) + r")\\b")
+    return bool(pattern.search(text))
+
+
 def _retry_replacements_for_term(
     model,
     processor,
@@ -1443,6 +1448,9 @@ def step3_generate_replacements_json(
             if _contains_vague_modifier(normalized):
                 issues.add("Some outputs contained vague texture/modifier terms (e.g., smooth/soft/hard).")
                 continue
+            if _contains_copula(normalized):
+                issues.add("Some outputs contained verbs/coplas (e.g., is/are).")
+                continue
             if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
                 issues.add("Some outputs included robot-related terms.")
                 continue
@@ -1460,6 +1468,8 @@ def step3_generate_replacements_json(
                 if not normalized or normalized == term or normalized in cleaned_alts:
                     continue
                 if is_vague_color_phrase(normalized) or _contains_vague_modifier(normalized):
+                    continue
+                if _contains_copula(normalized):
                     continue
                 if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
                     continue
