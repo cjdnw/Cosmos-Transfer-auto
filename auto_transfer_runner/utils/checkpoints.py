@@ -20,6 +20,12 @@ def job_done_marker_path(checkpoint_dir: Path) -> Path:
     return marker_path(checkpoint_dir, "job")
 
 
+def any_marker_exists(checkpoint_dir: Path) -> bool:
+    if not checkpoint_dir.exists():
+        return False
+    return any(p.suffix == ".done" for p in checkpoint_dir.iterdir() if p.is_file())
+
+
 def marker_exists(marker: Path) -> bool:
     return marker.exists()
 

@@ -297,6 +297,7 @@ python scripts/run_batch.py ... --cleanup_logs
 每个视频变体会在 `work_dir/checkpoints/` 下写入原子标记文件（Step2~Step6 + job 完成）。中途断掉后再次运行会基于标记文件跳过已完成的步骤，继续执行未完成部分。
 - 标记路径与输出目录一一对应：`work_dir/checkpoints/output_video/.../<job-step>.done`
 - 若 prompt/json 被清理（默认清理行为），对应步骤会自动重新生成并刷新标记
+- 若标记不存在，会根据 `output_video/<input>_var_x/...` 目录下的已有产物推断进度并补齐标记
 - 当本次批处理所有变体均完成后，会自动清空这批任务的标记目录
 
 ## 待完成项目

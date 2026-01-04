@@ -18,7 +18,7 @@ from .steps.json_spec import (
 from .steps.inference import run_transfer_inference
 from .steps.arm_swap import run_arm_swap
 from .utils.logging_utils import append_log, console_print
-from .utils.paths import make_job_paths, make_output_dir
+from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates
@@ -27,6 +27,7 @@ from .utils.checkpoints import (
     checkpoint_dir_for_job,
     job_done_marker_path,
     mark_done,
+    any_marker_exists,
     marker_exists,
     marker_path,
 )
@@ -63,6 +64,20 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     step4_marker = marker_path(checkpoint_dir, "step4_json")
     step5_marker = marker_path(checkpoint_dir, "step5_infer")
     step6_marker = marker_path(checkpoint_dir, "step6_arm_swap")
+
+    _bootstrap_checkpoints(
+        checkpoint_dir=checkpoint_dir,
+        job_done_marker=job_done_marker,
+        step2_marker=step2_marker,
+        step3_marker=step3_marker,
+        step4_marker=step4_marker,
+        step5_marker=step5_marker,
+        step6_marker=step6_marker,
+        paths=paths,
+        cfg=cfg,
+        input_root=input_root,
+        job=job,
+    )
 
     if marker_exists(job_done_marker) and paths.output_dir.exists() and any(paths.output_dir.iterdir()):
         append_log(paths.log_path, f"[SKIP] job checkpoint done: {job_done_marker}")
@@ -433,3 +448,58 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         job_duration = perf_counter() - job_start
         status = "success" if job_success else "failed"
         _log_duration(f"JOB TOTAL ({status})", job_duration)
+
+
+def _bootstrap_checkpoints(
+    *,
+    checkpoint_dir: Path,
+    job_done_marker: Path,
+    step2_marker: Path,
+    step3_marker: Path,
+    step4_marker: Path,
+    step5_marker: Path,
+    step6_marker: Path,
+    paths: PathBundle,
+    cfg: GlobalConfig,
+    input_root: Path,
+    job: Job,
+) -> None:
+    """Infer step markers from existing artifacts when no checkpoint files exist."""
+    if any_marker_exists(checkpoint_dir):
+        return
+
+    if paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
+        mark_done(step2_marker)
+
+    if paths.json_path.exists() and paths.json_path.stat().st_size > 0:
+        mark_done(step3_marker)
+        mark_done(step4_marker)
+
+    if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
+        mark_done(step5_marker)
+
+    if cfg.arm_swap.enable:
+        if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
+            arm_swap_output_base_dir = make_output_dir(
+                cfg.arm_swap.output_root,
+                input_root=input_root,
+                video_path=job.video_path,
+                variant_idx=job.variant_idx,
+            )
+            if _arm_swap_output_exists(paths.output_dir, arm_swap_output_base_dir):
+                mark_done(step6_marker)
+                mark_done(job_done_marker)
+    else:
+        if marker_exists(step5_marker):
+            mark_done(job_done_marker)
+
+
+def _arm_swap_output_exists(output_dir: Path, output_base_dir: Path) -> bool:
+    if not output_dir.exists():
+        return False
+    mp4s = sorted([p for p in output_dir.glob("*.mp4") if p.is_file()])
+    if not mp4s:
+        return False
+    output_base_dir.mkdir(parents=True, exist_ok=True)
+    expected = output_base_dir / mp4s[0].name
+    return expected.exists() and expected.stat().st_size > 0
