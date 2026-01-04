@@ -23,6 +23,7 @@ from .config import (
     DEPTH_DEFAULTS,
     SEG_DEFAULTS,
     CV_DEFAULTS,
+    PREPROCESS_DEFAULTS,
     PROMPT_DEFAULTS,
     TRANSFER_DEFAULTS,
     ARM_SWAP_DEFAULTS,
@@ -31,6 +32,7 @@ from .config import (
     DepthConfig,
     SegConfig,
     CvControlConfig,
+    PreprocessConfig,
     TransferConfig,
     ArmSwapConfig,
     CacheConfig,
@@ -121,6 +123,13 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         canny_high=args.edge_high,
     )
 
+    preprocess = PreprocessConfig(
+        fps=args.pre_fps,
+        width=args.pre_width,
+        height=args.pre_height,
+        keep_aspect=(not args.pre_no_keep_aspect),
+    )
+
     transfer = TransferConfig(
         seed=args.seed,
         num_conditional_frames=args.num_conditional_frames,
@@ -196,6 +205,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         cleanup=cleanup,
         run=run,
         cv=cv,
+        preprocess=preprocess,
     )
 
 
@@ -337,6 +347,21 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--edge_low", type=int, default=CV_DEFAULTS.canny_low, help="Canny low threshold for edge control")
     ap.add_argument("--edge_high", type=int, default=CV_DEFAULTS.canny_high, help="Canny high threshold for edge control")
 
+    # Step0 (preprocess)
+    ap.add_argument(
+        "--pre_fps",
+        type=int,
+        default=PREPROCESS_DEFAULTS.fps,
+        choices=[16, 30, 60],
+        help="Preprocess output fps (CFR). Choices: 16/30/60 (default: 16)",
+    )
+    ap.add_argument("--pre_width", type=int, default=PREPROCESS_DEFAULTS.width,
+                    help="Preprocess output width (default: keep original)")
+    ap.add_argument("--pre_height", type=int, default=PREPROCESS_DEFAULTS.height,
+                    help="Preprocess output height (default: keep original)")
+    ap.add_argument("--pre_no_keep_aspect", action="store_true",
+                    help="Disable aspect-ratio preservation in preprocessing (default: keep aspect)")
+
     # Step4/5 parameters
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
     ap.add_argument("--num_conditional_frames", type=int, default=TRANSFER_DEFAULTS.num_conditional_frames,
@@ -434,6 +459,10 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--max_terms must be >= --min_terms")
     if args.replacements_per_term < 1:
         raise ValueError("--replacements_per_term must be >= 1")
+    if args.pre_width is not None and args.pre_width < 1:
+        raise ValueError("--pre_width must be >= 1")
+    if args.pre_height is not None and args.pre_height < 1:
+        raise ValueError("--pre_height must be >= 1")
 
     cfg = build_config(args)
 
