@@ -8,6 +8,7 @@ from typing import Callable, Dict, TypeVar
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control, generate_controls_combo
+from .steps.preprocess import preprocess_video, PreprocessSettings
 from .steps.json_spec import (
     write_json_spec_blur,
     write_json_spec_depth,
@@ -123,8 +124,26 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     job_start = perf_counter()
     job_success = False
     arm_swap_output: Path | None = None
+    preprocessed_video: Path | None = None
 
     try:
+        preprocessed_video = _run_with_timing(
+            "STEP1 Preprocess",
+            lambda: preprocess_video(
+                video_path=job.video_path,
+                settings=PreprocessSettings(
+                    fps=cfg.preprocess.fps,
+                    width=cfg.preprocess.width,
+                    height=cfg.preprocess.height,
+                    keep_aspect=cfg.preprocess.keep_aspect,
+                ),
+                env=env,
+                log_path=paths.log_path,
+                lock_timeout_sec=cfg.cache.lock_timeout_sec,
+                stale_lock_sec=cfg.cache.stale_lock_sec,
+            ),
+        )
+
         # Step2: prompt
         if marker_exists(step2_marker) and paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
             append_log(paths.log_path, f"[SKIP] step2 checkpoint exists: {step2_marker}")
@@ -164,12 +183,13 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             mark_done(step2_marker)
 
         # Step3: control
+        control_video = preprocessed_video or job.video_path
         control_type = ControlType(cfg.run.control_type)
         if control_type == ControlType.COMBO:
             control_paths = _run_with_timing(
                 "STEP3 Control",
                 lambda: generate_controls_combo(
-                    video_path=job.video_path,
+                    video_path=control_video,
                     work_dir=repos.work_dir,
                     depth_root=repos.depth_root,
                     seg_root=repos.seg_root,
@@ -206,7 +226,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "STEP3 Control",
                 lambda: generate_control(
                     control_type=control_type,
-                    video_path=job.video_path,
+                    video_path=control_video,
                     work_dir=repos.work_dir,
                     depth_root=repos.depth_root,
                     seg_root=repos.seg_root,
@@ -253,7 +273,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     json_path=paths.json_path,
                     name=name,
                     prompt_path=paths.prompt_path,
-                    video_path=job.video_path,
+                    video_path=control_video,
                     seed=seed,
                     transfer_cfg=cfg.transfer,
                     control_path=control_path,
@@ -267,7 +287,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     json_path=paths.json_path,
                     name=name,
                     prompt_path=paths.prompt_path,
-                    video_path=job.video_path,
+                    video_path=control_video,
                     seed=seed,
                     transfer_cfg=cfg.transfer,
                     control_path=control_path,
@@ -281,7 +301,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     json_path=paths.json_path,
                     name=name,
                     prompt_path=paths.prompt_path,
-                    video_path=job.video_path,
+                    video_path=control_video,
                     seed=seed,
                     transfer_cfg=cfg.transfer,
                     control_path=control_path,
@@ -295,7 +315,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     json_path=paths.json_path,
                     name=name,
                     prompt_path=paths.prompt_path,
-                    video_path=job.video_path,
+                    video_path=control_video,
                     seed=seed,
                     transfer_cfg=cfg.transfer,
                     control_path=control_path,
@@ -311,7 +331,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     json_path=paths.json_path,
                     name=name,
                     prompt_path=paths.prompt_path,
-                    video_path=job.video_path,
+                    video_path=control_video,
                     seed=seed,
                     transfer_cfg=cfg.transfer,
                     depth_path=control_paths["depth"],
