@@ -168,6 +168,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         fps=args.arm_swap_fps,
         width=args.arm_swap_width,
         qwen_prompt=args.arm_swap_prompt,
+        sam3_auto_scale=(not args.arm_swap_no_sam3_auto_scale),
         skip_if_output_exists=(not args.arm_swap_force),
     )
 
@@ -426,6 +427,8 @@ def main(argv: List[str] | None = None) -> None:
                     help="Width for robot arm swap (default: 1280)")
     ap.add_argument("--arm_swap_prompt", type=str, default=ARM_SWAP_DEFAULTS.qwen_prompt,
                     help="Qwen prompt for robot arm swap (default: 'robotic arm')")
+    ap.add_argument("--arm_swap_no_sam3_auto_scale", action="store_true",
+                    help="Disable SAM3 auto-scale (default: enabled)")
     ap.add_argument("--arm_swap_force", action="store_true",
                     help="Force rerun arm swap even if output already exists")
 

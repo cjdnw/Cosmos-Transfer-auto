@@ -132,6 +132,7 @@ class ArmSwapConfig:
     fps: int = 30
     width: int = 1280
     qwen_prompt: str = "robotic arm"
+    sam3_auto_scale: bool = True
     skip_if_output_exists: bool = True
 
 
