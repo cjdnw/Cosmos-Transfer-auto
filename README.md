@@ -35,6 +35,23 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
+### 例 1.5：开启视频预处理（CFR + 尺寸缩放）
+预处理会生成 CFR 视频（默认 16fps），输出文件与原视频同目录但不覆盖原文件（文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --pre_fps 30 \
+  --pre_width 1280 \
+  --pre_height 720 \
+  --pre_no_keep_aspect
+```
+常用参数说明：
+- `--pre_fps`：输出帧率（16/30/60，默认 16）。
+- `--pre_width`/`--pre_height`：指定输出宽高，可只填一个；默认不缩放。
+- `--pre_no_keep_aspect`：关闭等比例缩放（默认保持比例）。
+
 ### 例 2：4 卡并行（每张卡完成完整 2→5 流程）
 ```bash
 python scripts/run_batch.py \
@@ -376,6 +393,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
 - 2026-1-4：Step6 机械臂替换默认拆分 Qwen3/SAM3 两个子进程以降低显存峰值，新增 `--arm_swap_no_split` 可恢复单进程旧行为。
 - 2026-1-4：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
 - 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
