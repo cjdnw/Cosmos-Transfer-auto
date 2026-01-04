@@ -4,15 +4,13 @@ import json
 import random
 import argparse
 import hashlib
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Set
 
 import torch
 from transformers import AutoProcessor
 from transformers import Qwen2_5_VLForConditionalGeneration
 from transformers import Qwen3VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
-
-from auto_transfer_runner.config import DEFAULT_WORK_DIR
 
 # =======================
 # 1) Prompts
@@ -138,7 +136,7 @@ Rules:
 - If multiple phrases share the same object noun (e.g., "table" and "table surface"),
   keep their color/material/shape changes consistent across those phrases.
 - Avoid rare or poetic color words.
-- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
+- Avoid vague/qualifier words (e.g., "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth"), unless the source phrase already contains them (keeping them is acceptable to preserve fidelity).
 - Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
 - Output STRICT JSON only:
   {{"replacements": {{"<src>": ["alt1", ...], ...}}}}
@@ -160,7 +158,7 @@ Rules:
 - For COLOR terms, alternatives MUST change the color (not just texture) and should vary the palette.
 - Preserve any MATERIAL words from the original phrase (e.g., keep "plastic" if present).
 - Keep the core object noun; you may vary shape/size adjectives to increase diversity.
-- Do NOT use vague or qualifier words like "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth".
+- Avoid vague/qualifier words (e.g., "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth"), unless the source phrase already contains them (keeping them is acceptable to preserve fidelity).
 - Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
 - Output STRICT JSON only: {{"alternatives": ["alt1", ...]}}.
 
@@ -313,6 +311,13 @@ VAGUE_TEXTURE_MODIFIERS = [
     "matte",
     "glossy",
 ]
+
+# Step3 caching/cleaning behavior
+STEP3_CACHE_VERSION = "v2-relaxed"
+# If True, Step3 allows vague modifiers (e.g., light/smooth) *when they already exist in the source phrase*.
+STEP3_ALLOW_SOURCE_VAGUE_MODIFIERS = True
+# If True, Step3 fills missing alternatives using deterministic, rule-based generators (colors/materials/textures).
+STEP3_ENABLE_RULE_BACKFILL = True
 
 # =======================
 # 2) Model Options
@@ -1140,10 +1145,89 @@ def _contains_vague_modifier(text: str) -> bool:
     )
     return bool(pattern.search(text))
 
+def _collect_word_matches(text: str, vocab: List[str]) -> Set[str]:
+    if not text:
+        return set()
+    pattern = re.compile(r"\b(" + "|".join(map(re.escape, vocab)) + r")\b", re.IGNORECASE)
+    return {m.group(1).lower() for m in pattern.finditer(text)}
 
-def _contains_copula(text: str) -> bool:
-    pattern = re.compile(r"\\b(" + "|".join(["am", "is", "are", "was", "were", "be", "being", "been"]) + r")\\b")
-    return bool(pattern.search(text))
+
+def _newly_introduced_modifiers(source: str, candidate: str, vocab: List[str]) -> Set[str]:
+    """Return modifiers that appear in candidate but not in source (case-insensitive, word-boundary match)."""
+    src = _collect_word_matches(source, vocab)
+    cand = _collect_word_matches(candidate, vocab)
+    return cand - src
+
+
+def _has_new_vague_color_modifiers(source: str, candidate: str) -> bool:
+    if not STEP3_ALLOW_SOURCE_VAGUE_MODIFIERS:
+        return is_vague_color_phrase(candidate)
+    return bool(_newly_introduced_modifiers(source, candidate, VAGUE_COLOR_MODIFIERS))
+
+
+def _has_new_vague_modifiers(source: str, candidate: str) -> bool:
+    vocab = VAGUE_MODIFIERS + VAGUE_COLOR_MODIFIERS + VAGUE_TEXTURE_MODIFIERS
+    if not STEP3_ALLOW_SOURCE_VAGUE_MODIFIERS:
+        return _contains_vague_modifier(candidate)
+    return bool(_newly_introduced_modifiers(source, candidate, vocab))
+
+
+def build_hyphen_and_color_variations(term: str, max_alternatives: int) -> List[str]:
+    """Handle patterns like 'yellow-and-black' (hyphenated) in a controlled way."""
+    colors = "|".join(map(re.escape, COLOR_BASES))
+    pattern = re.compile(rf"\b({colors})-and-({colors})\b", re.IGNORECASE)
+    m = pattern.search(term)
+    if not m:
+        return []
+    c1_raw, c2_raw = m.group(1), m.group(2)
+    c1, c2 = c1_raw.lower(), c2_raw.lower()
+    out: List[str] = []
+    for first in COLOR_BASES:
+        for second in COLOR_BASES:
+            if first == c1 and second == c2:
+                continue
+            if len(out) >= max_alternatives:
+                return out
+            first_c = _apply_color_case(first, c1_raw)
+            second_c = _apply_color_case(second, c2_raw)
+            repl = f"{first_c}-and-{second_c}"
+            cand = term[:m.start()] + repl + term[m.end():]
+            if cand != term and cand not in out:
+                out.append(cand)
+    return out
+
+
+def _step3_rule_backfill_replacements(term: str, max_needed: int) -> List[str]:
+    """Deterministic fallback: generate color/material/texture variations when LLM yields too few usable options."""
+    if max_needed <= 0:
+        return []
+    max_gen = max(16, max_needed * 4)
+    pool: List[str] = []
+    # Prefer structured variations first.
+    pool.extend(build_hyphen_and_color_variations(term, max_gen))
+    pool.extend(build_multicolor_variations(term, max_gen))
+    pool.extend(build_color_variations(term, max_gen))
+    pool.extend(build_material_variations(term, max_gen))
+    pool.extend(build_texture_variations(term, max_gen))
+    pool.extend(build_color_material_combinations(term, max_gen))
+    pool.extend(build_texture_material_combinations(term, max_gen))
+
+    out: List[str] = []
+    for cand in pool:
+        normalized = _normalize_replacement_phrase(str(cand).strip())
+        normalized = _ensure_materials(term, normalized)
+        if not normalized or normalized == term or normalized in out:
+            continue
+        if _has_new_vague_color_modifiers(term, normalized):
+            continue
+        if _has_new_vague_modifiers(term, normalized):
+            continue
+        if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
+            continue
+        out.append(normalized)
+        if len(out) >= max_needed:
+            break
+    return out
 
 
 def _retry_replacements_for_term(
@@ -1380,6 +1464,12 @@ def step3_generate_replacements_json(
     bracketed_prompt: str,
     alternatives_per_term: int = 64,
 ) -> Dict[str, List[str]]:
+    """Generate a per-descriptor replacement list (Step3).
+
+    Cache format (prompt_cache/step3_llm_cache/*.json):
+    - raw_replacements: direct parsed LLM output
+    - cleaned_replacements / replacements: post-filtered + aligned output returned by this function
+    """
     bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
     terms = [t for t in terms if not any(keyword in t.lower() for keyword in ROBOT_KEYWORDS)]
@@ -1389,11 +1479,30 @@ def step3_generate_replacements_json(
     normalized_terms = {normalize_term_key(t): t for t in terms}
     canonical_terms = list(normalized_terms.values())
     shared_groups = _shared_object_groups(canonical_terms)
+
     block = "\n".join([f"- {t}" for t in canonical_terms])
     cache_path = _step3_cache_path(block, alternatives_per_term)
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+
+    # -----------------------
+    # Load / produce raw LLM replacements
+    # -----------------------
+    raw_replacements: Dict[str, List[str]] = {}
+
     if os.path.exists(cache_path):
         cached = read_json(cache_path)
-        replacements = cached.get("replacements", {}) if isinstance(cached, dict) else {}
+        if isinstance(cached, dict):
+            # Prefer the already-cleaned cache if available
+            cleaned_cached = cached.get("cleaned_replacements")
+            if isinstance(cleaned_cached, dict) and cleaned_cached:
+                return cleaned_cached
+            legacy_cached = cached.get("replacements")
+            if isinstance(legacy_cached, dict) and legacy_cached and cached.get("raw_replacements") is not None:
+                # Our v2 cache stores both raw+cleaned, but keeps "replacements" for compatibility.
+                return legacy_cached
+            raw_replacements = cached.get("raw_replacements") or legacy_cached or {}
+        if not isinstance(raw_replacements, dict):
+            raw_replacements = {}
     else:
         messages = [{
             "role": "user",
@@ -1405,12 +1514,25 @@ def step3_generate_replacements_json(
                 ),
             }],
         }]
-
         raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
-        replacements = safe_parse_json(raw).get("replacements", {}) or {}
-        write_json(cache_path, {"replacements": replacements})
+        parsed = safe_parse_json(raw)
+        raw_replacements = parsed.get("replacements", {}) or {}
+        if not isinstance(raw_replacements, dict):
+            raw_replacements = {}
+        write_json(cache_path, {"cache_version": STEP3_CACHE_VERSION, "raw_replacements": raw_replacements})
 
+    # Normalize keys to reduce "zero replacements" caused by punctuation/hyphen differences.
+    raw_key_map: Dict[str, str] = {}
+    for k in raw_replacements.keys():
+        if isinstance(k, str):
+            raw_key_map[normalize_term_key(k)] = k
+
+    # -----------------------
+    # Parent/group alignment setup
+    # -----------------------
     ordered_keys = sorted(normalized_terms.keys(), key=len, reverse=True)
+
+    # Map child -> parent by normalized key inclusion (e.g., "blue cap" inside "blue plastic bottle cap")
     parent_map: Dict[str, str] = {}
     for key in ordered_keys:
         for other_key in ordered_keys:
@@ -1429,73 +1551,89 @@ def step3_generate_replacements_json(
         if current is None or len(term.split()) > len(current.split()):
             group_anchor[group_key] = term
 
+    # -----------------------
+    # Clean + backfill per term
+    # -----------------------
     merged: Dict[str, List[str]] = {}
     for key in ordered_keys:
         term = normalized_terms[key]
-        model_alts = replacements.get(term, []) or []
-        cleaned_alts = []
+        raw_key = raw_key_map.get(key)
+        model_alts = raw_replacements.get(raw_key, []) if raw_key else raw_replacements.get(term, []) or []
+
+        cleaned_alts: List[str] = []
         issues = set()
+
+        def _accept_candidate(src_term: str, candidate: str) -> bool:
+            if not candidate or candidate == src_term or candidate in cleaned_alts:
+                return False
+            if _has_new_vague_color_modifiers(src_term, candidate):
+                issues.add("Some outputs contained newly-introduced vague color modifiers.")
+                return False
+            if _has_new_vague_modifiers(src_term, candidate):
+                issues.add("Some outputs contained newly-introduced vague texture/modifier terms.")
+                return False
+            if any(keyword in candidate.lower() for keyword in ROBOT_KEYWORDS):
+                issues.add("Some outputs included robot-related terms.")
+                return False
+            return True
+
         for alt in model_alts:
             if not isinstance(alt, str):
                 continue
             normalized = _normalize_replacement_phrase(alt.strip())
             normalized = _ensure_materials(term, normalized)
-            if not normalized or normalized == term or normalized in cleaned_alts:
-                if normalized == term:
-                    issues.add("Some outputs repeated the original phrase.")
+            if not normalized:
                 continue
-            if is_vague_color_phrase(normalized):
-                issues.add("Some outputs contained vague color modifiers.")
+            if normalized == term:
+                issues.add("Some outputs repeated the original phrase.")
                 continue
-            if _contains_vague_modifier(normalized):
-                issues.add("Some outputs contained vague texture/modifier terms (e.g., smooth/soft/hard).")
-                continue
-            if _contains_copula(normalized):
-                issues.add("Some outputs contained verbs/coplas (e.g., is/are).")
-                continue
-            if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
-                issues.add("Some outputs included robot-related terms.")
-                continue
-            cleaned_alts.append(normalized)
+            if _accept_candidate(term, normalized):
+                cleaned_alts.append(normalized)
             if len(cleaned_alts) >= alternatives_per_term:
                 break
 
         cleaned_alts = _split_color_bias(term, cleaned_alts)
-        if len(cleaned_alts) < alternatives_per_term:
+
+        if len(cleaned_alts) < alternatives_per_term and issues:
             needed = alternatives_per_term - len(cleaned_alts)
             retry_alts = _retry_replacements_for_term(model, processor, term, needed, sorted(issues))
             for alt in retry_alts:
+                if not isinstance(alt, str):
+                    continue
                 normalized = _normalize_replacement_phrase(alt.strip())
                 normalized = _ensure_materials(term, normalized)
-                if not normalized or normalized == term or normalized in cleaned_alts:
-                    continue
-                if is_vague_color_phrase(normalized) or _contains_vague_modifier(normalized):
-                    continue
-                if _contains_copula(normalized):
-                    continue
-                if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
-                    continue
-                cleaned_alts.append(normalized)
+                if _accept_candidate(term, normalized):
+                    cleaned_alts.append(normalized)
+                if len(cleaned_alts) >= alternatives_per_term:
+                    break
+
+        if STEP3_ENABLE_RULE_BACKFILL and len(cleaned_alts) < alternatives_per_term:
+            needed = alternatives_per_term - len(cleaned_alts)
+            for bf in _step3_rule_backfill_replacements(term, needed):
+                if _accept_candidate(term, bf):
+                    cleaned_alts.append(bf)
                 if len(cleaned_alts) >= alternatives_per_term:
                     break
 
         if not cleaned_alts:
-            fallback = _normalize_replacement_phrase(term) or term
-            cleaned_alts = [fallback]
+            cleaned_alts = [_normalize_replacement_phrase(term) or term]
 
-        parent_key = parent_map.get(key)
-        if parent_key and parent_key in merged:
-            parent_alts = merged[parent_key]
+        # Parent alignment: if a shorter phrase is a substring of a longer phrase, align by suffix tokens.
+        parent_norm = parent_map.get(key)
+        parent_term = normalized_terms.get(parent_norm) if parent_norm else None
+        if parent_term and parent_term in merged:
+            parent_alts = merged[parent_term]
             child_tokens = term.split()
-            aligned = []
+            aligned: List[str] = []
             for alt in parent_alts:
-                alt_tokens = alt.split()
+                alt_tokens = str(alt).split()
                 if len(alt_tokens) >= len(child_tokens):
                     aligned.append(" ".join(alt_tokens[-len(child_tokens):]))
                 else:
-                    aligned.append(alt)
+                    aligned.append(str(alt))
             cleaned_alts = aligned
         else:
+            # Shared-object grouping: enforce consistent color/material across grouped phrases.
             group_key = shared_groups.get(term)
             anchor_term = group_anchor.get(group_key) if group_key else None
             if anchor_term and anchor_term != term and anchor_term in merged:
@@ -1507,11 +1645,16 @@ def step3_generate_replacements_json(
 
         merged[term] = cleaned_alts[:alternatives_per_term]
 
-    if not os.path.exists(cache_path) or replacements != merged:
-        write_json(cache_path, {"replacements": merged})
-
+    write_json(
+        cache_path,
+        {
+            "cache_version": STEP3_CACHE_VERSION,
+            "raw_replacements": raw_replacements,
+            "cleaned_replacements": merged,
+            "replacements": merged,
+        },
+    )
     return merged
-
 
 def write_text(path: str, text: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1536,13 +1679,9 @@ def read_json(path: str) -> Any:
 
 
 def _step3_cache_path(term_block: str, alternatives_per_term: int) -> str:
-    digest = hashlib.sha1(f"{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
-    return os.path.join(
-        str(DEFAULT_WORK_DIR),
-        "prompt_cache",
-        "step3_llm_cache",
-        f"{digest}.json",
-    )
+    # Cache key includes a version to make behavior changes (filters/prompt/backfill) reproducible.
+    digest = hashlib.sha1(f"{STEP3_CACHE_VERSION}::{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
+    return os.path.join("prompt_cache", "step3_llm_cache", f"{digest}.json")
 
 
 # =======================
