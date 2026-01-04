@@ -164,6 +164,7 @@ python scripts/run_batch.py \
   --arm_swap_width 1280 \
   --arm_swap_prompt "robotic arm"
 ```
+说明：Step6 默认拆成两个进程（Qwen3 -> bbox JSON，SAM3 -> swap）以降低显存峰值；如需恢复单进程旧行为，使用 `--arm_swap_no_split`。
 
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
@@ -375,6 +376,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2026-1-5：Step6 机械臂替换默认拆分 Qwen3/SAM3 两个子进程以降低显存峰值，新增 `--arm_swap_no_split` 可恢复单进程旧行为。
 - 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
 - 2025-12-31：Step2 在遇到 PyAV 缺失时自动用 ffmpeg 转码视频并重试，避免任务直接失败。
 - 2025-12-31：支持递归扫描输入 mp4 并按原始目录结构输出，最外层新增 `_var_x` 变体目录；arm swap 输出保持同样的目录镜像规则。
