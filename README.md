@@ -293,6 +293,13 @@ python scripts/run_batch.py ... --keep_prompt --keep_json
 python scripts/run_batch.py ... --cleanup_logs
 ```
 
+## 断点续跑（方案A：原子标记文件）
+每个视频变体会在 `work_dir/checkpoints/` 下写入原子标记文件（Step2~Step6 + job 完成）。中途断掉后再次运行会基于标记文件跳过已完成的步骤，继续执行未完成部分。
+- 标记路径与输出目录一一对应：`work_dir/checkpoints/output_video/.../<job-step>.done`
+- 若 prompt/json 被清理（默认清理行为），对应步骤会自动重新生成并刷新标记
+- 若标记不存在，会根据 `output_video/<input>_var_x/...` 目录下的已有产物推断进度并补齐标记
+- 当本次批处理所有变体均完成后，会自动清空这批任务的标记目录
+
 ## 待完成项目
 - depth 控制信号质量不佳，需研究提升方案。
 - seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
@@ -368,6 +375,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
 - 2025-12-31：Step2 在遇到 PyAV 缺失时自动用 ffmpeg 转码视频并重试，避免任务直接失败。
 - 2025-12-31：支持递归扫描输入 mp4 并按原始目录结构输出，最外层新增 `_var_x` 变体目录；arm swap 输出保持同样的目录镜像规则。
 - 2025-12-31：新增 sim2real 任务开关 `--sim2real_only`，Quickstart 增补 Step1-only 调用示例。
