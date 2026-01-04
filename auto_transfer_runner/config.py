@@ -82,6 +82,15 @@ class CvControlConfig:
 
 
 @dataclass(frozen=True)
+class PreprocessConfig:
+    """Video preprocessing config (CFR + resize) before inference."""
+    fps: int = 16
+    width: int | None = None
+    height: int | None = None
+    keep_aspect: bool = True
+
+
+@dataclass(frozen=True)
 class TransferConfig:
     """Step5: Transfer2.5 inference config."""
     seed: int | None = 2025
@@ -163,6 +172,7 @@ class GlobalConfig:
     depth: DepthConfig
     seg: SegConfig
     cv: CvControlConfig
+    preprocess: PreprocessConfig
     transfer: TransferConfig
     arm_swap: ArmSwapConfig
     cache: CacheConfig
@@ -175,6 +185,7 @@ PROMPT_DEFAULTS = PromptConfig()
 DEPTH_DEFAULTS = DepthConfig()
 SEG_DEFAULTS = SegConfig()
 CV_DEFAULTS = CvControlConfig()
+PREPROCESS_DEFAULTS = PreprocessConfig()
 TRANSFER_DEFAULTS = TransferConfig()
 ARM_SWAP_DEFAULTS = ArmSwapConfig()
 CACHE_DEFAULTS = CacheConfig()
