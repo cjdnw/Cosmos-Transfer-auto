@@ -332,7 +332,7 @@ python scripts/run_batch.py ... --cleanup_logs
    - 若出现误圈/漏圈，优先检查提示词与机器人过滤规则是否需调整。  
 
 ## video_to_prompt 三部曲完整逻辑
-以下对应 `robot_video_to_prompt.py` 的 Step1 ~ Step3 全流程（含 Step1.5 与 Step3_apply），用于从视频生成基础描述、标注可替换短语，并完成随机替换：
+以下对应 `robot_video_to_prompt.py` 的 Step1 ~ Step3 全流程（含 Step1.5 与 Step3_apply），用于从视频生成基础描述、标注可替换短语，并完成随机替换与批量缓存复用：
 
 ### Step 1：生成 base prompt（含 Step1.5 兜底）
 **入口命令**：`step1_base`  
@@ -363,9 +363,9 @@ python scripts/run_batch.py ... --cleanup_logs
 2. 调用大模型生成替换候选，并做严格过滤：
    - 去重、拒绝原词、移除模糊颜色/纹理词、排除机器人相关词。
    - `_ensure_materials` 强制保留原始材质词（如 plastic/metal）。
-   - 若候选数量不足，触发 `_retry_replacements_for_term` 重新补齐。
-3. 对同一物体的替换候选做一致性对齐，避免前后替换冲突。
-4. 结果写入 `prompt_cache/step3_llm_cache`，按内容与候选数量缓存复用。
+3. 若候选数量不足，会先触发 `_retry_replacements_for_term` 重试，再使用词库组合规则补齐（颜色/材质/纹理/双色组合等），确保列表尽量达到 `--replacements_per_term`。
+4. 对同一物体的替换候选做一致性对齐，避免前后替换冲突（同名物体的颜色/材质变化保持同步）。
+5. 自动化流水线会将 Step3 结果缓存到 `prompt_cache_replacements/`（`auto_transfer_runner/steps/prompt.py`）；单独运行 `robot_video_to_prompt.py` 不会写入内部 step3 缓存。
 
 **随机替换流程**（`apply_random_replacements` / `step3_apply`）：
 - 默认随机抽取 `min_terms ~ max_terms` 个括注短语进行替换；启用 `--replace_all_terms` 则全部替换。
@@ -376,7 +376,8 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
-- 2026-1-5：Step6 机械臂替换默认拆分 Qwen3/SAM3 两个子进程以降低显存峰值，新增 `--arm_swap_no_split` 可恢复单进程旧行为。
+- 2026-1-4：Step6 机械臂替换默认拆分 Qwen3/SAM3 两个子进程以降低显存峰值，新增 `--arm_swap_no_split` 可恢复单进程旧行为。
+- 2026-1-4：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
 - 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
 - 2025-12-31：Step2 在遇到 PyAV 缺失时自动用 ffmpeg 转码视频并重试，避免任务直接失败。
 - 2025-12-31：支持递归扫描输入 mp4 并按原始目录结构输出，最外层新增 `_var_x` 变体目录；arm swap 输出保持同样的目录镜像规则。
