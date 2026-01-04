@@ -12,6 +12,8 @@ from transformers import Qwen2_5_VLForConditionalGeneration
 from transformers import Qwen3VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 
+from auto_transfer_runner.config import DEFAULT_WORK_DIR
+
 # =======================
 # 1) Prompts
 # =======================
@@ -1139,6 +1141,11 @@ def _contains_vague_modifier(text: str) -> bool:
     return bool(pattern.search(text))
 
 
+def _contains_copula(text: str) -> bool:
+    pattern = re.compile(r"\\b(" + "|".join(["am", "is", "are", "was", "were", "be", "being", "been"]) + r")\\b")
+    return bool(pattern.search(text))
+
+
 def _retry_replacements_for_term(
     model,
     processor,
@@ -1443,6 +1450,9 @@ def step3_generate_replacements_json(
             if _contains_vague_modifier(normalized):
                 issues.add("Some outputs contained vague texture/modifier terms (e.g., smooth/soft/hard).")
                 continue
+            if _contains_copula(normalized):
+                issues.add("Some outputs contained verbs/coplas (e.g., is/are).")
+                continue
             if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
                 issues.add("Some outputs included robot-related terms.")
                 continue
@@ -1460,6 +1470,8 @@ def step3_generate_replacements_json(
                 if not normalized or normalized == term or normalized in cleaned_alts:
                     continue
                 if is_vague_color_phrase(normalized) or _contains_vague_modifier(normalized):
+                    continue
+                if _contains_copula(normalized):
                     continue
                 if any(keyword in normalized.lower() for keyword in ROBOT_KEYWORDS):
                     continue
@@ -1525,7 +1537,12 @@ def read_json(path: str) -> Any:
 
 def _step3_cache_path(term_block: str, alternatives_per_term: int) -> str:
     digest = hashlib.sha1(f"{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
-    return os.path.join("prompt_cache", "step3_llm_cache", f"{digest}.json")
+    return os.path.join(
+        str(DEFAULT_WORK_DIR),
+        "prompt_cache",
+        "step3_llm_cache",
+        f"{digest}.json",
+    )
 
 
 # =======================
