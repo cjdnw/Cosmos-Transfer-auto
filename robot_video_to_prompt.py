@@ -3,7 +3,6 @@ import re
 import json
 import random
 import argparse
-import hashlib
 from typing import Dict, List, Any, Set
 
 import torch
@@ -312,8 +311,7 @@ VAGUE_TEXTURE_MODIFIERS = [
     "glossy",
 ]
 
-# Step3 caching/cleaning behavior
-STEP3_CACHE_VERSION = "v2-relaxed"
+# Step3 cleaning behavior
 # If True, Step3 allows vague modifiers (e.g., light/smooth) *when they already exist in the source phrase*.
 STEP3_ALLOW_SOURCE_VAGUE_MODIFIERS = True
 # If True, Step3 fills missing alternatives using deterministic, rule-based generators (colors/materials/textures).
@@ -1109,6 +1107,38 @@ def build_multicolor_variations(term: str, max_alternatives: int) -> List[str]:
     return replacements
 
 
+def build_color_pair_variations(term: str, max_alternatives: int) -> List[str]:
+    pattern = re.compile(r"\b(" + "|".join(COLOR_BASES) + r")\b", re.IGNORECASE)
+    match = pattern.search(term)
+    replacements = []
+    seen = set()
+    if match:
+        original = match.group(1)
+        for first in COLOR_BASES:
+            for second in COLOR_BASES:
+                if first == second:
+                    continue
+                pair = f"{_apply_color_case(first, original)} and {second}"
+                candidate = pattern.sub(pair, term, count=1)
+                if candidate != term and candidate not in seen:
+                    replacements.append(candidate)
+                    seen.add(candidate)
+                if len(replacements) >= max_alternatives:
+                    return replacements
+    else:
+        for first in COLOR_BASES:
+            for second in COLOR_BASES:
+                if first == second:
+                    continue
+                candidate = f"{first} and {second} {term}".strip()
+                if candidate != term and candidate not in seen:
+                    replacements.append(candidate)
+                    seen.add(candidate)
+                if len(replacements) >= max_alternatives:
+                    return replacements
+    return replacements
+
+
 def is_vague_color_phrase(text: str) -> bool:
     pattern = re.compile(r"\\b(" + "|".join(VAGUE_COLOR_MODIFIERS) + r")\\b", re.IGNORECASE)
     return bool(pattern.search(text))
@@ -1206,6 +1236,7 @@ def _step3_rule_backfill_replacements(term: str, max_needed: int) -> List[str]:
     # Prefer structured variations first.
     pool.extend(build_hyphen_and_color_variations(term, max_gen))
     pool.extend(build_multicolor_variations(term, max_gen))
+    pool.extend(build_color_pair_variations(term, max_gen))
     pool.extend(build_color_variations(term, max_gen))
     pool.extend(build_material_variations(term, max_gen))
     pool.extend(build_texture_variations(term, max_gen))
@@ -1465,10 +1496,6 @@ def step3_generate_replacements_json(
     alternatives_per_term: int = 64,
 ) -> Dict[str, List[str]]:
     """Generate a per-descriptor replacement list (Step3).
-
-    Cache format (prompt_cache/step3_llm_cache/*.json):
-    - raw_replacements: direct parsed LLM output
-    - cleaned_replacements / replacements: post-filtered + aligned output returned by this function
     """
     bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
@@ -1481,45 +1508,24 @@ def step3_generate_replacements_json(
     shared_groups = _shared_object_groups(canonical_terms)
 
     block = "\n".join([f"- {t}" for t in canonical_terms])
-    cache_path = _step3_cache_path(block, alternatives_per_term)
-    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-
     # -----------------------
-    # Load / produce raw LLM replacements
+    # Produce raw LLM replacements
     # -----------------------
-    raw_replacements: Dict[str, List[str]] = {}
-
-    if os.path.exists(cache_path):
-        cached = read_json(cache_path)
-        if isinstance(cached, dict):
-            # Prefer the already-cleaned cache if available
-            cleaned_cached = cached.get("cleaned_replacements")
-            if isinstance(cleaned_cached, dict) and cleaned_cached:
-                return cleaned_cached
-            legacy_cached = cached.get("replacements")
-            if isinstance(legacy_cached, dict) and legacy_cached and cached.get("raw_replacements") is not None:
-                # Our v2 cache stores both raw+cleaned, but keeps "replacements" for compatibility.
-                return legacy_cached
-            raw_replacements = cached.get("raw_replacements") or legacy_cached or {}
-        if not isinstance(raw_replacements, dict):
-            raw_replacements = {}
-    else:
-        messages = [{
-            "role": "user",
-            "content": [{
-                "type": "text",
-                "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
-                    descriptor_block=block,
-                    num_alternatives=alternatives_per_term,
-                ),
-            }],
-        }]
-        raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
-        parsed = safe_parse_json(raw)
-        raw_replacements = parsed.get("replacements", {}) or {}
-        if not isinstance(raw_replacements, dict):
-            raw_replacements = {}
-        write_json(cache_path, {"cache_version": STEP3_CACHE_VERSION, "raw_replacements": raw_replacements})
+    messages = [{
+        "role": "user",
+        "content": [{
+            "type": "text",
+            "text": REPLACEMENT_JSON_PROMPT_TEMPLATE.format(
+                descriptor_block=block,
+                num_alternatives=alternatives_per_term,
+            ),
+        }],
+    }]
+    raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
+    parsed = safe_parse_json(raw)
+    raw_replacements = parsed.get("replacements", {}) or {}
+    if not isinstance(raw_replacements, dict):
+        raw_replacements = {}
 
     # Normalize keys to reduce "zero replacements" caused by punctuation/hyphen differences.
     raw_key_map: Dict[str, str] = {}
@@ -1645,15 +1651,6 @@ def step3_generate_replacements_json(
 
         merged[term] = cleaned_alts[:alternatives_per_term]
 
-    write_json(
-        cache_path,
-        {
-            "cache_version": STEP3_CACHE_VERSION,
-            "raw_replacements": raw_replacements,
-            "cleaned_replacements": merged,
-            "replacements": merged,
-        },
-    )
     return merged
 
 def write_text(path: str, text: str):
@@ -1676,12 +1673,6 @@ def write_json(path: str, obj: Any):
 def read_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def _step3_cache_path(term_block: str, alternatives_per_term: int) -> str:
-    # Cache key includes a version to make behavior changes (filters/prompt/backfill) reproducible.
-    digest = hashlib.sha1(f"{STEP3_CACHE_VERSION}::{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
-    return os.path.join("prompt_cache", "step3_llm_cache", f"{digest}.json")
 
 
 # =======================
