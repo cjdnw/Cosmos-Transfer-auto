@@ -12,6 +12,8 @@ from transformers import Qwen2_5_VLForConditionalGeneration
 from transformers import Qwen3VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 
+from auto_transfer_runner.config import DEFAULT_WORK_DIR
+
 # =======================
 # 1) Prompts
 # =======================
@@ -1535,7 +1537,12 @@ def read_json(path: str) -> Any:
 
 def _step3_cache_path(term_block: str, alternatives_per_term: int) -> str:
     digest = hashlib.sha1(f"{alternatives_per_term}::{term_block}".encode("utf-8")).hexdigest()
-    return os.path.join("prompt_cache", "step3_llm_cache", f"{digest}.json")
+    return os.path.join(
+        str(DEFAULT_WORK_DIR),
+        "prompt_cache",
+        "step3_llm_cache",
+        f"{digest}.json",
+    )
 
 
 # =======================
