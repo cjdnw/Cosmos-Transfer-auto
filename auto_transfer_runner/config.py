@@ -125,15 +125,10 @@ class ArmSwapConfig:
     """Step6: robot arm swap config (qwen3vl + sam3)."""
     enable: bool = False
     project_root: Path = DEFAULT_ARM_SWAP_ROOT
-    conda_env: str = "robot_arm_swap"
+    conda_env: str = "arm_swap"
     output_root: Path = DEFAULT_ARM_SWAP_OUTPUT_ROOT
     workdir_root: Path = DEFAULT_ARM_SWAP_WORKDIR_ROOT
-    split_process: bool = True
-    fps: int = 30
-    width: int = 1280
     qwen_prompt: str = "robotic arm"
-    sam3_auto_scale: bool = True
-    skip_if_output_exists: bool = True
 
 
 @dataclass(frozen=True)
