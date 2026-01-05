@@ -93,7 +93,7 @@ class PreprocessConfig:
     pre_chunk_clip_where: str = "tail"
     pre_chunk_max_adjust: int = 40
     pre_chunk_force_chunks: int | None = None
-    pre_chunk_force_chunks: int | None = None
+    pre_chunk_restore_length: bool = True
 
 
 @dataclass(frozen=True)

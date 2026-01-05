@@ -24,6 +24,7 @@ class PreprocessSettings:
     pre_chunk_clip_where: str
     pre_chunk_max_adjust: int
     pre_chunk_force_chunks: int | None
+    pre_chunk_restore_length: bool
     num_video_frames_per_chunk: int
     num_conditional_frames: int
 
@@ -353,7 +354,68 @@ def _align_preprocess_chunks(
         log_parts.append(f"output={aligned_path}")
         append_log(log_path, " ".join(log_parts))
         console_print(" ".join(log_parts))
-        return aligned_path
+        if (
+            mode != "speed"
+            or not settings.pre_chunk_restore_length
+            or total_frames == target_frames
+        ):
+            return aligned_path
+
+        restored_path = _build_restored_output_path(
+            aligned_path,
+            fps=settings.fps,
+            T_restore=total_frames,
+        )
+        if restored_path.exists() and restored_path.stat().st_size > 0:
+            append_log(log_path, f"[PRE_CHUNK RESTORE CACHE HIT] {restored_path}")
+            console_print(f"[PRE_CHUNK RESTORE CACHE HIT] {restored_path.name}")
+            return restored_path
+
+        tmp_restore = restored_path.with_name(f".{restored_path.stem}__tmp{restored_path.suffix}")
+        safe_unlink(tmp_restore, log_path=log_path)
+        restore_factor = total_frames / target_frames
+        restore_filter = f"setpts=PTS*{restore_factor},minterpolate=fps={settings.fps}"
+        restore_cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(aligned_path),
+            "-vf",
+            restore_filter,
+            "-frames:v",
+            str(total_frames),
+            "-vsync",
+            "cfr",
+            "-r",
+            str(settings.fps),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(tmp_restore),
+        ]
+        run_cmd(
+            restore_cmd,
+            cwd=None,
+            env=env or dict(os.environ),
+            log_path=log_path,
+            title="STEP1.5 Restore length (interpolate)",
+        )
+        tmp_restore.replace(restored_path)
+        append_log(
+            log_path,
+            (
+                "[PRE_CHUNK RESTORE DONE] "
+                f"T_restore={total_frames} factor={restore_factor} output={restored_path}"
+            ),
+        )
+        console_print(
+            "[PRE_CHUNK RESTORE DONE] "
+            f"T_restore={total_frames} factor={restore_factor} output={restored_path.name}"
+        )
+        return restored_path
 
 
 def _build_aligned_output_path(
@@ -369,6 +431,16 @@ def _build_aligned_output_path(
 ) -> Path:
     suffix = f"__chunk_{mode}_{policy}_L{L}_C{C}_n{n}_T{T}_Tt{T_target}"
     return pre_video_path.with_name(f"{pre_video_path.stem}{suffix}{pre_video_path.suffix}")
+
+
+def _build_restored_output_path(
+    aligned_path: Path,
+    *,
+    fps: int,
+    T_restore: int,
+) -> Path:
+    suffix = f"__restore_T{T_restore}_fps{fps}"
+    return aligned_path.with_name(f"{aligned_path.stem}{suffix}{aligned_path.suffix}")
 
 
 def _probe_frame_count(pre_video_path: Path, *, env: Dict[str, str], log_path: Path) -> int:
