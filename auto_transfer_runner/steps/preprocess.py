@@ -41,6 +41,7 @@ def preprocess_video(
         console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
         return output_path
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = output_path.with_name(f".{output_path.name}.lock")
     lock_cfg = FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec)
 
@@ -50,7 +51,6 @@ def preprocess_video(
             console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
             return output_path
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = output_path.with_name(f".{output_path.stem}__tmp{output_path.suffix}")
         safe_unlink(tmp_path, log_path=log_path)
 
