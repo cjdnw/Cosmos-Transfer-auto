@@ -36,7 +36,7 @@ python scripts/run_batch.py \
 ```
 
 ### 例 1.5：开启视频预处理（CFR + 尺寸缩放）
-预处理会生成 CFR 视频（默认 16fps），输出文件与原视频同目录但不覆盖原文件（文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
+预处理会生成 CFR 视频（默认 16fps），输出文件默认保存到 `work_dir/prepro_video/`（保留输入目录结构，文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \

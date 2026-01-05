@@ -137,6 +137,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     height=cfg.preprocess.height,
                     keep_aspect=cfg.preprocess.keep_aspect,
                 ),
+                output_root=repos.work_dir / "prepro_video",
+                input_root=input_root,
                 env=env,
                 log_path=paths.log_path,
                 lock_timeout_sec=cfg.cache.lock_timeout_sec,
