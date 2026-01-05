@@ -15,11 +15,7 @@ def _find_transfer_output_mp4(output_dir: Path) -> Path:
     if not mp4s:
         raise FileNotFoundError(f"No mp4 outputs found in transfer output_dir: {output_dir}")
     if len(mp4s) > 1:
-        names = ", ".join(sorted(p.name for p in mp4s))
-        raise FileExistsError(
-            "Multiple transfer mp4 outputs found; expected a single file. "
-            f"Found: {names}"
-        )
+        return max(mp4s, key=lambda p: p.stat().st_size)
     return mp4s[0]
 
 
