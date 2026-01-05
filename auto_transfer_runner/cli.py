@@ -170,6 +170,9 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     arm_swap = ArmSwapConfig(
         enable=args.enable_arm_swap,
         qwen_prompt=args.arm_swap_prompt,
+        erode=args.arm_swap_erode,
+        feather=args.arm_swap_feather,
+        dilate=args.arm_swap_dilate,
     )
 
     cache = CacheConfig(
@@ -421,6 +424,12 @@ def main(argv: List[str] | None = None) -> None:
                     help="Enable robot arm swap after transfer (qwen3vl + sam3)")
     ap.add_argument("--arm_swap_prompt", type=str, default=ARM_SWAP_DEFAULTS.qwen_prompt,
                     help="Qwen prompt for robot arm swap (default: 'robotic arm')")
+    ap.add_argument("--arm_swap_erode", type=int, default=ARM_SWAP_DEFAULTS.erode,
+                    help="Erode size for arm swap mask (default: 2)")
+    ap.add_argument("--arm_swap_feather", type=int, default=ARM_SWAP_DEFAULTS.feather,
+                    help="Feather size for arm swap mask (default: 3)")
+    ap.add_argument("--arm_swap_dilate", type=int, default=ARM_SWAP_DEFAULTS.dilate,
+                    help="Dilate size for arm swap mask (default: 0)")
 
     # Depth cache
     ap.add_argument("--no_cache_control", action="store_true", help="Disable depth control cache (default: enabled)")

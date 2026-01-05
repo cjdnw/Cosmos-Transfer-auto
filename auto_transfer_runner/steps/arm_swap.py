@@ -77,6 +77,9 @@ def run_arm_swap(
     workdir: Path,
     orig_video: Path,
     qwen_prompt: str,
+    erode: int,
+    feather: int,
+    dilate: int,
     env: Dict[str, str],
     log_path: Path,
 ) -> Path:
@@ -111,11 +114,17 @@ def run_arm_swap(
             str(fps),
             "--width",
             str(width),
-            "--qwen-prompt",
-            qwen_prompt,
-            "--out",
-            str(output_path),
-        ],
+        "--qwen-prompt",
+        qwen_prompt,
+        "--erode",
+        str(erode),
+        "--feather",
+        str(feather),
+        "--dilate",
+        str(dilate),
+        "--out",
+        str(output_path),
+    ],
     )
     try:
         run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap")
