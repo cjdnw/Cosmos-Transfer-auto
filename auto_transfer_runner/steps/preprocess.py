@@ -24,8 +24,15 @@ class PreprocessSettings:
     pre_chunk_clip_where: str
     pre_chunk_max_adjust: int
     pre_chunk_force_chunks: int | None
+    pre_chunk_restore_length: bool
     num_video_frames_per_chunk: int
     num_conditional_frames: int
+
+
+@dataclass(frozen=True)
+class PreprocessResult:
+    preprocessed_path: Path
+    aligned_path: Path
 
 
 def preprocess_video(
@@ -38,7 +45,7 @@ def preprocess_video(
     log_path: Path,
     lock_timeout_sec: int,
     stale_lock_sec: int,
-) -> Path:
+) -> PreprocessResult:
     output_path = _build_output_path(
         video_path,
         settings,
@@ -48,7 +55,7 @@ def preprocess_video(
     if output_path.exists() and output_path.stat().st_size > 0:
         append_log(log_path, f"[PREPROCESS CACHE HIT] {output_path}")
         console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
-        return _align_preprocess_chunks(
+        aligned_path = _align_preprocess_chunks(
             pre_video_path=output_path,
             settings=settings,
             env=env,
@@ -56,6 +63,7 @@ def preprocess_video(
             lock_timeout_sec=lock_timeout_sec,
             stale_lock_sec=stale_lock_sec,
         )
+        return PreprocessResult(preprocessed_path=output_path, aligned_path=aligned_path)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = output_path.with_name(f".{output_path.name}.lock")
@@ -65,7 +73,7 @@ def preprocess_video(
         if output_path.exists() and output_path.stat().st_size > 0:
             append_log(log_path, f"[PREPROCESS CACHE HIT AFTER LOCK] {output_path}")
             console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
-            return _align_preprocess_chunks(
+            aligned_path = _align_preprocess_chunks(
                 pre_video_path=output_path,
                 settings=settings,
                 env=env,
@@ -73,6 +81,7 @@ def preprocess_video(
                 lock_timeout_sec=lock_timeout_sec,
                 stale_lock_sec=stale_lock_sec,
             )
+            return PreprocessResult(preprocessed_path=output_path, aligned_path=aligned_path)
 
         tmp_path = output_path.with_name(f".{output_path.stem}__tmp{output_path.suffix}")
         safe_unlink(tmp_path, log_path=log_path)
@@ -114,7 +123,7 @@ def preprocess_video(
         tmp_path.replace(output_path)
         append_log(log_path, f"[PREPROCESS DONE] output={output_path}")
         console_print(f"[PREPROCESS DONE] {output_path.name}")
-        return _align_preprocess_chunks(
+        aligned_path = _align_preprocess_chunks(
             pre_video_path=output_path,
             settings=settings,
             env=env,
@@ -122,6 +131,7 @@ def preprocess_video(
             lock_timeout_sec=lock_timeout_sec,
             stale_lock_sec=stale_lock_sec,
         )
+        return PreprocessResult(preprocessed_path=output_path, aligned_path=aligned_path)
 
 
 def _evenize(value: int | None) -> int | None:
@@ -369,6 +379,7 @@ def _build_aligned_output_path(
 ) -> Path:
     suffix = f"__chunk_{mode}_{policy}_L{L}_C{C}_n{n}_T{T}_Tt{T_target}"
     return pre_video_path.with_name(f"{pre_video_path.stem}{suffix}{pre_video_path.suffix}")
+
 
 
 def _probe_frame_count(pre_video_path: Path, *, env: Dict[str, str], log_path: Path) -> int:

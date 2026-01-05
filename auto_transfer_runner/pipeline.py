@@ -9,7 +9,8 @@ from typing import Callable, Dict, TypeVar
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control, generate_controls_combo
-from .steps.preprocess import preprocess_video, PreprocessSettings
+from .steps.postprocess import restore_transfer_length
+from .steps.preprocess import PreprocessResult, preprocess_video, PreprocessSettings
 from .steps.json_spec import (
     write_json_spec_blur,
     write_json_spec_depth,
@@ -126,9 +127,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     job_success = False
     arm_swap_output: Path | None = None
     preprocessed_video: Path | None = None
+    preprocess_result: PreprocessResult | None = None
 
     try:
-        preprocessed_video = _run_with_timing(
+        preprocess_result = _run_with_timing(
             "STEP1 Preprocess",
             lambda: preprocess_video(
                 video_path=job.video_path,
@@ -142,6 +144,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     pre_chunk_clip_where=cfg.preprocess.pre_chunk_clip_where,
                     pre_chunk_max_adjust=cfg.preprocess.pre_chunk_max_adjust,
                     pre_chunk_force_chunks=cfg.preprocess.pre_chunk_force_chunks,
+                    pre_chunk_restore_length=cfg.preprocess.pre_chunk_restore_length,
                     num_video_frames_per_chunk=cfg.transfer.num_video_frames_per_chunk,
                     num_conditional_frames=cfg.transfer.num_conditional_frames,
                 ),
@@ -153,6 +156,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 stale_lock_sec=cfg.cache.stale_lock_sec,
             ),
         )
+        preprocessed_video = preprocess_result.aligned_path
 
         # Step2: prompt
         if marker_exists(step2_marker) and paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
@@ -378,6 +382,22 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 ),
             )
             mark_done(step5_marker)
+
+        if (
+            cfg.preprocess.pre_chunk_mode == "speed"
+            and cfg.preprocess.pre_chunk_restore_length
+            and preprocess_result is not None
+        ):
+            _run_with_timing(
+                "STEP5.5 Restore length",
+                lambda: restore_transfer_length(
+                    output_dir=paths.output_dir,
+                    reference_video=preprocess_result.preprocessed_path,
+                    fps=cfg.preprocess.fps,
+                    env=env,
+                    log_path=paths.log_path,
+                ),
+            )
 
         append_log(paths.log_path, f"[DONE] output_dir={paths.output_dir}")
         console_print(f"[JOB DONE]  out={paths.output_dir}")
