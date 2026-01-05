@@ -313,6 +313,8 @@ def _align_preprocess_chunks(
                 str(pre_video_path),
                 "-vf",
                 filters,
+                "-frames:v",
+                str(target_frames),
                 "-vsync",
                 "cfr",
                 "-r",

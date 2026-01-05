@@ -447,7 +447,6 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
-- 2026-01-07：新增 `--selective_task [N]`，按 `meta/task.parquet` 内容分组抽样视频，每个任务最多保留 N 个视频（默认 3）。
 - 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
 - 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
