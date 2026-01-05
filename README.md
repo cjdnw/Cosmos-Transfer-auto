@@ -151,7 +151,19 @@ python scripts/run_batch.py \
   --interactive_replace
 ```
 
-### 例 10：自动生成 edge 控制信号（缓存复用）
+### 例 10：预处理对齐 chunk 帧数（clip/down）
+```bash
+python scripts/run_batch.py \
+  --input_dir /path/to/mp4s \
+  --gpus 0 \
+  --control_type depth \
+  --pre_fps 16 \
+  --pre_chunk_mode clip \
+  --pre_chunk_policy down \
+  --pre_chunk_clip_where tail
+```
+
+### 例 11：自动生成 edge 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -161,7 +173,7 @@ python scripts/run_batch.py \
   --edge_high 160
 ```
 
-### 例 11：自动生成 blur 控制信号（缓存复用）
+### 例 12：自动生成 blur 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -170,7 +182,7 @@ python scripts/run_batch.py \
   --blur_sigma 10
 ```
 
-### 例 12：多控制信号（combo）
+### 例 13：多控制信号（combo）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -182,7 +194,7 @@ python scripts/run_batch.py \
   --vis_control_weight 0.1
 ```
 
-### 例 13：开启机械臂替换（qwen3vl + sam3）
+### 例 14：开启机械臂替换（qwen3vl + sam3）
 在 Step5 Transfer 输出完成后，自动调用 `robot_arm_swap` 生成机械臂替换版本（两个输出都会保留）。
 ```bash
 python scripts/run_batch.py \
@@ -419,6 +431,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
 - 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
 - 2026-1-4：Step6 机械臂替换切换为单次 `robot_arm_swap` 调用，固定使用 conda 环境 `arm_swap`。
