@@ -51,6 +51,18 @@ from .utils.checkpoints import (
     job_done_marker_path,
 )
 
+RESOLUTION_CHOICES = [
+    "1080",
+    "1024",
+    "720",
+    "720p",
+    "720robocasa",
+    "480",
+    "480p",
+    "512",
+    "256",
+]
+
 
 def now_tag() -> str:
     return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -367,7 +379,15 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
     ap.add_argument("--num_conditional_frames", type=int, default=TRANSFER_DEFAULTS.num_conditional_frames,
                     help="num_conditional_frames in json spec (default: 1)")
-    ap.add_argument("--resolution", type=str, default=TRANSFER_DEFAULTS.resolution, help="resolution in json spec (default: 720)")
+    ap.add_argument(
+        "--resolution",
+        type=str,
+        default=TRANSFER_DEFAULTS.resolution,
+        help=(
+            "resolution key in json spec for Transfer2.5 buckets "
+            f"(choices: {', '.join(RESOLUTION_CHOICES)}; default: 720)"
+        ),
+    )
     ap.add_argument("--sigma_max", type=float, default=TRANSFER_DEFAULTS.sigma_max,
                     help="sigma_max in json spec (default: None)")
     ap.add_argument("--num_video_frames_per_chunk", type=int, default=TRANSFER_DEFAULTS.num_video_frames_per_chunk,
@@ -466,6 +486,8 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--pre_width must be >= 1")
     if args.pre_height is not None and args.pre_height < 1:
         raise ValueError("--pre_height must be >= 1")
+    if args.resolution not in RESOLUTION_CHOICES:
+        raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
 
     cfg = build_config(args)
 

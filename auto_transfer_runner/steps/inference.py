@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Dict
 
@@ -29,6 +30,11 @@ def run_transfer_inference(
         append_log(log_path, f"[SKIP] output_dir not empty, skip inference: {output_dir}")
         console_print(f"[SKIP] inference (output exists): {output_dir.name}")
         return
+
+    with json_path.open("r", encoding="utf-8") as f:
+        json_resolution = json.load(f).get("resolution")
+    append_log(log_path, f"[STEP5] resolution={json_resolution}")
+    console_print(f"[STEP5] resolution={json_resolution}")
 
     venv_python = transfer_root / ".venv" / "bin" / "python"
     if not venv_python.exists():
