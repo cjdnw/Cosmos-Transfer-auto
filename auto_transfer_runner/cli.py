@@ -137,6 +137,10 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         width=args.pre_width,
         height=args.pre_height,
         keep_aspect=(not args.pre_no_keep_aspect),
+        pre_chunk_mode=args.pre_chunk_mode,
+        pre_chunk_policy=args.pre_chunk_policy,
+        pre_chunk_clip_where=args.pre_chunk_clip_where,
+        pre_chunk_max_adjust=args.pre_chunk_max_adjust,
     )
 
     transfer = TransferConfig(
@@ -365,6 +369,33 @@ def main(argv: List[str] | None = None) -> None:
                     help="Preprocess output height (default: keep original)")
     ap.add_argument("--pre_no_keep_aspect", action="store_true",
                     help="Disable aspect-ratio preservation in preprocessing (default: keep aspect)")
+    ap.add_argument(
+        "--pre_chunk_mode",
+        type=str,
+        default=PREPROCESS_DEFAULTS.pre_chunk_mode,
+        choices=["none", "clip", "speed"],
+        help="Align preprocess video to Transfer chunk size; none|clip|speed (default: none)",
+    )
+    ap.add_argument(
+        "--pre_chunk_policy",
+        type=str,
+        default=PREPROCESS_DEFAULTS.pre_chunk_policy,
+        choices=["down", "up"],
+        help="Chunk alignment policy; down uses fewer chunks, up uses more (default: down)",
+    )
+    ap.add_argument(
+        "--pre_chunk_clip_where",
+        type=str,
+        default=PREPROCESS_DEFAULTS.pre_chunk_clip_where,
+        choices=["tail", "head", "center"],
+        help="Clip strategy for pre_chunk_mode=clip (default: tail)",
+    )
+    ap.add_argument(
+        "--pre_chunk_max_adjust",
+        type=int,
+        default=PREPROCESS_DEFAULTS.pre_chunk_max_adjust,
+        help="Skip pre-chunk alignment when |T-T_target| exceeds this value (default: 40)",
+    )
 
     # Step4/5 parameters
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
