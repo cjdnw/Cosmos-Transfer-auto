@@ -21,6 +21,7 @@ from .config import (
     SEG_DEFAULTS,
     CV_DEFAULTS,
     PREPROCESS_DEFAULTS,
+    POSTPROCESS_DEFAULTS,
     PROMPT_DEFAULTS,
     TRANSFER_DEFAULTS,
     ARM_SWAP_DEFAULTS,
@@ -30,6 +31,7 @@ from .config import (
     SegConfig,
     CvControlConfig,
     PreprocessConfig,
+    PostprocessConfig,
     TransferConfig,
     ArmSwapConfig,
     CacheConfig,
@@ -188,6 +190,11 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         pre_chunk_force_chunks=args.pre_chunk_force_chunks,
     )
 
+    postprocess = PostprocessConfig(
+        restore_duration=args.post_restore_duration,
+        restore_mode=args.post_restore_mode,
+    )
+
     transfer = TransferConfig(
         seed=args.seed,
         num_conditional_frames=args.num_conditional_frames,
@@ -259,6 +266,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         run=run,
         cv=cv,
         preprocess=preprocess,
+        postprocess=postprocess,
     )
 
 
@@ -457,6 +465,20 @@ def main(argv: List[str] | None = None) -> None:
         help="Force chunk count (uses speed mode and ignores clip/policy options)",
     )
 
+    # Step5.5 post-restore (duration)
+    ap.add_argument(
+        "--post_restore_duration",
+        action="store_true",
+        help="Restore Transfer output to original duration (keeps pre_fps)",
+    )
+    ap.add_argument(
+        "--post_restore_mode",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.restore_mode,
+        choices=["speed", "minterpolate"],
+        help="Post-restore mode: speed (setpts+fps) or minterpolate (smoother, slower)",
+    )
+
     # Step4/5 parameters
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
     ap.add_argument("--num_conditional_frames", type=int, default=TRANSFER_DEFAULTS.num_conditional_frames,
@@ -558,6 +580,8 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--pre_height must be >= 1")
     if args.pre_chunk_force_chunks is not None and args.pre_chunk_force_chunks < 1:
         raise ValueError("--pre_chunk_force_chunks must be >= 1")
+    if args.post_restore_mode not in ["speed", "minterpolate"]:
+        raise ValueError("--post_restore_mode must be speed or minterpolate")
     if args.resolution not in RESOLUTION_CHOICES:
         raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
 

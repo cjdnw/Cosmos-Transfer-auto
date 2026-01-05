@@ -19,6 +19,7 @@ from .steps.json_spec import (
 )
 from .steps.inference import run_transfer_inference
 from .steps.arm_swap import run_arm_swap
+from .steps.postprocess import probe_video_stats, restore_duration, VideoStats, find_transfer_output_mp4
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
@@ -65,6 +66,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     step3_marker = marker_path(checkpoint_dir, "step3_control")
     step4_marker = marker_path(checkpoint_dir, "step4_json")
     step5_marker = marker_path(checkpoint_dir, "step5_infer")
+    step5_restore_marker = marker_path(checkpoint_dir, "step5_restore")
     step6_marker = marker_path(checkpoint_dir, "step6_arm_swap")
 
     _bootstrap_checkpoints(
@@ -74,6 +76,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         step3_marker=step3_marker,
         step4_marker=step4_marker,
         step5_marker=step5_marker,
+        step5_restore_marker=step5_restore_marker,
         step6_marker=step6_marker,
         paths=paths,
         cfg=cfg,
@@ -96,6 +99,11 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "json_path": str(paths.json_path),
                 "output_dir": str(paths.output_dir),
                 "arm_swap_output": None,
+                "post_restore_output": (
+                    str(find_transfer_output_mp4(paths.output_dir))
+                    if cfg.postprocess.restore_duration
+                    else None
+                ),
                 "log_path": str(paths.log_path),
                 "skip_reason": "checkpoint",
             },
@@ -126,8 +134,14 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     job_success = False
     arm_swap_output: Path | None = None
     preprocessed_video: Path | None = None
+    original_stats: VideoStats | None = None
 
     try:
+        if cfg.postprocess.restore_duration:
+            original_stats = _run_with_timing(
+                "STEP0 Probe Original",
+                lambda: probe_video_stats(job.video_path, env=env, log_path=paths.log_path),
+            )
         preprocessed_video = _run_with_timing(
             "STEP1 Preprocess",
             lambda: preprocess_video(
@@ -379,6 +393,27 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             )
             mark_done(step5_marker)
 
+        # Step5.5: post-restore duration
+        if cfg.postprocess.restore_duration:
+            if marker_exists(step5_restore_marker):
+                append_log(paths.log_path, f"[SKIP] step5.5 checkpoint exists: {step5_restore_marker}")
+                console_print(f"[SKIP] step5.5 post-restore (checkpoint): {paths.output_dir.name}")
+            else:
+                if original_stats is None:
+                    raise RuntimeError("Missing original video stats for post-restore.")
+                _run_with_timing(
+                    "STEP5.5 Post-restore",
+                    lambda: restore_duration(
+                        output_dir=paths.output_dir,
+                        original_stats=original_stats,
+                        pre_fps=cfg.preprocess.fps,
+                        mode=cfg.postprocess.restore_mode,
+                        env=env,
+                        log_path=paths.log_path,
+                    ),
+                )
+                mark_done(step5_restore_marker)
+
         append_log(paths.log_path, f"[DONE] output_dir={paths.output_dir}")
         console_print(f"[JOB DONE]  out={paths.output_dir}")
 
@@ -428,6 +463,11 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "json_path": str(paths.json_path),
                 "output_dir": str(paths.output_dir),
                 "arm_swap_output": str(arm_swap_output) if arm_swap_output is not None else None,
+                "post_restore_output": (
+                    str(find_transfer_output_mp4(paths.output_dir))
+                    if cfg.postprocess.restore_duration
+                    else None
+                ),
                 "log_path": str(paths.log_path),
                 "control_vis_path": str(control_path) if control_path is not None else None,
                 "control_paths": (
@@ -492,6 +532,7 @@ def _bootstrap_checkpoints(
     step3_marker: Path,
     step4_marker: Path,
     step5_marker: Path,
+    step5_restore_marker: Path,
     step6_marker: Path,
     paths: PathBundle,
     cfg: GlobalConfig,
@@ -511,6 +552,8 @@ def _bootstrap_checkpoints(
 
     if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
         mark_done(step5_marker)
+        if cfg.postprocess.restore_duration and marker_exists(step5_restore_marker):
+            mark_done(step5_restore_marker)
 
     if cfg.arm_swap.enable:
         if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
@@ -522,9 +565,12 @@ def _bootstrap_checkpoints(
             )
             if _arm_swap_output_exists(paths.output_dir, arm_swap_output_base_dir):
                 mark_done(step6_marker)
-                mark_done(job_done_marker)
+                if not cfg.postprocess.restore_duration or marker_exists(step5_restore_marker):
+                    mark_done(job_done_marker)
     else:
-        if marker_exists(step5_marker):
+        if marker_exists(step5_marker) and (
+            not cfg.postprocess.restore_duration or marker_exists(step5_restore_marker)
+        ):
             mark_done(job_done_marker)
 
 
