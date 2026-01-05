@@ -201,6 +201,9 @@ python -m robot_arm_swap \
   --fps <与预处理视频一致> \
   --width <与预处理视频一致> \
   --qwen-prompt "robotic arm" \
+  --erode 2 \
+  --feather 3 \
+  --dilate 0 \
   --out /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/<output_video_name>.mp4
 ```
 执行完成后会自动清空 workdir。

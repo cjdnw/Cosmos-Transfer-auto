@@ -129,6 +129,9 @@ class ArmSwapConfig:
     output_root: Path = DEFAULT_ARM_SWAP_OUTPUT_ROOT
     workdir_root: Path = DEFAULT_ARM_SWAP_WORKDIR_ROOT
     qwen_prompt: str = "robotic arm"
+    erode: int = 2
+    feather: int = 3
+    dilate: int = 0
 
 
 @dataclass(frozen=True)
