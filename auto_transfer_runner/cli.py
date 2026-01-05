@@ -186,6 +186,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         pre_chunk_clip_where=args.pre_chunk_clip_where,
         pre_chunk_max_adjust=args.pre_chunk_max_adjust,
         pre_chunk_force_chunks=args.pre_chunk_force_chunks,
+        pre_chunk_restore_length=args.pre_chunk_restore_length,
     )
 
     transfer = TransferConfig(
@@ -455,6 +456,12 @@ def main(argv: List[str] | None = None) -> None:
         type=int,
         default=PREPROCESS_DEFAULTS.pre_chunk_force_chunks,
         help="Force chunk count (uses speed mode and ignores clip/policy options)",
+    )
+    ap.add_argument(
+        "--pre_chunk_restore_length",
+        action="store_true",
+        default=PREPROCESS_DEFAULTS.pre_chunk_restore_length,
+        help="After speed alignment, interpolate back to original duration at pre_fps",
     )
 
     # Step4/5 parameters

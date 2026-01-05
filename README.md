@@ -178,6 +178,7 @@ python scripts/run_batch.py \
 - `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
 - `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
 - `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，会忽略 clip/policy/clip_where）。
+- `--pre_chunk_restore_length`：speed 对齐后插值恢复回原始时长（输出仍为 pre_fps，默认开启）。
 
 ### 例 11：自动生成 edge 控制信号（缓存复用）
 ```bash
