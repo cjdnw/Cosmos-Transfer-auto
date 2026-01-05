@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -345,6 +346,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         else:
             raise NotImplementedError("Only depth/seg/edge/blur/combo json spec are implemented for now.")
 
+        with paths.json_path.open("r", encoding="utf-8") as f:
+            json_resolution = json.load(f).get("resolution")
+        append_log(paths.log_path, f"[STEP4] resolution={json_resolution}")
+        console_print(f"[STEP4] resolution={json_resolution}")
         append_log(paths.log_path, f"[STEP4] Wrote json: {paths.json_path}")
         console_print(f"[STEP4] json={paths.json_path.name}")
 

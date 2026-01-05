@@ -35,22 +35,39 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
-### 例 1.5：开启视频预处理（CFR + 尺寸缩放）
+### 例 1.5：开启视频预处理（CFR）+ 设置推理 resolution
 预处理会生成 CFR 视频（默认 16fps），输出文件默认保存到 `work_dir/prepro_video/`（保留输入目录结构，文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
   --gpus 0 \
   --control_type depth \
-  --pre_fps 30 \
-  --pre_width 1280 \
-  --pre_height 720 \
-  --pre_no_keep_aspect
+  --pre_fps 16 \
+  --resolution 480
 ```
 常用参数说明：
 - `--pre_fps`：输出帧率（16/30/60，默认 16）。
+说明：`--pre_fps` 影响预处理/控制生成，`--resolution` 决定 STEP5 推理速度（关键加速开关）。
+
+预处理选项（影响控制生成/IO，不影响 STEP5 推理 bucket）：
 - `--pre_width`/`--pre_height`：指定输出宽高，可只填一个；默认不缩放。
 - `--pre_no_keep_aspect`：关闭等比例缩放（默认保持比例）。
+
+## 推理加速：resolution
+`resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：
+`1080`, `1024`, `720`, `720p`, `720robocasa`, `480`, `480p`, `512`, `256`。
+
+| resolution key | 16:9 bucket 尺寸 |
+| --- | --- |
+| 1080 | 1920x1056 |
+| 1024 | 1280x768 |
+| 720 | 1280x704 |
+| 720p | 1280x720 |
+| 720robocasa | 1280x720 |
+| 480 | 768x432 |
+| 480p | 832x480 |
+| 512 | 640x384 |
+| 256 | 320x192 |
 
 ### 例 2：4 卡并行（每张卡完成完整 2→5 流程）
 ```bash
@@ -393,6 +410,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## 更新记录
+- 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
 - 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
 - 2026-1-4：Step6 机械臂替换默认拆分 Qwen3/SAM3 两个子进程以降低显存峰值，新增 `--arm_swap_no_split` 可恢复单进程旧行为。
 - 2026-1-4：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
