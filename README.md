@@ -35,7 +35,7 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
-### 例 1.5：开启视频预处理（CFR）+ 设置推理 resolution
+### 例 1.5：开启视频预处理（CFR/对齐 chunk）+ 设置推理 resolution
 预处理会生成 CFR 视频（默认 16fps），输出文件默认保存到 `work_dir/prepro_video/`（保留输入目录结构，文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
 ```bash
 python scripts/run_batch.py \
@@ -43,15 +43,28 @@ python scripts/run_batch.py \
   --gpus 0 \
   --control_type depth \
   --pre_fps 16 \
+  --pre_chunk_mode speed \
+  --pre_chunk_force_chunks 8 \
+  --post_restore_duration \
+  --post_restore_mode speed \
   --resolution 480
 ```
 常用参数说明：
 - `--pre_fps`：输出帧率（16/30/60，默认 16）。
 说明：`--pre_fps` 影响预处理/控制生成，`--resolution` 决定 STEP5 推理速度（关键加速开关）。
 
-预处理选项（影响控制生成/IO，不影响 STEP5 推理 bucket）：
+预处理/对齐选项（影响控制生成/IO，不影响 STEP5 推理 bucket）：
 - `--pre_width`/`--pre_height`：指定输出宽高，可只填一个；默认不缩放。
 - `--pre_no_keep_aspect`：关闭等比例缩放（默认保持比例）。
+- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=变速补帧，保持输出 fps=16）。
+- `--pre_chunk_policy {down,up}`：down 减少 chunk，up 增加 chunk（必要时补帧/减速）。
+- `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
+- `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
+- `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，会忽略 clip/policy/clip_where）。
+
+Transfer 后恢复时长（输出保持 `pre_fps`）：
+- `--post_restore_duration`：在 Step5 后把输出时长拉回原视频时长。
+- `--post_restore_mode {speed,minterpolate}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）。
 
 ## 推理加速：resolution
 `resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：
@@ -161,25 +174,7 @@ python scripts/run_batch.py \
   --interactive_replace
 ```
 
-### 例 10：预处理对齐 chunk 帧数（clip/speed）
-```bash
-python scripts/run_batch.py \
-  --input_dir /path/to/mp4s \
-  --gpus 0 \
-  --control_type depth \
-  --pre_fps 16 \
-  --pre_chunk_mode clip \
-  --pre_chunk_policy down \
-  --pre_chunk_clip_where tail
-```
-可用参数说明：
-- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=变速补帧，保持输出 fps=16）。
-- `--pre_chunk_policy {down,up}`：down 减少 chunk，up 增加 chunk（必要时补帧/减速）。
-- `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
-- `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
-- `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，会忽略 clip/policy/clip_where）。
-
-### 例 11：自动生成 edge 控制信号（缓存复用）
+### 例 10：自动生成 edge 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -189,7 +184,7 @@ python scripts/run_batch.py \
   --edge_high 160
 ```
 
-### 例 12：自动生成 blur 控制信号（缓存复用）
+### 例 11：自动生成 blur 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -198,7 +193,7 @@ python scripts/run_batch.py \
   --blur_sigma 10
 ```
 
-### 例 13：多控制信号（combo）
+### 例 12：多控制信号（combo）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -210,7 +205,7 @@ python scripts/run_batch.py \
   --vis_control_weight 0.1
 ```
 
-### 例 14：开启机械臂替换（qwen3vl + sam3）
+### 例 13：开启机械臂替换（qwen3vl + sam3）
 在 Step5 Transfer 输出完成后，自动调用 `robot_arm_swap` 生成机械臂替换版本（两个输出都会保留）。
 ```bash
 python scripts/run_batch.py \

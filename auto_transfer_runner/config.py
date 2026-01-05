@@ -93,7 +93,13 @@ class PreprocessConfig:
     pre_chunk_clip_where: str = "tail"
     pre_chunk_max_adjust: int = 40
     pre_chunk_force_chunks: int | None = None
-    pre_chunk_force_chunks: int | None = None
+
+
+@dataclass(frozen=True)
+class PostprocessConfig:
+    """Postprocess config (restore duration after Transfer)."""
+    restore_duration: bool = False
+    restore_mode: str = "speed"  # speed | minterpolate
 
 
 @dataclass(frozen=True)
@@ -178,6 +184,7 @@ class GlobalConfig:
     seg: SegConfig
     cv: CvControlConfig
     preprocess: PreprocessConfig
+    postprocess: PostprocessConfig
     transfer: TransferConfig
     arm_swap: ArmSwapConfig
     cache: CacheConfig
@@ -191,6 +198,7 @@ DEPTH_DEFAULTS = DepthConfig()
 SEG_DEFAULTS = SegConfig()
 CV_DEFAULTS = CvControlConfig()
 PREPROCESS_DEFAULTS = PreprocessConfig()
+POSTPROCESS_DEFAULTS = PostprocessConfig()
 TRANSFER_DEFAULTS = TransferConfig()
 ARM_SWAP_DEFAULTS = ArmSwapConfig()
 CACHE_DEFAULTS = CacheConfig()
