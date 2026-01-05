@@ -151,7 +151,7 @@ python scripts/run_batch.py \
   --interactive_replace
 ```
 
-### 例 10：预处理对齐 chunk 帧数（clip/down）
+### 例 10：预处理对齐 chunk 帧数（clip/speed）
 ```bash
 python scripts/run_batch.py \
   --input_dir /path/to/mp4s \
@@ -162,6 +162,11 @@ python scripts/run_batch.py \
   --pre_chunk_policy down \
   --pre_chunk_clip_where tail
 ```
+可用参数说明：
+- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=变速补帧，保持输出 fps=16）。
+- `--pre_chunk_policy {down,up}`：down 减少 chunk，up 增加 chunk（必要时补帧/减速）。
+- `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
+- `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
 
 ### 例 11：自动生成 edge 控制信号（缓存复用）
 ```bash
