@@ -88,6 +88,12 @@ class PreprocessConfig:
     width: int | None = None
     height: int | None = None
     keep_aspect: bool = True
+    pre_chunk_mode: str = "none"
+    pre_chunk_policy: str = "down"
+    pre_chunk_clip_where: str = "tail"
+    pre_chunk_max_adjust: int = 40
+    pre_chunk_force_chunks: int | None = None
+    pre_chunk_force_chunks: int | None = None
 
 
 @dataclass(frozen=True)
