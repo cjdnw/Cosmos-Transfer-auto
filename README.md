@@ -78,6 +78,16 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
+### 例 2.5：按 task.parquet 分组抽样（每个任务最多选 N 个）
+`task.parquet` 默认位于 `meta/` 目录下，视频位于 `videos/` 子目录；程序会向上查找同级 `meta/task.parquet` 并按内容分组。
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --selective_task 3
+```
+
 ### 例 3：自动生成 seg 控制信号（缓存复用）
 ```bash
 python scripts/run_batch.py \

@@ -6,7 +6,7 @@ import multiprocessing as mp
 import os
 import random
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 from .config import (
     DEFAULT_AUTOPROMPT_ROOT,
@@ -65,11 +65,55 @@ def now_tag() -> str:
     return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-def pick_videos(input_dir: Path, num_videos: int, shuffle: bool) -> List[Path]:
+def _task_parquet_for_video(video_path: Path, input_root: Path) -> Optional[Path]:
+    """Find task.parquet by searching parents for a sibling meta/task.parquet."""
+    for parent in [video_path.parent, *video_path.parents[1:]]:
+        try:
+            parent.relative_to(input_root)
+        except ValueError:
+            break
+        candidate = parent / "meta" / "task.parquet"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _hash_file(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def pick_videos(
+    input_dir: Path,
+    num_videos: int,
+    shuffle: bool,
+    selective_task_max: int,
+) -> List[Path]:
     """Select unique input videos from a folder tree (recursive)."""
     videos = sorted([p for p in input_dir.rglob("*.mp4") if p.is_file()])
     if shuffle:
         random.shuffle(videos)
+    if selective_task_max > 0:
+        max_per_task = selective_task_max
+        selected: List[Path] = []
+        task_counts: Dict[str, int] = {}
+        for video in videos:
+            task_parquet = _task_parquet_for_video(video, input_dir)
+            if task_parquet is None:
+                selected.append(video)
+                continue
+            task_key = _hash_file(task_parquet)
+            task_counts.setdefault(task_key, 0)
+            if task_counts[task_key] >= max_per_task:
+                continue
+            task_counts[task_key] += 1
+            selected.append(video)
+        videos = selected
     if num_videos and num_videos > 0:
         videos = videos[:num_videos]
     return videos
@@ -265,6 +309,15 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--input_dir", required=True, help="Directory that contains source .mp4 files (recursive)")
     ap.add_argument("--num_videos", type=int, default=0, help="How many unique input videos to process; 0 = all")
     ap.add_argument("--shuffle", action="store_true", help="Shuffle videos before selecting the first N")
+    ap.add_argument(
+        "--selective_task",
+        type=int,
+        nargs="?",
+        const=3,
+        default=0,
+        metavar="N",
+        help="Select videos by task.parquet content; keep at most N videos per task (default: 3)",
+    )
     ap.add_argument("--gpus", type=str, default="", help="GPU list, e.g. 0,1,2,3; empty = 0")
     ap.add_argument("--console", action="store_true", help="Print high-level progress to console (stdout)")
 
@@ -516,7 +569,7 @@ def main(argv: List[str] | None = None) -> None:
 
     cfg.repos.work_dir.mkdir(parents=True, exist_ok=True)
 
-    videos = pick_videos(input_dir, args.num_videos, args.shuffle)
+    videos = pick_videos(input_dir, args.num_videos, args.shuffle, args.selective_task)
     if not videos:
         raise RuntimeError("No mp4 files found in input_dir.")
 
