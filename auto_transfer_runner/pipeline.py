@@ -395,15 +395,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         output_dir=paths.output_dir,
                         output_base_dir=arm_swap_output_base_dir,
                         workdir=arm_swap_workdir,
-                        orig_video=job.video_path,
-                        fps=cfg.arm_swap.fps,
-                        width=cfg.arm_swap.width,
+                        orig_video=preprocessed_video or job.video_path,
                         qwen_prompt=cfg.arm_swap.qwen_prompt,
-                        split_process=cfg.arm_swap.split_process,
-                        sam3_auto_scale=cfg.arm_swap.sam3_auto_scale,
                         env=env,
                         log_path=paths.log_path,
-                        skip_if_output_exists=cfg.arm_swap.skip_if_output_exists,
                     ),
                 )
                 append_log(paths.log_path, f"[DONE] arm_swap_output={arm_swap_output}")

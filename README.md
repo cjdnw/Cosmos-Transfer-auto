@@ -190,15 +190,21 @@ python scripts/run_batch.py \
   --gpus 0 \
   --control_type depth \
   --enable_arm_swap \
-  --arm_swap_root /mnt/data/ganrunhe/robot_arm_swap_project \
-  --arm_swap_env robot_arm_swap \
-  --arm_swap_output_root /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm \
-  --arm_swap_workdir_root /mnt/data/ganrunhe/auto_transfer/arm_swap_cache \
-  --arm_swap_fps 30 \
-  --arm_swap_width 1280 \
   --arm_swap_prompt "robotic arm"
 ```
-说明：Step6 默认拆成两个进程（Qwen3 -> bbox JSON，SAM3 -> swap）以降低显存峰值；如需恢复单进程旧行为，使用 `--arm_swap_no_split`。
+Step6 会在 `conda` 环境 `arm_swap` 下调用：
+```
+python -m robot_arm_swap \
+  --orig 预处理后的视频 \
+  --skin Transfer 输出视频 \
+  --workdir /mnt/data/ganrunhe/auto_transfer/arm_swap_cache \
+  --fps <与预处理视频一致> \
+  --width <与预处理视频一致> \
+  --qwen-prompt "robotic arm" \
+  --out /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/<output_video_name>.mp4
+```
+执行完成后会自动清空 workdir。
+`--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
 
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
@@ -412,7 +418,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ## 更新记录
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
 - 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
-- 2026-1-4：Step6 机械臂替换默认拆分 Qwen3/SAM3 两个子进程以降低显存峰值，新增 `--arm_swap_no_split` 可恢复单进程旧行为。
+- 2026-1-4：Step6 机械臂替换切换为单次 `robot_arm_swap` 调用，固定使用 conda 环境 `arm_swap`。
 - 2026-1-4：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
 - 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
 - 2025-12-31：Step2 在遇到 PyAV 缺失时自动用 ffmpeg 转码视频并重试，避免任务直接失败。
