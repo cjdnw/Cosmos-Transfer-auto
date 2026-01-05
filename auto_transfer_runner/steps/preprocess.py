@@ -23,17 +23,25 @@ def preprocess_video(
     *,
     video_path: Path,
     settings: PreprocessSettings,
+    output_root: Path,
+    input_root: Path | None,
     env: Dict[str, str],
     log_path: Path,
     lock_timeout_sec: int,
     stale_lock_sec: int,
 ) -> Path:
-    output_path = _build_output_path(video_path, settings)
+    output_path = _build_output_path(
+        video_path,
+        settings,
+        output_root=output_root,
+        input_root=input_root,
+    )
     if output_path.exists() and output_path.stat().st_size > 0:
         append_log(log_path, f"[PREPROCESS CACHE HIT] {output_path}")
         console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
         return output_path
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = output_path.with_name(f".{output_path.name}.lock")
     lock_cfg = FileLockConfig(timeout_sec=lock_timeout_sec, stale_lock_sec=stale_lock_sec)
 
@@ -43,7 +51,6 @@ def preprocess_video(
             console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
             return output_path
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = output_path.with_name(f".{output_path.stem}__tmp{output_path.suffix}")
         safe_unlink(tmp_path, log_path=log_path)
 
@@ -97,14 +104,27 @@ def _evenize(value: int | None) -> int | None:
     return max(2, value - 1)
 
 
-def _build_output_path(video_path: Path, settings: PreprocessSettings) -> Path:
+def _build_output_path(
+    video_path: Path,
+    settings: PreprocessSettings,
+    *,
+    output_root: Path,
+    input_root: Path | None,
+) -> Path:
     width = _evenize(settings.width)
     height = _evenize(settings.height)
     w_label = str(width) if width is not None else "auto"
     h_label = str(height) if height is not None else "auto"
     aspect_label = "ka1" if settings.keep_aspect else "ka0"
     name = f"{video_path.stem}__pre_fps{settings.fps}_w{w_label}_h{h_label}_{aspect_label}{video_path.suffix}"
-    return video_path.with_name(name)
+    relative_dir = None
+    if input_root is not None:
+        try:
+            relative_dir = video_path.parent.relative_to(input_root)
+        except ValueError:
+            relative_dir = None
+    output_dir = output_root if relative_dir is None else output_root / relative_dir
+    return output_dir / name
 
 
 def _build_scale_filter(*, width: int | None, height: int | None, keep_aspect: bool) -> str:
