@@ -28,31 +28,13 @@ def _parse_fraction(value: str) -> float:
     return float(value)
 
 
-def _find_transfer_output_mp4(output_dir: Path) -> Path:
+def find_transfer_output_mp4(output_dir: Path) -> Path:
     mp4s: List[Path] = [p for p in output_dir.glob("*.mp4") if p.is_file()]
     if not mp4s:
         raise FileNotFoundError(f"No mp4 outputs found in transfer output_dir: {output_dir}")
-    candidates = [p for p in mp4s if "__post_restore_" not in p.stem]
-    if candidates:
-        mp4s = candidates
     if len(mp4s) > 1:
         return max(mp4s, key=lambda p: p.stat().st_size)
     return mp4s[0]
-
-
-def find_restored_output(output_dir: Path, *, mode: str, fps: int) -> Path | None:
-    suffix = f"__post_restore_{mode}_fps{fps}"
-    matches = [p for p in output_dir.glob(f"*{suffix}.mp4") if p.is_file()]
-    if not matches:
-        return None
-    if len(matches) > 1:
-        return max(matches, key=lambda p: p.stat().st_size)
-    return matches[0]
-
-
-def _build_restore_output_path(input_path: Path, *, mode: str, fps: int) -> Path:
-    suffix = f"__post_restore_{mode}_fps{fps}"
-    return input_path.with_name(f"{input_path.stem}{suffix}{input_path.suffix}")
 
 
 def probe_video_stats(video_path: Path, *, env: Dict[str, str], log_path: Path) -> VideoStats:
@@ -119,14 +101,8 @@ def restore_duration(
     if original_stats.duration_sec is None or original_stats.duration_sec <= 0:
         raise ValueError("Original duration is required for post-restore.")
 
-    existing = find_restored_output(output_dir, mode=mode, fps=pre_fps)
-    if existing and existing.stat().st_size > 0:
-        append_log(log_path, f"[POST_RESTORE CACHE HIT] {existing}")
-        console_print(f"[POST_RESTORE CACHE HIT] {existing.name}")
-        return existing
-
-    transfer_mp4 = _find_transfer_output_mp4(output_dir)
-    output_path = _build_restore_output_path(transfer_mp4, mode=mode, fps=pre_fps)
+    transfer_mp4 = find_transfer_output_mp4(output_dir)
+    tmp_path = transfer_mp4.with_name(f".{transfer_mp4.stem}__post_restore_tmp{transfer_mp4.suffix}")
 
     current_stats = probe_video_stats(transfer_mp4, env=env, log_path=log_path)
     if current_stats.duration_sec is None or current_stats.duration_sec <= 0:
@@ -161,7 +137,7 @@ def restore_duration(
         "yuv420p",
         "-movflags",
         "+faststart",
-        str(output_path),
+        str(tmp_path),
     ]
     run_cmd(
         cmd,
@@ -170,16 +146,17 @@ def restore_duration(
         log_path=log_path,
         title="STEP5.5 Post-restore duration",
     )
+    tmp_path.replace(transfer_mp4)
     append_log(
         log_path,
         (
             "[POST_RESTORE DONE] "
             f"mode={mode} target_duration={original_stats.duration_sec:.3f} "
             f"current_duration={current_stats.duration_sec:.3f} "
-            f"ratio={ratio:.6f} target_frames={target_frames} output={output_path}"
+            f"ratio={ratio:.6f} target_frames={target_frames} output={transfer_mp4}"
         ),
     )
     console_print(
-        f"[POST_RESTORE DONE] mode={mode} target_frames={target_frames} output={output_path.name}",
+        f"[POST_RESTORE DONE] mode={mode} target_frames={target_frames} output={transfer_mp4.name}",
     )
-    return output_path
+    return transfer_mp4

@@ -19,7 +19,7 @@ from .steps.json_spec import (
 )
 from .steps.inference import run_transfer_inference
 from .steps.arm_swap import run_arm_swap
-from .steps.postprocess import probe_video_stats, restore_duration, VideoStats, find_restored_output
+from .steps.postprocess import probe_video_stats, restore_duration, VideoStats, find_transfer_output_mp4
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
@@ -100,13 +100,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "output_dir": str(paths.output_dir),
                 "arm_swap_output": None,
                 "post_restore_output": (
-                    str(
-                        find_restored_output(
-                            paths.output_dir,
-                            mode=cfg.postprocess.restore_mode,
-                            fps=cfg.preprocess.fps,
-                        ),
-                    )
+                    str(find_transfer_output_mp4(paths.output_dir))
                     if cfg.postprocess.restore_duration
                     else None
                 ),
@@ -470,13 +464,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "output_dir": str(paths.output_dir),
                 "arm_swap_output": str(arm_swap_output) if arm_swap_output is not None else None,
                 "post_restore_output": (
-                    str(
-                        find_restored_output(
-                            paths.output_dir,
-                            mode=cfg.postprocess.restore_mode,
-                            fps=cfg.preprocess.fps,
-                        ),
-                    )
+                    str(find_transfer_output_mp4(paths.output_dir))
                     if cfg.postprocess.restore_duration
                     else None
                 ),
@@ -564,14 +552,8 @@ def _bootstrap_checkpoints(
 
     if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
         mark_done(step5_marker)
-        if cfg.postprocess.restore_duration:
-            restored = find_restored_output(
-                paths.output_dir,
-                mode=cfg.postprocess.restore_mode,
-                fps=cfg.preprocess.fps,
-            )
-            if restored is not None:
-                mark_done(step5_restore_marker)
+        if cfg.postprocess.restore_duration and marker_exists(step5_restore_marker):
+            mark_done(step5_restore_marker)
 
     if cfg.arm_swap.enable:
         if paths.output_dir.exists() and any(paths.output_dir.iterdir()):

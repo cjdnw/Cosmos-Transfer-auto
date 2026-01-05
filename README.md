@@ -62,8 +62,8 @@ python scripts/run_batch.py \
 - `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
 - `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，会忽略 clip/policy/clip_where）。
 
-Transfer 后恢复时长（输出保持 `pre_fps`）：
-- `--post_restore_duration`：在 Step5 后把输出时长拉回原视频时长。
+Transfer 后恢复时长（输出保持 `pre_fps`，直接覆盖 Transfer 输出 mp4）：
+- `--post_restore_duration`：在 Step5 后把输出时长拉回原视频时长（覆盖原输出文件）。
 - `--post_restore_mode {speed,minterpolate}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）。
 
 ## 推理加速：resolution
