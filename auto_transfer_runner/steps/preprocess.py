@@ -23,6 +23,7 @@ class PreprocessSettings:
     pre_chunk_policy: str
     pre_chunk_clip_where: str
     pre_chunk_max_adjust: int
+    pre_chunk_force_chunks: int | None
     num_video_frames_per_chunk: int
     num_conditional_frames: int
 
@@ -165,8 +166,9 @@ def _align_preprocess_chunks(
     lock_timeout_sec: int,
     stale_lock_sec: int,
 ) -> Path:
+    force_chunks = settings.pre_chunk_force_chunks
     mode = settings.pre_chunk_mode
-    if mode == "none":
+    if force_chunks is None and mode == "none":
         return pre_video_path
 
     total_frames = _probe_frame_count(pre_video_path, env=env, log_path=log_path)
@@ -178,21 +180,31 @@ def _align_preprocess_chunks(
         console_print("[PRE_CHUNK SKIP] invalid chunk config")
         return pre_video_path
 
-    if total_frames <= L:
-        n_up = 1
-        n_down = 1
+    if force_chunks is not None:
+        mode = "speed"
+        n = force_chunks
+        policy_label = "force"
     else:
-        n_up = 1 + math.ceil((total_frames - L) / S)
-        n_down = 1 + math.floor((total_frames - L) / S)
+        if total_frames <= L:
+            n_up = 1
+            n_down = 1
+        else:
+            n_up = 1 + math.ceil((total_frames - L) / S)
+            n_down = 1 + math.floor((total_frames - L) / S)
 
-    if settings.pre_chunk_policy == "up":
-        n = n_up
-    else:
-        n = n_down
+        if settings.pre_chunk_policy == "up":
+            n = n_up
+        else:
+            n = n_down
+        policy_label = settings.pre_chunk_policy
 
     target_frames = L + (n - 1) * S
     drop = total_frames - target_frames
-    if settings.pre_chunk_max_adjust is not None and abs(drop) > settings.pre_chunk_max_adjust:
+    if (
+        force_chunks is None
+        and settings.pre_chunk_max_adjust is not None
+        and abs(drop) > settings.pre_chunk_max_adjust
+    ):
         append_log(
             log_path,
             (
@@ -215,7 +227,7 @@ def _align_preprocess_chunks(
     aligned_path = _build_aligned_output_path(
         pre_video_path,
         mode=mode,
-        policy=settings.pre_chunk_policy,
+        policy=policy_label,
         L=L,
         C=C,
         n=n,
@@ -328,7 +340,7 @@ def _align_preprocess_chunks(
 
         log_parts = [
             f"[PRE_CHUNK DONE] mode={mode}",
-            f"policy={settings.pre_chunk_policy}",
+            f"policy={policy_label}",
             f"T={total_frames}",
             f"T_target={target_frames}",
             f"drop={drop}",

@@ -141,6 +141,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         pre_chunk_policy=args.pre_chunk_policy,
         pre_chunk_clip_where=args.pre_chunk_clip_where,
         pre_chunk_max_adjust=args.pre_chunk_max_adjust,
+        pre_chunk_force_chunks=args.pre_chunk_force_chunks,
     )
 
     transfer = TransferConfig(
@@ -396,6 +397,12 @@ def main(argv: List[str] | None = None) -> None:
         default=PREPROCESS_DEFAULTS.pre_chunk_max_adjust,
         help="Skip pre-chunk alignment when |T-T_target| exceeds this value (default: 40)",
     )
+    ap.add_argument(
+        "--pre_chunk_force_chunks",
+        type=int,
+        default=PREPROCESS_DEFAULTS.pre_chunk_force_chunks,
+        help="Force chunk count (uses speed mode and ignores clip/policy options)",
+    )
 
     # Step4/5 parameters
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
@@ -496,6 +503,8 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--pre_width must be >= 1")
     if args.pre_height is not None and args.pre_height < 1:
         raise ValueError("--pre_height must be >= 1")
+    if args.pre_chunk_force_chunks is not None and args.pre_chunk_force_chunks < 1:
+        raise ValueError("--pre_chunk_force_chunks must be >= 1")
     if args.resolution not in RESOLUTION_CHOICES:
         raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
 

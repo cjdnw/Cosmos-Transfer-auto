@@ -141,6 +141,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     pre_chunk_policy=cfg.preprocess.pre_chunk_policy,
                     pre_chunk_clip_where=cfg.preprocess.pre_chunk_clip_where,
                     pre_chunk_max_adjust=cfg.preprocess.pre_chunk_max_adjust,
+                    pre_chunk_force_chunks=cfg.preprocess.pre_chunk_force_chunks,
                     num_video_frames_per_chunk=cfg.transfer.num_video_frames_per_chunk,
                     num_conditional_frames=cfg.transfer.num_conditional_frames,
                 ),
