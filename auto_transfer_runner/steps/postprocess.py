@@ -75,74 +75,6 @@ def probe_video_dimensions(video_path: Path, *, env: Dict[str, str], log_path: P
     return width, height
 
 
-def ffmpeg_pad_video(
-    input_path: Path,
-    output_path: Path,
-    pad_w: int,
-    pad_h: int,
-    *,
-    env: Dict[str, str],
-    log_path: Path,
-) -> None:
-    filters = f"pad={pad_w}:{pad_h}:(ow-iw)/2:(oh-ih)/2"
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-vf",
-        filters,
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        str(output_path),
-    ]
-    run_cmd(
-        cmd,
-        cwd=None,
-        env=env or dict(os.environ),
-        log_path=log_path,
-        title="STEP5.5 Post-restore RIFE pad",
-    )
-
-
-def ffmpeg_crop_video(
-    input_path: Path,
-    output_path: Path,
-    orig_w: int,
-    orig_h: int,
-    *,
-    env: Dict[str, str],
-    log_path: Path,
-) -> None:
-    filters = f"crop={orig_w}:{orig_h}:(in_w-{orig_w})/2:(in_h-{orig_h})/2"
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-vf",
-        filters,
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        str(output_path),
-    ]
-    run_cmd(
-        cmd,
-        cwd=None,
-        env=env or dict(os.environ),
-        log_path=log_path,
-        title="STEP5.5 Post-restore RIFE crop",
-    )
-
-
 def find_transfer_output_mp4(output_dir: Path) -> Path:
     mp4s: List[Path] = [p for p in output_dir.glob("*.mp4") if p.is_file()]
     if not mp4s:
@@ -250,10 +182,9 @@ def restore_duration(
             shutil.rmtree(rife_workdir, ignore_errors=True)
         rife_workdir.mkdir(parents=True, exist_ok=True)
         speed_path = rife_workdir / f"{transfer_mp4.stem}__post_restore_speed{transfer_mp4.suffix}"
-        pad_path = rife_workdir / f"{transfer_mp4.stem}__post_restore_pad{transfer_mp4.suffix}"
-        rife_output_path = rife_workdir / f"{transfer_mp4.stem}__post_restore_rife{transfer_mp4.suffix}"
-        crop_path = rife_workdir / f"{transfer_mp4.stem}__post_restore_crop{transfer_mp4.suffix}"
-        final_output = rife_output_path
+        input_frames_dir = rife_workdir / "input_frames"
+        output_frames_dir = rife_workdir / "output_frames"
+        final_output = rife_workdir / f"{transfer_mp4.stem}__post_restore_final{transfer_mp4.suffix}"
         try:
             safe_unlink(speed_path, log_path=log_path)
             cmd = [
@@ -282,19 +213,45 @@ def restore_duration(
             )
             orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
             pad_w, pad_h = get_pad_dims(orig_w, orig_h, align=32)
-            rife_input_path = speed_path
+            target_frames = round(original_stats.duration_sec * pre_fps)
+            if input_frames_dir.exists():
+                shutil.rmtree(input_frames_dir, ignore_errors=True)
+            if output_frames_dir.exists():
+                shutil.rmtree(output_frames_dir, ignore_errors=True)
+            input_frames_dir.mkdir(parents=True, exist_ok=True)
+            output_frames_dir.mkdir(parents=True, exist_ok=True)
+            pad_filter = None
             if pad_w != orig_w or pad_h != orig_h:
-                safe_unlink(pad_path, log_path=log_path)
-                ffmpeg_pad_video(
-                    speed_path,
-                    pad_path,
-                    pad_w,
-                    pad_h,
-                    env=env,
-                    log_path=log_path,
-                )
-                rife_input_path = pad_path
-            rife_cmd = [rife_bin, "-i", str(rife_input_path), "-o", str(rife_output_path), "-f", str(pre_fps)]
+                pad_filter = f"pad=ceil(iw/32)*32:ceil(ih/32)*32:(ow-iw)/2:(oh-ih)/2"
+            extract_cmd = [
+                "ffmpeg",
+                "-y",
+                "-vsync",
+                "0",
+                "-i",
+                str(speed_path),
+            ]
+            if pad_filter:
+                extract_cmd += ["-vf", pad_filter]
+            extract_cmd.append(str(input_frames_dir / "%08d.png"))
+            run_cmd(
+                extract_cmd,
+                cwd=None,
+                env=env or dict(os.environ),
+                log_path=log_path,
+                title="STEP5.5 Post-restore RIFE extract frames",
+            )
+            rife_cmd = [
+                rife_bin,
+                "-i",
+                str(input_frames_dir),
+                "-o",
+                str(output_frames_dir),
+                "-n",
+                str(target_frames),
+                "-f",
+                "%08d.png",
+            ]
             if rife_model:
                 rife_cmd += ["-m", rife_model]
             rife_env = dict(env) if env is not None else dict(os.environ)
@@ -307,17 +264,33 @@ def restore_duration(
                 log_path=log_path,
                 title="STEP5.5 Post-restore RIFE interpolation",
             )
+            encode_cmd = [
+                "ffmpeg",
+                "-y",
+                "-framerate",
+                str(pre_fps),
+                "-i",
+                str(output_frames_dir / "%08d.png"),
+            ]
             if pad_w != orig_w or pad_h != orig_h:
-                safe_unlink(crop_path, log_path=log_path)
-                ffmpeg_crop_video(
-                    rife_output_path,
-                    crop_path,
-                    orig_w,
-                    orig_h,
-                    env=env,
-                    log_path=log_path,
-                )
-                final_output = crop_path
+                crop_filter = f"crop={orig_w}:{orig_h}:(in_w-{orig_w})/2:(in_h-{orig_h})/2"
+                encode_cmd += ["-vf", crop_filter]
+            encode_cmd += [
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(final_output),
+            ]
+            run_cmd(
+                encode_cmd,
+                cwd=None,
+                env=env or dict(os.environ),
+                log_path=log_path,
+                title="STEP5.5 Post-restore RIFE encode",
+            )
             shutil.move(str(final_output), str(transfer_mp4))
         finally:
             shutil.rmtree(rife_workdir, ignore_errors=True)
