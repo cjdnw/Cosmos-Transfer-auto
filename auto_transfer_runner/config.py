@@ -100,8 +100,8 @@ class PostprocessConfig:
     """Postprocess config (restore duration after Transfer)."""
     restore_duration: bool = False
     restore_mode: str = "speed"  # speed | minterpolate | rife
-    rife_bin: str = "rife-ncnn-vulkan"
-    rife_model: str | None = None
+    rife_bin: str = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan"
+    rife_model: str | None = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6"
 
 
 @dataclass(frozen=True)
