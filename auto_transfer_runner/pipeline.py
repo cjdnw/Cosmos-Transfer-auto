@@ -19,7 +19,13 @@ from .steps.json_spec import (
 )
 from .steps.inference import run_transfer_inference
 from .steps.arm_swap import run_arm_swap
-from .steps.postprocess import probe_video_stats, restore_duration, VideoStats, find_transfer_output_mp4
+from .steps.postprocess import (
+    probe_video_stats,
+    restore_duration,
+    VideoStats,
+    find_transfer_output_mp4,
+    has_transfer_output_mp4,
+)
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
@@ -84,7 +90,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         job=job,
     )
 
-    if marker_exists(job_done_marker) and paths.output_dir.exists() and any(paths.output_dir.iterdir()):
+    if marker_exists(job_done_marker) and has_transfer_output_mp4(paths.output_dir):
         append_log(paths.log_path, f"[SKIP] job checkpoint done: {job_done_marker}")
         console_print(f"[SKIP] job already done (checkpoint): {job.video_path.name} variant={job.variant_idx}")
         append_manifest(
@@ -375,7 +381,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         console_print(f"[STEP4] json={paths.json_path.name}")
 
         # Step5: inference
-        if marker_exists(step5_marker) and paths.output_dir.exists() and any(paths.output_dir.iterdir()):
+        if marker_exists(step5_marker) and has_transfer_output_mp4(paths.output_dir):
             append_log(paths.log_path, f"[SKIP] step5 checkpoint exists: {step5_marker}")
             console_print(f"[SKIP] step5 inference (checkpoint): {paths.output_dir.name}")
         else:
@@ -395,7 +401,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 
         # Step5.5: post-restore duration
         if cfg.postprocess.restore_duration:
-            if marker_exists(step5_restore_marker):
+            if marker_exists(step5_restore_marker) and has_transfer_output_mp4(paths.output_dir):
                 append_log(paths.log_path, f"[SKIP] step5.5 checkpoint exists: {step5_restore_marker}")
                 console_print(f"[SKIP] step5.5 post-restore (checkpoint): {paths.output_dir.name}")
             else:
@@ -553,13 +559,13 @@ def _bootstrap_checkpoints(
         mark_done(step3_marker)
         mark_done(step4_marker)
 
-    if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
+    if has_transfer_output_mp4(paths.output_dir):
         mark_done(step5_marker)
         if cfg.postprocess.restore_duration and marker_exists(step5_restore_marker):
             mark_done(step5_restore_marker)
 
     if cfg.arm_swap.enable:
-        if paths.output_dir.exists() and any(paths.output_dir.iterdir()):
+        if has_transfer_output_mp4(paths.output_dir):
             arm_swap_output_base_dir = make_output_dir(
                 cfg.arm_swap.output_root,
                 input_root=input_root,

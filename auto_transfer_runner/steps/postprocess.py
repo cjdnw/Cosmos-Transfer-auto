@@ -84,6 +84,15 @@ def find_transfer_output_mp4(output_dir: Path) -> Path:
     return mp4s[0]
 
 
+def has_transfer_output_mp4(output_dir: Path) -> bool:
+    if not output_dir.exists():
+        return False
+    for mp4 in output_dir.glob("*.mp4"):
+        if mp4.is_file() and mp4.stat().st_size > 0:
+            return True
+    return False
+
+
 def probe_video_stats(video_path: Path, *, env: Dict[str, str], log_path: Path) -> VideoStats:
     cmd = [
         "ffprobe",
