@@ -151,6 +151,7 @@ def restore_duration(
     original_stats: VideoStats,
     pre_fps: int,
     mode: str,
+    fps_mode: str,
     rife_bin: str | None,
     rife_model: str | None,
     env: Dict[str, str],
@@ -167,12 +168,20 @@ def restore_duration(
         raise RuntimeError("Failed to probe current duration for post-restore.")
 
     ratio = original_stats.duration_sec / current_stats.duration_sec
-    target_frames = round(original_stats.duration_sec * pre_fps)
+    target_fps: float
+    if fps_mode == "original":
+        target_fps = original_stats.fps or 0.0
+        if target_fps <= 0:
+            append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
+            target_fps = float(pre_fps)
+    else:
+        target_fps = float(pre_fps)
+    target_frames = round(original_stats.duration_sec * target_fps)
 
     if mode == "speed":
-        filters = f"setpts=PTS*{ratio:.6f},fps={pre_fps}"
+        filters = f"setpts=PTS*{ratio:.6f},fps={target_fps}"
     elif mode == "minterpolate":
-        filters = f"setpts=PTS*{ratio:.6f},minterpolate=fps={pre_fps}:mi_mode=mci"
+        filters = f"setpts=PTS*{ratio:.6f},minterpolate=fps={target_fps}:mi_mode=mci"
     elif mode == "rife":
         if not rife_bin:
             raise ValueError("rife_bin must be set when post_restore_mode=rife")
@@ -213,7 +222,7 @@ def restore_duration(
             )
             orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
             pad_w, pad_h = get_pad_dims(orig_w, orig_h, align=32)
-            target_frames = round(original_stats.duration_sec * pre_fps)
+            target_frames = round(original_stats.duration_sec * target_fps)
             if input_frames_dir.exists():
                 shutil.rmtree(input_frames_dir, ignore_errors=True)
             if output_frames_dir.exists():
@@ -268,7 +277,7 @@ def restore_duration(
                 "ffmpeg",
                 "-y",
                 "-framerate",
-                str(pre_fps),
+                str(target_fps),
                 "-i",
                 str(output_frames_dir / "%08d.png"),
             ]

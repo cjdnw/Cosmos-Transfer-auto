@@ -46,10 +46,6 @@ python scripts/run_batch.py \
   --pre_fps 16 \
   --pre_chunk_mode speed \
   --pre_chunk_force_chunks 8 \
-  --post_restore_duration \
-  --post_restore_mode rife \
-  --rife_bin /path/to/rife-ncnn-vulkan \
-  --rife_model /path/to/rife-model \
   --resolution 480
 ```
 常用参数说明：
@@ -64,12 +60,6 @@ python scripts/run_batch.py \
 - `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
 - `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
 - `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，会忽略 clip/policy/clip_where）。
-
-Transfer 后恢复时长（输出保持 `pre_fps`，直接覆盖 Transfer 输出 mp4）：
-- `--post_restore_duration`：在 Step5 后把输出时长拉回原视频时长（覆盖原输出文件）。
-- `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
-  - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
-  - `--rife_model`：RIFE 模型目录（可选）。
 
 ## 推理加速：resolution
 `resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：
@@ -116,7 +106,27 @@ python scripts/run_batch.py \
   --seg_detect_stride 10
 ```
 
-### 例 4：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
+### 例 4：Transfer 后恢复时长（RIFE 补帧）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --post_restore_duration \
+  --post_restore_mode rife \
+  --post_restore_fps_mode pre_fps \
+  --rife_bin /path/to/rife-ncnn-vulkan \
+  --rife_model /path/to/rife-model
+```
+参数说明：
+- `--post_restore_duration`：在 Step5 后把输出时长拉回原视频时长（覆盖原输出文件）。
+- `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
+  - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
+  - `--rife_model`：RIFE 模型目录（可选）。
+- `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps。
+- `--post_restore_fps_mode original`：目标 FPS = 原始输入视频 FPS（若无法探测则回退为 pre_fps）。
+
+### 例 5：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \

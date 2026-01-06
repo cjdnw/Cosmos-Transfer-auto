@@ -414,6 +414,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         original_stats=original_stats,
                         pre_fps=cfg.preprocess.fps,
                         mode=cfg.postprocess.restore_mode,
+                        fps_mode=cfg.postprocess.restore_fps_mode,
                         rife_bin=cfg.postprocess.rife_bin,
                         rife_model=cfg.postprocess.rife_model,
                         env=env,
