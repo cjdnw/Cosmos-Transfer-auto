@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict
 
@@ -15,7 +15,7 @@ from ..utils.subprocess_utils import run_cmd
 
 @dataclass(frozen=True)
 class PreprocessSettings:
-    fps: int
+    fps: float | None
     width: int | None
     height: int | None
     keep_aspect: bool
@@ -45,12 +45,14 @@ def preprocess_video(
         output_root=output_root,
         input_root=input_root,
     )
+    effective_fps = _resolve_fps(settings.fps, video_path, env=env, log_path=log_path)
+    settings_for_align = settings if settings.fps is not None else replace(settings, fps=effective_fps)
     if output_path.exists() and output_path.stat().st_size > 0:
         append_log(log_path, f"[PREPROCESS CACHE HIT] {output_path}")
         console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
         return _align_preprocess_chunks(
             pre_video_path=output_path,
-            settings=settings,
+            settings=settings_for_align,
             env=env,
             log_path=log_path,
             lock_timeout_sec=lock_timeout_sec,
@@ -67,7 +69,7 @@ def preprocess_video(
             console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
             return _align_preprocess_chunks(
                 pre_video_path=output_path,
-                settings=settings,
+                settings=settings_for_align,
                 env=env,
                 log_path=log_path,
                 lock_timeout_sec=lock_timeout_sec,
@@ -82,7 +84,7 @@ def preprocess_video(
             height=settings.height,
             keep_aspect=settings.keep_aspect,
         )
-        filters = [scale_filter, f"fps={settings.fps}"]
+        filters = [scale_filter, f"fps={effective_fps}"]
         filter_chain = ",".join(filters)
 
         cmd = [
@@ -95,7 +97,7 @@ def preprocess_video(
             "-vsync",
             "cfr",
             "-r",
-            str(settings.fps),
+            str(effective_fps),
             "-c:v",
             "libx264",
             "-pix_fmt",
@@ -116,7 +118,7 @@ def preprocess_video(
         console_print(f"[PREPROCESS DONE] {output_path.name}")
         return _align_preprocess_chunks(
             pre_video_path=output_path,
-            settings=settings,
+            settings=settings_for_align,
             env=env,
             log_path=log_path,
             lock_timeout_sec=lock_timeout_sec,
@@ -143,10 +145,11 @@ def _build_output_path(
 ) -> Path:
     width = _evenize(settings.width)
     height = _evenize(settings.height)
+    fps_label = "orig" if settings.fps is None else str(int(settings.fps))
     w_label = str(width) if width is not None else "auto"
     h_label = str(height) if height is not None else "auto"
     aspect_label = "ka1" if settings.keep_aspect else "ka0"
-    name = f"{video_path.stem}__pre_fps{settings.fps}_w{w_label}_h{h_label}_{aspect_label}{video_path.suffix}"
+    name = f"{video_path.stem}__pre_fps{fps_label}_w{w_label}_h{h_label}_{aspect_label}{video_path.suffix}"
     relative_dir = None
     if input_root is not None:
         try:
@@ -427,3 +430,58 @@ def _build_scale_filter(*, width: int | None, height: int | None, keep_aspect: b
             return f"scale=trunc(iw/2)*2:{height}"
 
     return "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+
+
+def _parse_fraction(value: str) -> float:
+    if "/" in value:
+        num_str, den_str = value.split("/", 1)
+        den = float(den_str)
+        if den == 0:
+            return 0.0
+        return float(num_str) / den
+    return float(value)
+
+
+def _probe_video_fps(video_path: Path, *, env: Dict[str, str], log_path: Path) -> float:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=avg_frame_rate",
+        "-of",
+        "default=nokey=1:noprint_wrappers=1",
+        str(video_path),
+    ]
+    append_log(log_path, f"[PREPROCESS] ffprobe fps: {' '.join(cmd)}")
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env or dict(os.environ),
+        check=False,
+    )
+    if result.returncode != 0:
+        append_log(log_path, f"[PREPROCESS] ffprobe failed: {result.stderr.strip()}")
+        raise RuntimeError("ffprobe failed while probing fps.")
+    fps = _parse_fraction(result.stdout.strip())
+    if fps <= 0:
+        append_log(log_path, f"[PREPROCESS] invalid fps: {fps}")
+        raise RuntimeError("ffprobe returned invalid fps.")
+    append_log(log_path, f"[PREPROCESS] probed fps={fps}")
+    return fps
+
+
+def _resolve_fps(
+    fps: float | None,
+    video_path: Path,
+    *,
+    env: Dict[str, str],
+    log_path: Path,
+) -> float:
+    if fps is not None:
+        return float(fps)
+    return _probe_video_fps(video_path, env=env, log_path=log_path)

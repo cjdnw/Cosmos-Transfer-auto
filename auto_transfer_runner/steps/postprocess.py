@@ -149,7 +149,7 @@ def restore_duration(
     *,
     output_dir: Path,
     original_stats: VideoStats,
-    pre_fps: int,
+    pre_fps: int | None,
     mode: str,
     fps_mode: str,
     rife_bin: str | None,
@@ -172,10 +172,22 @@ def restore_duration(
     if fps_mode == "original":
         target_fps = original_stats.fps or 0.0
         if target_fps <= 0:
-            append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
-            target_fps = float(pre_fps)
+            if pre_fps is not None:
+                append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
+                target_fps = float(pre_fps)
+            elif current_stats.fps and current_stats.fps > 0:
+                append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to current fps")
+                target_fps = current_stats.fps
+            else:
+                raise RuntimeError("Unable to resolve target fps for post-restore.")
     else:
-        target_fps = float(pre_fps)
+        if pre_fps is None:
+            append_log(log_path, "[POST_RESTORE] pre_fps=none, fallback to original fps")
+            target_fps = original_stats.fps or 0.0
+            if target_fps <= 0:
+                raise RuntimeError("Original fps unavailable for post-restore.")
+        else:
+            target_fps = float(pre_fps)
     target_frames = round(original_stats.duration_sec * target_fps)
 
     if mode == "speed":
@@ -331,7 +343,7 @@ def restore_duration(
         "-vsync",
         "cfr",
         "-r",
-        str(pre_fps),
+        str(target_fps),
         "-c:v",
         "libx264",
         "-pix_fmt",

@@ -16,6 +16,7 @@ def run_transfer_inference(
     hf_cache: Path,
     env: Dict[str, str],
     log_path: Path,
+    disable_guardrails: bool,
     skip_if_output_exists: bool,
 ) -> None:
     """
@@ -55,4 +56,6 @@ def run_transfer_inference(
         "-o",
         str(output_dir),
     ]
+    if disable_guardrails:
+        cmd.append("--disable_guardrails")
     run_cmd(cmd, cwd=transfer_root, env=env, log_path=log_path, title="STEP5: Transfer2.5 inference")

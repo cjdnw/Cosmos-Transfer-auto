@@ -84,7 +84,7 @@ class CvControlConfig:
 @dataclass(frozen=True)
 class PreprocessConfig:
     """Video preprocessing config (CFR + resize) before inference."""
-    fps: int = 16
+    fps: int | None = 16
     width: int | None = None
     height: int | None = None
     keep_aspect: bool = True
@@ -132,6 +132,7 @@ class TransferConfig:
     edge_control_weight: float = 1.0
     seg_control_weight: float = 1.0
     vis_control_weight: float = 1.0
+    disable_guardrails: bool = False
     skip_if_output_exists: bool = True
 
 
