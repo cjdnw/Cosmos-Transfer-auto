@@ -467,6 +467,7 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
 - 2026-01-07：新增 `--post_restore_mode rife`，支持使用 RIFE 进行补帧（含 `--rife_bin`/`--rife_model`）。
 - 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
