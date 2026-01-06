@@ -193,6 +193,8 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     postprocess = PostprocessConfig(
         restore_duration=args.post_restore_duration,
         restore_mode=args.post_restore_mode,
+        rife_bin=args.rife_bin,
+        rife_model=args.rife_model,
     )
 
     transfer = TransferConfig(
@@ -475,8 +477,20 @@ def main(argv: List[str] | None = None) -> None:
         "--post_restore_mode",
         type=str,
         default=POSTPROCESS_DEFAULTS.restore_mode,
-        choices=["speed", "minterpolate"],
-        help="Post-restore mode: speed (setpts+fps) or minterpolate (smoother, slower)",
+        choices=["speed", "minterpolate", "rife"],
+        help="Post-restore mode: speed (setpts+fps), minterpolate (smoother, slower), or rife (RIFE interpolation)",
+    )
+    ap.add_argument(
+        "--rife_bin",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_bin,
+        help="RIFE binary path (used when --post_restore_mode=rife)",
+    )
+    ap.add_argument(
+        "--rife_model",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_model,
+        help="RIFE model directory (optional; used when --post_restore_mode=rife)",
     )
 
     # Step4/5 parameters
@@ -580,8 +594,8 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--pre_height must be >= 1")
     if args.pre_chunk_force_chunks is not None and args.pre_chunk_force_chunks < 1:
         raise ValueError("--pre_chunk_force_chunks must be >= 1")
-    if args.post_restore_mode not in ["speed", "minterpolate"]:
-        raise ValueError("--post_restore_mode must be speed or minterpolate")
+    if args.post_restore_mode not in ["speed", "minterpolate", "rife"]:
+        raise ValueError("--post_restore_mode must be speed/minterpolate/rife")
     if args.resolution not in RESOLUTION_CHOICES:
         raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
 

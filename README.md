@@ -18,6 +18,7 @@
 - 若指定的 `--qwen_env` 不存在，运行时会自动回退到 `qwen25vl` 并在日志中打印警告。
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
+- 可选：安装 `rife-ncnn-vulkan` 以启用 `--post_restore_mode rife`（RIFE 补帧）
 
 ## 工程结构
 - `scripts/run_batch.py`：主入口（命令行运行）
@@ -46,7 +47,9 @@ python scripts/run_batch.py \
   --pre_chunk_mode speed \
   --pre_chunk_force_chunks 8 \
   --post_restore_duration \
-  --post_restore_mode speed \
+  --post_restore_mode rife \
+  --rife_bin /path/to/rife-ncnn-vulkan \
+  --rife_model /path/to/rife-model \
   --resolution 480
 ```
 常用参数说明：
@@ -64,7 +67,9 @@ python scripts/run_batch.py \
 
 Transfer 后恢复时长（输出保持 `pre_fps`，直接覆盖 Transfer 输出 mp4）：
 - `--post_restore_duration`：在 Step5 后把输出时长拉回原视频时长（覆盖原输出文件）。
-- `--post_restore_mode {speed,minterpolate}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）。
+- `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
+  - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
+  - `--rife_model`：RIFE 模型目录（可选）。
 
 ## 推理加速：resolution
 `resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：
@@ -441,7 +446,28 @@ python scripts/run_batch.py ... --cleanup_logs
 - `replacements.json`（每个术语的替换候选列表）
 - `final.txt`（完成替换的最终 prompt）
 
+## RIFE 补帧（可选）
+用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到 `--pre_fps`。
+
+### 安装（示例：rife-ncnn-vulkan）
+1. 从 release 下载 `rife-ncnn-vulkan`（或自行编译）。
+2. 解压后保证可执行文件在 PATH，或通过 `--rife_bin` 指定完整路径。
+3. （可选）下载模型目录，并用 `--rife_model` 指定。
+
+### 调用示例
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --post_restore_duration \
+  --post_restore_mode rife \
+  --rife_bin /path/to/rife-ncnn-vulkan \
+  --rife_model /path/to/rife-model
+```
+
 ## 更新记录
+- 2026-01-07：新增 `--post_restore_mode rife`，支持使用 RIFE 进行补帧（含 `--rife_bin`/`--rife_model`）。
 - 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
 - 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。

@@ -99,7 +99,9 @@ class PreprocessConfig:
 class PostprocessConfig:
     """Postprocess config (restore duration after Transfer)."""
     restore_duration: bool = False
-    restore_mode: str = "speed"  # speed | minterpolate
+    restore_mode: str = "speed"  # speed | minterpolate | rife
+    rife_bin: str = "rife-ncnn-vulkan"
+    rife_model: str | None = None
 
 
 @dataclass(frozen=True)
