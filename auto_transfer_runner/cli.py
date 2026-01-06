@@ -127,6 +127,18 @@ def parse_gpus(gpus: str) -> List[str]:
     return [x.strip() for x in gpus.split(",") if x.strip()]
 
 
+def _parse_pre_fps(value: str) -> int | None:
+    if value.lower() == "none":
+        return None
+    try:
+        fps = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("pre_fps must be 'none' or 16") from exc
+    if fps != 16:
+        raise argparse.ArgumentTypeError("pre_fps must be 'none' or 16")
+    return fps
+
+
 def build_config(args: argparse.Namespace) -> GlobalConfig:
     repos = RepoPaths(
         work_dir=Path(args.work_dir),
@@ -223,6 +235,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         vis_control_weight=(
             args.vis_control_weight if args.vis_control_weight is not None else args.control_weight
         ),
+        disable_guardrails=args.disable_guardrails,
         skip_if_output_exists=(not args.force_infer),
     )
 
@@ -423,10 +436,10 @@ def main(argv: List[str] | None = None) -> None:
     # Step0 (preprocess)
     ap.add_argument(
         "--pre_fps",
-        type=int,
+        type=_parse_pre_fps,
         default=PREPROCESS_DEFAULTS.fps,
-        choices=[16, 30, 60],
-        help="Preprocess output fps (CFR). Choices: 16/30/60 (default: 16)",
+        metavar="{none,16}",
+        help="Preprocess output fps (CFR). Choices: none/original or 16 (default: 16)",
     )
     ap.add_argument("--pre_width", type=int, default=PREPROCESS_DEFAULTS.width,
                     help="Preprocess output width (default: keep original)")
@@ -528,6 +541,11 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--guidance", type=float, default=TRANSFER_DEFAULTS.guidance, help="guidance value in json spec")
     ap.add_argument("--num_steps", type=int, default=TRANSFER_DEFAULTS.num_steps, help="num_steps in json spec (default: 35)")
     ap.add_argument("--control_weight", type=float, default=TRANSFER_DEFAULTS.control_weight, help="control_weight in json spec")
+    ap.add_argument(
+        "--disable_guardrails",
+        action="store_true",
+        help="Pass --disable_guardrails to Cosmos-Transfer2.5 inference",
+    )
     ap.add_argument(
         "--depth_control_weight",
         type=float,

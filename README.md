@@ -49,13 +49,13 @@ python scripts/run_batch.py \
   --resolution 480
 ```
 常用参数说明：
-- `--pre_fps`：输出帧率（16/30/60，默认 16）。
+- `--pre_fps`：输出帧率（none/16，默认 16；none=原视频 fps）。
 说明：`--pre_fps` 影响预处理/控制生成，`--resolution` 决定 STEP5 推理速度（关键加速开关）。
 
 预处理/对齐选项（影响控制生成/IO，不影响 STEP5 推理 bucket）：
 - `--pre_width`/`--pre_height`：指定输出宽高，可只填一个；默认不缩放。
 - `--pre_no_keep_aspect`：关闭等比例缩放（默认保持比例）。
-- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=变速补帧，保持输出 fps=16）。
+- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=变速补帧，保持输出 fps=pre_fps）。
 - `--pre_chunk_policy {down,up}`：down 减少 chunk，up 增加 chunk（必要时补帧/减速）。
 - `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
 - `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
@@ -125,6 +125,7 @@ python scripts/run_batch.py \
   - `--rife_model`：RIFE 模型目录（可选）。
 - `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps。
 - `--post_restore_fps_mode original`：目标 FPS = 原始输入视频 FPS（若无法探测则回退为 pre_fps）。
+补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。
 
 ### 例 5：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
 ```bash
@@ -233,11 +234,11 @@ python scripts/run_batch.py \
 Step6 会在 `conda` 环境 `arm_swap` 下调用：
 ```
 python -m robot_arm_swap \
-  --orig 预处理后的视频 \
+  --orig 预处理后的视频（或原视频，见说明） \
   --skin Transfer 输出视频 \
   --workdir /mnt/data/ganrunhe/auto_transfer/arm_swap_cache \
-  --fps <与预处理视频一致> \
-  --width <与预处理视频一致> \
+  --fps <与 orig 视频一致> \
+  --width <与 orig 视频一致> \
   --qwen-prompt "robotic arm" \
   --erode 2 \
   --feather 3 \
@@ -246,6 +247,9 @@ python -m robot_arm_swap \
 ```
 执行完成后会自动清空 workdir。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
+Step6 的 `--orig` 选择规则：
+- 当 `--post_restore_fps_mode pre_fps` 且 `--pre_fps 16`：使用预处理 16fps 视频进行 swap。
+- 当 `--pre_fps none` 或 `--post_restore_fps_mode original`：使用原始输入视频进行 swap。
 
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
@@ -457,7 +461,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## RIFE 补帧（可选）
-用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到 `--pre_fps`。
+用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到 `--pre_fps`（16 或原视频 fps）。
 
 ### 安装（示例：rife-ncnn-vulkan）
 1. 从 release 下载 `rife-ncnn-vulkan`（或自行编译）。
@@ -477,6 +481,7 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-08：`--pre_fps` 缩减为 `none/16`（none=原视频 fps），Step6 arm swap 根据 `--pre_fps` 与 `--post_restore_fps_mode` 选择 orig 视频，并新增 `--disable_guardrails` 透传到 Transfer2.5。
 - 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
 - 2026-01-07：新增 `--post_restore_mode rife`，支持使用 RIFE 进行补帧（含 `--rife_bin`/`--rife_model`）。
 - 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。

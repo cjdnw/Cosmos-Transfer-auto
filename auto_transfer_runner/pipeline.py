@@ -394,6 +394,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     hf_cache=repos.hf_cache,
                     env=env,
                     log_path=paths.log_path,
+                    disable_guardrails=cfg.transfer.disable_guardrails,
                     skip_if_output_exists=cfg.transfer.skip_if_output_exists,
                 ),
             )
@@ -446,7 +447,15 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         output_dir=paths.output_dir,
                         output_base_dir=arm_swap_output_base_dir,
                         workdir=arm_swap_workdir,
-                        orig_video=preprocessed_video or job.video_path,
+                        orig_video=(
+                            preprocessed_video
+                            if (
+                                preprocessed_video is not None
+                                and cfg.postprocess.restore_fps_mode == "pre_fps"
+                                and cfg.preprocess.fps == 16
+                            )
+                            else job.video_path
+                        ),
                         qwen_prompt=cfg.arm_swap.qwen_prompt,
                         erode=cfg.arm_swap.erode,
                         feather=cfg.arm_swap.feather,
