@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 from ..utils.subprocess_utils import run_cmd
+from .postprocess import has_transfer_output_mp4
 from ..utils.logging_utils import append_log, console_print
 
 
@@ -26,8 +27,8 @@ def run_transfer_inference(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if skip_if_output_exists and any(output_dir.iterdir()):
-        append_log(log_path, f"[SKIP] output_dir not empty, skip inference: {output_dir}")
+    if skip_if_output_exists and has_transfer_output_mp4(output_dir):
+        append_log(log_path, f"[SKIP] output mp4 exists, skip inference: {output_dir}")
         console_print(f"[SKIP] inference (output exists): {output_dir.name}")
         return
 
