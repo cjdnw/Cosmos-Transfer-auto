@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
+from ..utils.cleanup import safe_unlink
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import run_cmd
 
@@ -95,6 +96,8 @@ def restore_duration(
     original_stats: VideoStats,
     pre_fps: int,
     mode: str,
+    rife_bin: str | None,
+    rife_model: str | None,
     env: Dict[str, str],
     log_path: Path,
 ) -> Path:
@@ -115,6 +118,60 @@ def restore_duration(
         filters = f"setpts=PTS*{ratio:.6f},fps={pre_fps}"
     elif mode == "minterpolate":
         filters = f"setpts=PTS*{ratio:.6f},minterpolate=fps={pre_fps}:mi_mode=mci"
+    elif mode == "rife":
+        if not rife_bin:
+            raise ValueError("rife_bin must be set when post_restore_mode=rife")
+        speed_path = transfer_mp4.with_name(f".{transfer_mp4.stem}__post_restore_speed{transfer_mp4.suffix}")
+        safe_unlink(speed_path, log_path=log_path)
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(transfer_mp4),
+            "-vf",
+            f"setpts=PTS*{ratio:.6f}",
+            "-vsync",
+            "vfr",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(speed_path),
+        ]
+        run_cmd(
+            cmd,
+            cwd=None,
+            env=env or dict(os.environ),
+            log_path=log_path,
+            title="STEP5.5 Post-restore speed adjust (RIFE prep)",
+        )
+        rife_cmd = [rife_bin, "-i", str(speed_path), "-o", str(tmp_path), "-f", str(pre_fps)]
+        if rife_model:
+            rife_cmd += ["-m", rife_model]
+        run_cmd(
+            rife_cmd,
+            cwd=None,
+            env=env or dict(os.environ),
+            log_path=log_path,
+            title="STEP5.5 Post-restore RIFE interpolation",
+        )
+        safe_unlink(speed_path, log_path=log_path)
+        tmp_path.replace(transfer_mp4)
+        append_log(
+            log_path,
+            (
+                "[POST_RESTORE DONE] "
+                f"mode={mode} target_duration={original_stats.duration_sec:.3f} "
+                f"current_duration={current_stats.duration_sec:.3f} "
+                f"ratio={ratio:.6f} target_frames={target_frames} output={transfer_mp4}"
+            ),
+        )
+        console_print(
+            f"[POST_RESTORE DONE] mode={mode} target_frames={target_frames} output={transfer_mp4.name}",
+        )
+        return transfer_mp4
     else:
         raise ValueError(f"Unknown post_restore_mode: {mode}")
 
