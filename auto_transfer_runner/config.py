@@ -101,8 +101,13 @@ class PostprocessConfig:
     restore_duration: bool = False
     restore_mode: str = "speed"  # speed | minterpolate | rife
     restore_fps_mode: str = "pre_fps"  # pre_fps | original
+    rife_backend: str = "ncnn_vulkan"  # ncnn_vulkan | pytorch_cuda
     rife_bin: str = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan"
     rife_model: str | None = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6"
+    rife_repo_dir: str | None = None
+    rife_target_fps: float | None = None
+    rife_scale: float = 1.0
+    rife_keep_audio: bool = False
 
 
 @dataclass(frozen=True)

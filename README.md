@@ -18,7 +18,7 @@
 - 若指定的 `--qwen_env` 不存在，运行时会自动回退到 `qwen25vl` 并在日志中打印警告。
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
-- 可选：安装 `rife-ncnn-vulkan` 以启用 `--post_restore_mode rife`（RIFE 补帧）
+- 可选：安装 `rife-ncnn-vulkan` 或 `ECCV2022-RIFE` 以启用 `--post_restore_mode rife`（RIFE 补帧）
 
 ## 工程结构
 - `scripts/run_batch.py`：主入口（命令行运行）
@@ -114,15 +114,21 @@ python scripts/run_batch.py \
   --control_type depth \
   --post_restore_duration \
   --post_restore_mode rife \
+  --rife_backend ncnn_vulkan \
   --post_restore_fps_mode pre_fps \
   --rife_bin /path/to/rife-ncnn-vulkan \
   --rife_model /path/to/rife-model
 ```
 参数说明：
 - `--post_restore_duration`：在 Step5 后让输出与原视频 **帧数/FPS 对齐**（覆盖原输出文件；时长可能略有误差）。
-- `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
-  - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
-  - `--rife_model`：RIFE 模型目录（可选）。
+- `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 ncnn 或 pytorch 版）。
+- `--rife_backend {ncnn_vulkan,pytorch_cuda}`：选择 RIFE 后端（默认 `ncnn_vulkan`）。
+  - `--rife_bin`：RIFE 可执行文件路径（ncnn_vulkan 后端需要；默认 `rife-ncnn-vulkan`，需在 PATH）。
+  - `--rife_model`：RIFE 模型目录（可选；ncnn_vulkan 后端使用）。
+  - `--rife_repo_dir`：ECCV2022-RIFE repo 目录（pytorch_cuda 后端需要）。
+  - `--rife_target_fps`：覆盖 RIFE 插帧目标 FPS（可选；默认用原逻辑）。
+  - `--rife_scale`：pytorch 后端的 scale（默认 1.0；可设置 0.5 加速）。
+  - `--rife_keep_audio`：pytorch 后端完成后把原视频音频轨 mux 回输出（可选）。
 - `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps；若能获取原视频帧数与 FPS，则优先与原视频完全一致。
 - `--post_restore_fps_mode original`：目标 FPS = 原始输入视频 FPS（若无法探测则回退为 pre_fps），并优先与原视频帧数一致。
 补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。
@@ -468,6 +474,12 @@ python scripts/run_batch.py ... --cleanup_logs
 2. 解压后保证可执行文件在 PATH，或通过 `--rife_bin` 指定完整路径。
 3. （可选）下载模型目录，并用 `--rife_model` 指定。
 
+### 安装（示例：ECCV2022-RIFE PyTorch/CUDA）
+1. `git clone https://github.com/hzwer/ECCV2022-RIFE.git`
+2. `cd ECCV2022-RIFE`
+3. `pip3 install -r requirements.txt`
+4. 从官方链接下载预训练 HD models，解压后放到 `train_log/*` 目录下（保持目录结构）。
+
 ### 调用示例
 ```bash
 python scripts/run_batch.py \
@@ -478,6 +490,36 @@ python scripts/run_batch.py \
   --post_restore_mode rife \
   --rife_bin /path/to/rife-ncnn-vulkan \
   --rife_model /path/to/rife-model
+```
+
+### 调用示例（pytorch_cuda 后端，无帧缓存）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --post_restore_duration \
+  --post_restore_mode rife \
+  --rife_backend pytorch_cuda \
+  --rife_repo_dir /path/to/ECCV2022-RIFE \
+  --rife_target_fps 30 \
+  --rife_scale 1.0 \
+  --rife_keep_audio
+```
+
+### 最小可复现（input.mp4 -> output.mp4）
+```bash
+python scripts/run_batch.py \
+  --input_dir /path/to/input_dir \
+  --gpus 0 \
+  --control_type depth \
+  --post_restore_duration \
+  --post_restore_mode rife \
+  --rife_backend pytorch_cuda \
+  --rife_repo_dir /path/to/ECCV2022-RIFE \
+  --rife_target_fps 30 \
+  --work_dir /tmp/auto_transfer && \
+cp /tmp/auto_transfer/output_video/**/input.mp4 /path/to/output.mp4
 ```
 
 ## 更新记录
