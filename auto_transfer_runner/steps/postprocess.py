@@ -167,40 +167,53 @@ def restore_duration(
     if current_stats.duration_sec is None or current_stats.duration_sec <= 0:
         raise RuntimeError("Failed to probe current duration for post-restore.")
 
-    ratio = original_stats.duration_sec / current_stats.duration_sec
-    target_fps: float
-    if fps_mode == "original":
-        target_fps = original_stats.fps or 0.0
-        if target_fps <= 0:
-            if pre_fps is not None:
-                append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
-                target_fps = float(pre_fps)
-            elif current_stats.fps and current_stats.fps > 0:
-                append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to current fps")
-                target_fps = current_stats.fps
-            else:
-                raise RuntimeError("Unable to resolve target fps for post-restore.")
-    else:
-        if pre_fps is None:
-            append_log(log_path, "[POST_RESTORE] pre_fps=none, fallback to original fps")
+    target_fps: float | None = None
+    target_frames: int | None = None
+    if original_stats.frame_count and original_stats.frame_count > 0:
+        if original_stats.fps and original_stats.fps > 0:
+            target_frames = original_stats.frame_count
+            target_fps = original_stats.fps
+            append_log(
+                log_path,
+                f"[POST_RESTORE] match original frames={target_frames} fps={target_fps:.6f}",
+            )
+        elif original_stats.duration_sec and original_stats.duration_sec > 0:
+            target_frames = original_stats.frame_count
+            target_fps = target_frames / original_stats.duration_sec
+            append_log(
+                log_path,
+                f"[POST_RESTORE] match original frames={target_frames} fps={target_fps:.6f} (derived)",
+            )
+
+    if target_fps is None:
+        if fps_mode == "original":
             target_fps = original_stats.fps or 0.0
             if target_fps <= 0:
-                raise RuntimeError("Original fps unavailable for post-restore.")
+                if pre_fps is not None:
+                    append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
+                    target_fps = float(pre_fps)
+                elif current_stats.fps and current_stats.fps > 0:
+                    append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to current fps")
+                    target_fps = current_stats.fps
+                else:
+                    raise RuntimeError("Unable to resolve target fps for post-restore.")
         else:
-            target_fps = float(pre_fps)
-    target_frames = round(original_stats.duration_sec * target_fps)
-    if (
-        fps_mode == "original"
-        and original_stats.frame_count
-        and original_stats.frame_count > 0
-        and original_stats.duration_sec > 0
-    ):
-        target_frames = original_stats.frame_count
-        target_fps = target_frames / original_stats.duration_sec
-        append_log(
-            log_path,
-            f"[POST_RESTORE] force frame_count={target_frames} => fps={target_fps:.6f}",
-        )
+            if pre_fps is None:
+                append_log(log_path, "[POST_RESTORE] pre_fps=none, fallback to original fps")
+                target_fps = original_stats.fps or 0.0
+                if target_fps <= 0:
+                    raise RuntimeError("Original fps unavailable for post-restore.")
+            else:
+                target_fps = float(pre_fps)
+
+    if target_fps <= 0:
+        raise RuntimeError("Target fps invalid for post-restore.")
+
+    if target_frames is None:
+        target_frames = round(original_stats.duration_sec * target_fps)
+
+    target_duration = target_frames / target_fps
+    ratio = target_duration / current_stats.duration_sec
 
     if mode == "speed":
         filters = f"setpts=PTS*{ratio:.6f},fps={target_fps}"
