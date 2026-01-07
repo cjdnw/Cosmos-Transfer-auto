@@ -206,8 +206,14 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         restore_duration=args.post_restore_duration,
         restore_mode=args.post_restore_mode,
         restore_fps_mode=args.post_restore_fps_mode,
+        rife_backend=args.rife_backend,
         rife_bin=args.rife_bin,
         rife_model=args.rife_model,
+        rife_repo_dir=args.rife_repo_dir,
+        rife_target_fps=args.rife_target_fps,
+        rife_scale=args.rife_scale,
+        rife_keep_audio=args.rife_keep_audio,
+        rife_conda_env=args.rife_conda_env,
     )
 
     transfer = TransferConfig(
@@ -502,6 +508,13 @@ def main(argv: List[str] | None = None) -> None:
         help="Post-restore fps source: pre_fps (default) or original input fps",
     )
     ap.add_argument(
+        "--rife_backend",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_backend,
+        choices=["ncnn_vulkan", "pytorch_cuda"],
+        help="RIFE backend for post-restore: ncnn_vulkan (default) or pytorch_cuda",
+    )
+    ap.add_argument(
         "--rife_bin",
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_bin,
@@ -512,6 +525,36 @@ def main(argv: List[str] | None = None) -> None:
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_model,
         help="RIFE model directory (optional; used when --post_restore_mode=rife)",
+    )
+    ap.add_argument(
+        "--rife_repo_dir",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_repo_dir,
+        help="ECCV2022-RIFE repo directory (used when --rife_backend=pytorch_cuda)",
+    )
+    ap.add_argument(
+        "--rife_target_fps",
+        type=float,
+        default=POSTPROCESS_DEFAULTS.rife_target_fps,
+        help="Override target fps for RIFE interpolation (optional)",
+    )
+    ap.add_argument(
+        "--rife_scale",
+        type=float,
+        default=POSTPROCESS_DEFAULTS.rife_scale,
+        help="RIFE scale factor for pytorch backend (default: 1.0; 0.5 speeds up)",
+    )
+    ap.add_argument(
+        "--rife_keep_audio",
+        action="store_true",
+        default=POSTPROCESS_DEFAULTS.rife_keep_audio,
+        help="Mux original audio back after RIFE interpolation (pytorch backend only)",
+    )
+    ap.add_argument(
+        "--rife_conda_env",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_conda_env,
+        help="Conda env name for PyTorch RIFE backend (default: rife)",
     )
 
     # Step4/5 parameters
@@ -622,6 +665,10 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--pre_chunk_force_chunks must be >= 1")
     if args.post_restore_mode not in ["speed", "minterpolate", "rife"]:
         raise ValueError("--post_restore_mode must be speed/minterpolate/rife")
+    if args.rife_scale <= 0:
+        raise ValueError("--rife_scale must be > 0")
+    if args.rife_target_fps is not None and args.rife_target_fps <= 0:
+        raise ValueError("--rife_target_fps must be > 0")
     if args.resolution not in RESOLUTION_CHOICES:
         raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
 
