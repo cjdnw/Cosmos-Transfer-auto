@@ -189,6 +189,18 @@ def restore_duration(
         else:
             target_fps = float(pre_fps)
     target_frames = round(original_stats.duration_sec * target_fps)
+    if (
+        fps_mode == "original"
+        and original_stats.frame_count
+        and original_stats.frame_count > 0
+        and original_stats.duration_sec > 0
+    ):
+        target_frames = original_stats.frame_count
+        target_fps = target_frames / original_stats.duration_sec
+        append_log(
+            log_path,
+            f"[POST_RESTORE] force frame_count={target_frames} => fps={target_fps:.6f}",
+        )
 
     if mode == "speed":
         filters = f"setpts=PTS*{ratio:.6f},fps={target_fps}"
