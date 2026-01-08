@@ -18,7 +18,7 @@
 - 若指定的 `--qwen_env` 不存在，运行时会自动回退到 `qwen25vl` 并在日志中打印警告。
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
-- 可选：安装 `rife-ncnn-vulkan` 以启用 `--post_restore_mode rife`（RIFE 补帧）
+- 可选：安装 `rife-ncnn-vulkan` 或 Practical-RIFE（PyTorch/CUDA）以启用 `--post_restore_mode rife`（RIFE 补帧）
 
 ## 工程结构
 - `scripts/run_batch.py`：主入口（命令行运行）
@@ -114,6 +114,7 @@ python scripts/run_batch.py \
   --control_type depth \
   --post_restore_duration \
   --post_restore_mode rife \
+  --rife_backend ncnn_vulkan \
   --post_restore_fps_mode pre_fps \
   --rife_bin /path/to/rife-ncnn-vulkan \
   --rife_model /path/to/rife-model
@@ -123,6 +124,11 @@ python scripts/run_batch.py \
 - `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
   - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
   - `--rife_model`：RIFE 模型目录（可选）。
+  - `--rife_backend {ncnn_vulkan,pytorch}`：RIFE 后端选择（默认 ncnn_vulkan）。
+  - `--rife_pytorch_repo`：Practical-RIFE 仓库路径（pytorch 后端必填）。
+  - `--rife_pytorch_model_dir`：Practical-RIFE 权重目录（默认 `<repo>/train_log`）。
+  - `--rife_scale`：RIFE scale（默认 1.0，0.5 可加速）。
+  - `--rife_keep_audio`：保留输入音频并 mux 回输出（默认 false）。
 - `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps；若能获取原视频帧数与 FPS，则优先与原视频完全一致。
 - `--post_restore_fps_mode original`：目标 FPS = 原始输入视频 FPS（若无法探测则回退为 pre_fps），并优先与原视频帧数一致。
 补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。
@@ -461,12 +467,32 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## RIFE 补帧（可选）
-用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到 `--pre_fps`（16 或原视频 fps）。
+用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到目标 FPS（默认 `--pre_fps` 或原视频 fps）。
 
 ### 安装（示例：rife-ncnn-vulkan）
 1. 从 release 下载 `rife-ncnn-vulkan`（或自行编译）。
 2. 解压后保证可执行文件在 PATH，或通过 `--rife_bin` 指定完整路径。
 3. （可选）下载模型目录，并用 `--rife_model` 指定。
+
+### 安装（Practical-RIFE，PyTorch/CUDA）
+```bash
+git clone https://github.com/hzwer/Practical-RIFE.git
+cd Practical-RIFE
+pip3 install -r requirements.txt
+mkdir -p train_log
+```
+
+### 权重下载（Practical-RIFE）
+```bash
+gdown 1zlKblGuKNatulJNFf5jdB-emp9AqGK05 -O RIFEv4.25lite_1018.zip
+gdown 1ZKjcbmt1hypiFprJPIKW0Tt0lr_2i7bg -O RIFEv4.25_0919.zip
+gdown 1Smy6gY7BkS_RzCjPCbMEy-TsX8Ma5B0R -O RIFEv4.22_lite_0819.zip
+unzip RIFEv4.25lite_1018.zip -d train_log
+# 或根据需要解压其他版本：
+# unzip RIFEv4.25_0919.zip -d train_log
+# unzip RIFEv4.22_lite_0819.zip -d train_log
+```
+确保 `train_log/` 根目录下包含 `flownet.pkl` 和若干 `*.py`（若压缩包多一层目录，请将文件移动到 `train_log/` 根目录）。
 
 ### 调用示例
 ```bash
@@ -478,6 +504,19 @@ python scripts/run_batch.py \
   --post_restore_mode rife \
   --rife_bin /path/to/rife-ncnn-vulkan \
   --rife_model /path/to/rife-model
+```
+
+### 调用示例（Practical-RIFE）
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --post_restore_duration \
+  --post_restore_mode rife \
+  --rife_backend pytorch \
+  --rife_pytorch_repo /path/to/Practical-RIFE \
+  --rife_scale 1.0
 ```
 
 ## 更新记录
