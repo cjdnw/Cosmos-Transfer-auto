@@ -542,6 +542,11 @@ def restore_duration(
             repo_dir = Path(rife_pytorch_repo)
             model_dir = Path(rife_pytorch_model_dir) if rife_pytorch_model_dir else repo_dir / "train_log"
             speed_path = transfer_mp4.with_name(f".{transfer_mp4.stem}__post_restore_speed{transfer_mp4.suffix}")
+            if current_stats.fps and current_stats.fps > 0:
+                speed_fps = current_stats.fps / ratio
+            else:
+                speed_fps = target_fps / ratio
+            append_log(log_path, f"[POST_RESTORE] pytorch speed_fps={speed_fps:.6f}")
             try:
                 safe_unlink(speed_path, log_path=log_path)
                 if rife_keep_audio and has_audio_stream(transfer_mp4, env=env, log_path=log_path):
@@ -558,6 +563,10 @@ def restore_duration(
                         "[v]",
                         "-map",
                         "[a]",
+                        "-r",
+                        f"{speed_fps:.6f}",
+                        "-vsync",
+                        "cfr",
                         "-c:v",
                         "libx264",
                         "-pix_fmt",
@@ -574,8 +583,10 @@ def restore_duration(
                         str(transfer_mp4),
                         "-vf",
                         f"setpts=PTS*{ratio:.6f}",
+                        "-r",
+                        f"{speed_fps:.6f}",
                         "-vsync",
-                        "vfr",
+                        "cfr",
                         "-c:v",
                         "libx264",
                         "-pix_fmt",
