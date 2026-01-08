@@ -12,7 +12,7 @@ from typing import Dict, List
 
 from ..utils.cleanup import safe_unlink
 from ..utils.logging_utils import append_log, console_print
-from ..utils.subprocess_utils import run_cmd
+from ..utils.subprocess_utils import conda_run, run_cmd
 
 
 @dataclass(frozen=True)
@@ -222,6 +222,7 @@ def run_rife_pytorch(
     repo_dir: Path,
     model_dir: Path,
     keep_audio: bool,
+    conda_env: str,
     env: Dict[str, str],
     log_path: Path,
 ) -> None:
@@ -247,7 +248,7 @@ def run_rife_pytorch(
     tmp_output = output_mp4.with_name(f".{output_mp4.stem}__rife_pytorch{output_mp4.suffix}")
     safe_unlink(tmp_output, log_path=log_path)
 
-    cmd = [
+    base_cmd = [
         "python3",
         str(script_path),
         "--video",
@@ -261,6 +262,7 @@ def run_rife_pytorch(
         "--scale",
         str(scale),
     ]
+    cmd = conda_run(conda_env, base_cmd) if conda_env else base_cmd
     run_cmd(
         cmd,
         cwd=repo_dir,
@@ -330,6 +332,7 @@ def restore_duration(
     rife_backend: str,
     rife_pytorch_repo: str | None,
     rife_pytorch_model_dir: str | None,
+    rife_pytorch_env: str,
     rife_scale: float,
     rife_keep_audio: bool,
     env: Dict[str, str],
@@ -595,6 +598,7 @@ def restore_duration(
                     repo_dir=repo_dir,
                     model_dir=model_dir,
                     keep_audio=rife_keep_audio,
+                    conda_env=rife_pytorch_env,
                     env=env,
                     log_path=log_path,
                 )

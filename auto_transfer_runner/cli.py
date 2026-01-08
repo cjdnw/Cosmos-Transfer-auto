@@ -215,6 +215,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
             if args.rife_pytorch_model_dir is not None
             else (str(Path(args.rife_pytorch_repo) / "train_log") if args.rife_pytorch_repo else None)
         ),
+        rife_pytorch_env=args.rife_pytorch_env,
         rife_scale=args.rife_scale,
         rife_keep_audio=args.rife_keep_audio,
     )
@@ -540,6 +541,12 @@ def main(argv: List[str] | None = None) -> None:
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_pytorch_model_dir,
         help="Practical-RIFE model dir (default: <rife_pytorch_repo>/train_log)",
+    )
+    ap.add_argument(
+        "--rife_pytorch_env",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_pytorch_env,
+        help="Conda env for Practical-RIFE (default: rife)",
     )
     ap.add_argument(
         "--rife_scale",

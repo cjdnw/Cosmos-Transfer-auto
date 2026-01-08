@@ -106,6 +106,7 @@ class PostprocessConfig:
     rife_backend: str = "ncnn_vulkan"  # ncnn_vulkan | pytorch
     rife_pytorch_repo: str | None = None
     rife_pytorch_model_dir: str | None = None
+    rife_pytorch_env: str = "rife"
     rife_scale: float = 1.0
     rife_keep_audio: bool = False
 

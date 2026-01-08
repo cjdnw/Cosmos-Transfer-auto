@@ -127,6 +127,7 @@ python scripts/run_batch.py \
   - `--rife_backend {ncnn_vulkan,pytorch}`：RIFE 后端选择（默认 ncnn_vulkan）。
   - `--rife_pytorch_repo`：Practical-RIFE 仓库路径（pytorch 后端必填）。
   - `--rife_pytorch_model_dir`：Practical-RIFE 权重目录（默认 `<repo>/train_log`）。
+  - `--rife_pytorch_env`：Practical-RIFE conda 环境（默认 rife）。
   - `--rife_scale`：RIFE scale（默认 1.0，0.5 可加速）。
   - `--rife_keep_audio`：保留输入音频并 mux 回输出（默认 false）。
 - `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps；若能获取原视频帧数与 FPS，则优先与原视频完全一致。
@@ -516,10 +517,12 @@ python scripts/run_batch.py \
   --post_restore_mode rife \
   --rife_backend pytorch \
   --rife_pytorch_repo /path/to/Practical-RIFE \
+  --rife_pytorch_env rife \
   --rife_scale 1.0
 ```
 
 ## 更新记录
+- 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。
 - 2026-01-08：`--pre_fps` 缩减为 `none/16`（none=原视频 fps），Step6 arm swap 根据 `--pre_fps` 与 `--post_restore_fps_mode` 选择 orig 视频，并新增 `--disable_guardrails` 透传到 Transfer2.5。
 - 2026-01-07：`--post_restore_duration` 优先对齐原视频帧数与 FPS，保证输出帧数与帧率完全一致（即使时长不再强制百分百对齐）。
 - 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
