@@ -147,6 +147,127 @@ def probe_video_stats(video_path: Path, *, env: Dict[str, str], log_path: Path) 
     return VideoStats(duration_sec=duration_sec, frame_count=frame_count, fps=fps)
 
 
+def _load_frame_map(frame_map_path: Path) -> List[int]:
+    indices: List[int] = []
+    with frame_map_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            record = json.loads(line)
+            indices.append(int(record["original_index"]))
+    return indices
+
+
+def _validate_frame_map(indices: List[int]) -> None:
+    if not indices:
+        raise ValueError("Frame map is empty.")
+    last = -1
+    for idx in indices:
+        if idx < 0:
+            raise ValueError("Frame map contains negative indices.")
+        if idx <= last:
+            raise ValueError("Frame map is not strictly increasing.")
+        last = idx
+
+
+def _build_gap_plan(indices: List[int]) -> List[int]:
+    gaps: List[int] = []
+    for i in range(len(indices) - 1):
+        gap = indices[i + 1] - indices[i]
+        if gap <= 0:
+            raise ValueError("Frame map gap is non-positive.")
+        gaps.append(gap)
+    return gaps
+
+
+def _extract_frames(
+    *,
+    input_video: Path,
+    output_dir: Path,
+    pad_filter: str | None,
+    env: Dict[str, str],
+    log_path: Path,
+    title: str,
+) -> None:
+    if output_dir.exists():
+        shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-vsync",
+        "0",
+        "-i",
+        str(input_video),
+    ]
+    if pad_filter:
+        cmd += ["-vf", pad_filter]
+    cmd.append(str(output_dir / "%08d.png"))
+    run_cmd(cmd, cwd=None, env=env or dict(os.environ), log_path=log_path, title=title)
+
+
+def _encode_frames(
+    *,
+    input_dir: Path,
+    output_path: Path,
+    target_fps: float,
+    crop_filter: str | None,
+    env: Dict[str, str],
+    log_path: Path,
+    title: str,
+) -> None:
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        str(target_fps),
+        "-i",
+        str(input_dir / "%08d.png"),
+    ]
+    if crop_filter:
+        cmd += ["-vf", crop_filter]
+    cmd += [
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+    run_cmd(cmd, cwd=None, env=env or dict(os.environ), log_path=log_path, title=title)
+
+
+def _mux_audio(
+    *,
+    video_path: Path,
+    audio_source: Path,
+    env: Dict[str, str],
+    log_path: Path,
+    title: str,
+) -> None:
+    tmp_output = video_path.with_name(f".{video_path.stem}__audio{video_path.suffix}")
+    safe_unlink(tmp_output, log_path=log_path)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-i",
+        str(audio_source),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "copy",
+        "-shortest",
+        str(tmp_output),
+    ]
+    run_cmd(cmd, cwd=None, env=env or dict(os.environ), log_path=log_path, title=title)
+    tmp_output.replace(video_path)
+
+
 def _build_atempo_filter(tempo: float) -> str:
     if tempo <= 0:
         raise ValueError("Audio tempo must be > 0.")
@@ -321,13 +442,300 @@ def run_rife_pytorch(
     )
 
 
+def _copy_frame(src: Path, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
+
+
+def _interpolate_segment_ncnn(
+    *,
+    rife_bin: str,
+    rife_model: str | None,
+    segment_input_dir: Path,
+    segment_output_dir: Path,
+    output_frames: int,
+    env: Dict[str, str],
+    log_path: Path,
+) -> None:
+    if segment_output_dir.exists():
+        shutil.rmtree(segment_output_dir, ignore_errors=True)
+    segment_output_dir.mkdir(parents=True, exist_ok=True)
+    rife_cmd = [
+        rife_bin,
+        "-i",
+        str(segment_input_dir),
+        "-o",
+        str(segment_output_dir),
+        "-n",
+        str(output_frames),
+        "-f",
+        "%08d.png",
+    ]
+    if rife_model:
+        rife_cmd += ["-m", rife_model]
+    rife_env = dict(env) if env is not None else dict(os.environ)
+    rife_env.pop("DISPLAY", None)
+    rife_env.pop("WAYLAND_DISPLAY", None)
+    run_cmd(
+        rife_cmd,
+        cwd=None,
+        env=rife_env,
+        log_path=log_path,
+        title="STEP5.5 Post-restore RIFE segment interpolation",
+    )
+
+
+def _interpolate_segment_pytorch(
+    *,
+    segment_input_dir: Path,
+    segment_video_path: Path,
+    segment_output_video: Path,
+    segment_output_frames_dir: Path,
+    output_frames: int,
+    scale: float,
+    repo_dir: Path,
+    model_dir: Path,
+    conda_env: str,
+    env: Dict[str, str],
+    log_path: Path,
+) -> None:
+    if segment_video_path.exists():
+        safe_unlink(segment_video_path, log_path=log_path)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        "2",
+        "-i",
+        str(segment_input_dir / "%08d.png"),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(segment_video_path),
+    ]
+    run_cmd(
+        cmd,
+        cwd=None,
+        env=env or dict(os.environ),
+        log_path=log_path,
+        title="STEP5.5 Post-restore RIFE (pytorch) segment video",
+    )
+    run_rife_pytorch(
+        input_mp4=segment_video_path,
+        output_mp4=segment_output_video,
+        target_fps=float(output_frames),
+        scale=scale,
+        repo_dir=repo_dir,
+        model_dir=model_dir,
+        keep_audio=False,
+        conda_env=conda_env,
+        env=env,
+        log_path=log_path,
+    )
+    _extract_frames(
+        input_video=segment_output_video,
+        output_dir=segment_output_frames_dir,
+        pad_filter=None,
+        env=env,
+        log_path=log_path,
+        title="STEP5.5 Post-restore RIFE (pytorch) segment extract frames",
+    )
+
+
+def _interpolate_with_frame_map(
+    *,
+    transfer_mp4: Path,
+    frame_map_path: Path,
+    target_fps: float,
+    target_frames: int,
+    ratio: float,
+    rife_backend: str,
+    rife_bin: str | None,
+    rife_model: str | None,
+    rife_pytorch_repo: str | None,
+    rife_pytorch_model_dir: str | None,
+    rife_pytorch_env: str,
+    rife_scale: float,
+    rife_keep_audio: bool,
+    env: Dict[str, str],
+    log_path: Path,
+) -> None:
+    indices = _load_frame_map(frame_map_path)
+    _validate_frame_map(indices)
+    gaps = _build_gap_plan(indices)
+
+    rife_workdir = transfer_mp4.parent / f".{transfer_mp4.stem}__post_restore_rife"
+    if rife_workdir.exists():
+        shutil.rmtree(rife_workdir, ignore_errors=True)
+    rife_workdir.mkdir(parents=True, exist_ok=True)
+
+    speed_path = rife_workdir / f"{transfer_mp4.stem}__post_restore_speed{transfer_mp4.suffix}"
+    audio_source = rife_workdir / f"{transfer_mp4.stem}__post_restore_audio{transfer_mp4.suffix}"
+    input_frames_dir = rife_workdir / "input_frames"
+    output_frames_dir = rife_workdir / "output_frames"
+    segment_input_dir = rife_workdir / "segment_input"
+    segment_output_dir = rife_workdir / "segment_output"
+    segment_video = rife_workdir / "segment.mp4"
+    segment_output_video = rife_workdir / "segment_rife.mp4"
+
+    try:
+        shutil.copyfile(transfer_mp4, audio_source)
+        safe_unlink(speed_path, log_path=log_path)
+        speed_cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(transfer_mp4),
+            "-vf",
+            f"setpts=PTS*{ratio:.6f}",
+            "-vsync",
+            "vfr",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(speed_path),
+        ]
+        run_cmd(
+            speed_cmd,
+            cwd=None,
+            env=env or dict(os.environ),
+            log_path=log_path,
+            title="STEP5.5 Post-restore speed adjust (frame map prep)",
+        )
+
+        orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
+        pad_w, pad_h = get_pad_dims(orig_w, orig_h, align=32)
+        pad_filter = None
+        crop_filter = None
+        if pad_w != orig_w or pad_h != orig_h:
+            pad_filter = f"pad=ceil(iw/32)*32:ceil(ih/32)*32:(ow-iw)/2:(oh-ih)/2"
+            crop_filter = f"crop={orig_w}:{orig_h}:(in_w-{orig_w})/2:(in_h-{orig_h})/2"
+
+        _extract_frames(
+            input_video=speed_path,
+            output_dir=input_frames_dir,
+            pad_filter=pad_filter,
+            env=env,
+            log_path=log_path,
+            title="STEP5.5 Post-restore RIFE extract frames (frame map)",
+        )
+        input_frames = sorted(input_frames_dir.glob("*.png"))
+        if len(input_frames) != len(indices):
+            raise RuntimeError(
+                "Frame map size does not match extracted frames "
+                f"({len(indices)} != {len(input_frames)})."
+            )
+        if indices[-1] + 1 != target_frames:
+            raise RuntimeError(
+                "Frame map last index does not match target frames "
+                f"({indices[-1] + 1} != {target_frames})."
+            )
+        if output_frames_dir.exists():
+            shutil.rmtree(output_frames_dir, ignore_errors=True)
+        output_frames_dir.mkdir(parents=True, exist_ok=True)
+
+        output_index = 1
+        for i, gap in enumerate(gaps):
+            if segment_input_dir.exists():
+                shutil.rmtree(segment_input_dir, ignore_errors=True)
+            segment_input_dir.mkdir(parents=True, exist_ok=True)
+            _copy_frame(input_frames[i], segment_input_dir / "00000001.png")
+            _copy_frame(input_frames[i + 1], segment_input_dir / "00000002.png")
+
+            output_count = gap + 1
+            if rife_backend == "ncnn_vulkan":
+                if not rife_bin:
+                    raise ValueError("rife_bin must be set when post_restore_mode=rife")
+                _interpolate_segment_ncnn(
+                    rife_bin=rife_bin,
+                    rife_model=rife_model,
+                    segment_input_dir=segment_input_dir,
+                    segment_output_dir=segment_output_dir,
+                    output_frames=output_count,
+                    env=env,
+                    log_path=log_path,
+                )
+            elif rife_backend == "pytorch":
+                if not rife_pytorch_repo:
+                    raise ValueError("rife_pytorch_repo must be set when rife_backend=pytorch")
+                repo_dir = Path(rife_pytorch_repo)
+                model_dir = (
+                    Path(rife_pytorch_model_dir)
+                    if rife_pytorch_model_dir
+                    else repo_dir / "train_log"
+                )
+                _interpolate_segment_pytorch(
+                    segment_input_dir=segment_input_dir,
+                    segment_video_path=segment_video,
+                    segment_output_video=segment_output_video,
+                    segment_output_frames_dir=segment_output_dir,
+                    output_frames=output_count,
+                    scale=rife_scale,
+                    repo_dir=repo_dir,
+                    model_dir=model_dir,
+                    conda_env=rife_pytorch_env,
+                    env=env,
+                    log_path=log_path,
+                )
+            else:
+                raise ValueError(f"Unknown RIFE backend: {rife_backend}")
+
+            segment_frames = sorted(segment_output_dir.glob("*.png"))
+            if len(segment_frames) < output_count:
+                raise RuntimeError(
+                    "Segment interpolation produced fewer frames than expected "
+                    f"({len(segment_frames)} < {output_count})."
+                )
+            for frame_path in segment_frames[:-1]:
+                dest = output_frames_dir / f"{output_index:08d}.png"
+                _copy_frame(frame_path, dest)
+                output_index += 1
+
+        last_frame = output_frames_dir / f"{output_index:08d}.png"
+        _copy_frame(input_frames[-1], last_frame)
+        output_index += 1
+
+        produced_frames = output_index - 1
+        if produced_frames != target_frames:
+            raise RuntimeError(
+                "Post-restore frame count mismatch "
+                f"({produced_frames} != {target_frames})."
+            )
+
+        _encode_frames(
+            input_dir=output_frames_dir,
+            output_path=transfer_mp4,
+            target_fps=target_fps,
+            crop_filter=crop_filter,
+            env=env,
+            log_path=log_path,
+            title="STEP5.5 Post-restore RIFE encode (frame map)",
+        )
+
+        if rife_keep_audio and has_audio_stream(audio_source, env=env, log_path=log_path):
+            _mux_audio(
+                video_path=transfer_mp4,
+                audio_source=audio_source,
+                env=env,
+                log_path=log_path,
+                title="STEP5.5 Post-restore RIFE mux audio",
+            )
+    finally:
+        shutil.rmtree(rife_workdir, ignore_errors=True)
+
+
 def restore_duration(
     *,
     output_dir: Path,
     original_stats: VideoStats,
-    pre_fps: int | None,
     mode: str,
-    fps_mode: str,
+    frame_map_path: Path | None,
     rife_bin: str | None,
     rife_model: str | None,
     rife_backend: str,
@@ -351,48 +759,23 @@ def restore_duration(
 
     target_fps: float | None = None
     target_frames: int | None = None
+    if original_stats.fps and original_stats.fps > 0:
+        target_fps = original_stats.fps
+    else:
+        raise RuntimeError("Original fps unavailable for post-restore.")
+
     if original_stats.frame_count and original_stats.frame_count > 0:
-        if original_stats.fps and original_stats.fps > 0:
-            target_frames = original_stats.frame_count
-            target_fps = original_stats.fps
-            append_log(
-                log_path,
-                f"[POST_RESTORE] match original frames={target_frames} fps={target_fps:.6f}",
-            )
-        elif original_stats.duration_sec and original_stats.duration_sec > 0:
-            target_frames = original_stats.frame_count
-            target_fps = target_frames / original_stats.duration_sec
-            append_log(
-                log_path,
-                f"[POST_RESTORE] match original frames={target_frames} fps={target_fps:.6f} (derived)",
-            )
-
-    if target_fps is None:
-        if fps_mode == "original":
-            target_fps = original_stats.fps or 0.0
-            if target_fps <= 0:
-                if pre_fps is not None:
-                    append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
-                    target_fps = float(pre_fps)
-                elif current_stats.fps and current_stats.fps > 0:
-                    append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to current fps")
-                    target_fps = current_stats.fps
-                else:
-                    raise RuntimeError("Unable to resolve target fps for post-restore.")
-        else:
-            if pre_fps is None:
-                append_log(log_path, "[POST_RESTORE] pre_fps=none, fallback to original fps")
-                target_fps = original_stats.fps or 0.0
-                if target_fps <= 0:
-                    raise RuntimeError("Original fps unavailable for post-restore.")
-            else:
-                target_fps = float(pre_fps)
-
-    if target_fps <= 0:
-        raise RuntimeError("Target fps invalid for post-restore.")
-
-    if target_frames is None:
+        target_frames = original_stats.frame_count
+        append_log(
+            log_path,
+            f"[POST_RESTORE] match original frames={target_frames} fps={target_fps:.6f}",
+        )
+    elif original_stats.duration_sec and original_stats.duration_sec > 0:
         target_frames = round(original_stats.duration_sec * target_fps)
+        append_log(
+            log_path,
+            f"[POST_RESTORE] match original duration fps={target_fps:.6f} frames={target_frames}",
+        )
 
     target_duration = target_frames / target_fps
     ratio = target_duration / current_stats.duration_sec
@@ -402,6 +785,37 @@ def restore_duration(
     elif mode == "minterpolate":
         filters = f"setpts=PTS*{ratio:.6f},minterpolate=fps={target_fps}:mi_mode=mci"
     elif mode == "rife":
+        if frame_map_path is not None and frame_map_path.exists():
+            _interpolate_with_frame_map(
+                transfer_mp4=transfer_mp4,
+                frame_map_path=frame_map_path,
+                target_fps=target_fps,
+                target_frames=target_frames,
+                ratio=ratio,
+                rife_backend=rife_backend,
+                rife_bin=rife_bin,
+                rife_model=rife_model,
+                rife_pytorch_repo=rife_pytorch_repo,
+                rife_pytorch_model_dir=rife_pytorch_model_dir,
+                rife_pytorch_env=rife_pytorch_env,
+                rife_scale=rife_scale,
+                rife_keep_audio=rife_keep_audio,
+                env=env,
+                log_path=log_path,
+            )
+            append_log(
+                log_path,
+                (
+                    "[POST_RESTORE DONE] "
+                    f"mode={mode} target_duration={original_stats.duration_sec:.3f} "
+                    f"current_duration={current_stats.duration_sec:.3f} "
+                    f"ratio={ratio:.6f} target_frames={target_frames} output={transfer_mp4}"
+                ),
+            )
+            console_print(
+                f"[POST_RESTORE DONE] mode={mode} target_frames={target_frames} output={transfer_mp4.name}",
+            )
+            return transfer_mp4
         if rife_backend == "ncnn_vulkan":
             if not rife_bin:
                 raise ValueError("rife_bin must be set when post_restore_mode=rife")

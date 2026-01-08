@@ -9,7 +9,7 @@ from typing import Callable, Dict, TypeVar
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control, generate_controls_combo
-from .steps.preprocess import preprocess_video, PreprocessSettings
+from .steps.preprocess import preprocess_video, PreprocessSettings, frame_map_path_for_video
 from .steps.json_spec import (
     write_json_spec_blur,
     write_json_spec_depth,
@@ -141,6 +141,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     arm_swap_output: Path | None = None
     preprocessed_video: Path | None = None
     original_stats: VideoStats | None = None
+    frame_map_path: Path | None = None
 
     try:
         if cfg.postprocess.restore_duration:
@@ -173,6 +174,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 stale_lock_sec=cfg.cache.stale_lock_sec,
             ),
         )
+        frame_map_path = frame_map_path_for_video(preprocessed_video)
 
         # Step2: prompt
         if marker_exists(step2_marker) and paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
@@ -413,9 +415,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     lambda: restore_duration(
                         output_dir=paths.output_dir,
                         original_stats=original_stats,
-                        pre_fps=cfg.preprocess.fps,
                         mode=cfg.postprocess.restore_mode,
-                        fps_mode=cfg.postprocess.restore_fps_mode,
+                        frame_map_path=frame_map_path,
                         rife_bin=cfg.postprocess.rife_bin,
                         rife_model=cfg.postprocess.rife_model,
                         rife_backend=cfg.postprocess.rife_backend,
@@ -454,15 +455,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         output_base_dir=arm_swap_output_base_dir,
                         workdir=arm_swap_workdir,
                         no_workdir_write=cfg.arm_swap.no_workdir_write,
-                        orig_video=(
-                            preprocessed_video
-                            if (
-                                preprocessed_video is not None
-                                and cfg.postprocess.restore_fps_mode == "pre_fps"
-                                and cfg.preprocess.fps == 16
-                            )
-                            else job.video_path
-                        ),
+                        orig_video=job.video_path,
                         qwen_prompt=cfg.arm_swap.qwen_prompt,
                         erode=cfg.arm_swap.erode,
                         feather=cfg.arm_swap.feather,

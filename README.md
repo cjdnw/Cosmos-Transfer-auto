@@ -115,12 +115,11 @@ python scripts/run_batch.py \
   --post_restore_duration \
   --post_restore_mode rife \
   --rife_backend ncnn_vulkan \
-  --post_restore_fps_mode pre_fps \
   --rife_bin /path/to/rife-ncnn-vulkan \
   --rife_model /path/to/rife-model
 ```
 参数说明：
-- `--post_restore_duration`：在 Step5 后让输出与原视频 **帧数/FPS 对齐**（覆盖原输出文件；时长可能略有误差）。
+- `--post_restore_duration`：在 Step5 后让输出与原视频 **帧数/FPS 对齐**（覆盖原输出文件；时长可能略有误差）。会生成与原始输入视频对齐的帧映射表并按映射补帧。
 - `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
   - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
   - `--rife_model`：RIFE 模型目录（可选）。
@@ -130,8 +129,7 @@ python scripts/run_batch.py \
   - `--rife_pytorch_env`：Practical-RIFE conda 环境（默认 rife）。
   - `--rife_scale`：RIFE scale（默认 1.0，0.5 可加速）。
   - `--rife_keep_audio`：保留输入音频并 mux 回输出（默认 false）。
-- `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps；若能获取原视频帧数与 FPS，则优先与原视频完全一致。
-- `--post_restore_fps_mode original`：目标 FPS = 原始输入视频 FPS（若无法探测则回退为 pre_fps），并优先与原视频帧数一致。
+说明：Post-restore 的目标 FPS 与帧数 **固定对齐原始输入视频**（若无法探测则报错）。
 补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。
 
 ### 例 5：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
@@ -257,8 +255,8 @@ python -m robot_arm_swap \
 执行完成后会自动清空 workdir。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
 Step6 的 `--orig` 选择规则：
-- 当 `--post_restore_fps_mode pre_fps` 且 `--pre_fps 16`：使用预处理 16fps 视频进行 swap。
-- 当 `--pre_fps none` 或 `--post_restore_fps_mode original`：使用原始输入视频进行 swap。
+- 当 `--pre_fps 16`：使用预处理 16fps 视频进行 swap。
+- 当 `--pre_fps none`：使用原始输入视频进行 swap。
 
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
@@ -526,7 +524,7 @@ python scripts/run_batch.py \
 ## 更新记录
 - 2026-01-09：Step6 arm swap 新增 `--no-workdir-write`（默认开启内存模式避免 PNG 落盘），CLI 暴露 `--arm_swap_no_workdir_write/--arm_swap_workdir_write` 控制开关。
 - 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。
-- 2026-01-08：`--pre_fps` 缩减为 `none/16`（none=原视频 fps），Step6 arm swap 根据 `--pre_fps` 与 `--post_restore_fps_mode` 选择 orig 视频，并新增 `--disable_guardrails` 透传到 Transfer2.5。
+- 2026-01-08：`--pre_fps` 缩减为 `none/16`（none=原视频 fps），Step6 arm swap 根据 `--pre_fps` 选择 orig 视频，并新增 `--disable_guardrails` 透传到 Transfer2.5。
 - 2026-01-07：`--post_restore_duration` 优先对齐原视频帧数与 FPS，保证输出帧数与帧率完全一致（即使时长不再强制百分百对齐）。
 - 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
 - 2026-01-07：新增 `--post_restore_mode rife`，支持使用 RIFE 进行补帧（含 `--rife_bin`/`--rife_model`）。
