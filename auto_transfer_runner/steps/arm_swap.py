@@ -75,6 +75,7 @@ def run_arm_swap(
     output_dir: Path,
     output_base_dir: Path,
     workdir: Path,
+    no_workdir_write: bool,
     orig_video: Path,
     qwen_prompt: str,
     erode: int,
@@ -114,18 +115,20 @@ def run_arm_swap(
             str(fps),
             "--width",
             str(width),
-        "--qwen-prompt",
-        qwen_prompt,
-        "--erode",
-        str(erode),
-        "--feather",
-        str(feather),
-        "--dilate",
-        str(dilate),
-        "--out",
-        str(output_path),
-    ],
+            "--qwen-prompt",
+            qwen_prompt,
+            "--erode",
+            str(erode),
+            "--feather",
+            str(feather),
+            "--dilate",
+            str(dilate),
+            "--out",
+            str(output_path),
+        ],
     )
+    if no_workdir_write:
+        cmd.append("--no-workdir-write")
     try:
         run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap")
         if not output_path.exists() or output_path.stat().st_size == 0:

@@ -453,6 +453,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         output_dir=paths.output_dir,
                         output_base_dir=arm_swap_output_base_dir,
                         workdir=arm_swap_workdir,
+                        no_workdir_write=cfg.arm_swap.no_workdir_write,
                         orig_video=(
                             preprocessed_video
                             if (

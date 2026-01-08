@@ -251,6 +251,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
 
     arm_swap = ArmSwapConfig(
         enable=args.enable_arm_swap,
+        no_workdir_write=args.arm_swap_no_workdir_write,
         qwen_prompt=args.arm_swap_prompt,
         erode=args.arm_swap_erode,
         feather=args.arm_swap_feather,
@@ -621,6 +622,18 @@ def main(argv: List[str] | None = None) -> None:
     # Step6: robot arm swap (qwen3vl + sam3)
     ap.add_argument("--enable_arm_swap", action="store_true",
                     help="Enable robot arm swap after transfer (qwen3vl + sam3)")
+    ap.add_argument(
+        "--arm_swap_no_workdir_write",
+        action="store_true",
+        default=ARM_SWAP_DEFAULTS.no_workdir_write,
+        help="Use in-memory arm swap pipeline (avoid PNG workdir writes, default: enabled)",
+    )
+    ap.add_argument(
+        "--arm_swap_workdir_write",
+        action="store_false",
+        dest="arm_swap_no_workdir_write",
+        help="Allow arm swap to write PNGs into workdir (default: disabled)",
+    )
     ap.add_argument("--arm_swap_prompt", type=str, default=ARM_SWAP_DEFAULTS.qwen_prompt,
                     help="Qwen prompt for robot arm swap (default: 'robotic arm')")
     ap.add_argument("--arm_swap_erode", type=int, default=ARM_SWAP_DEFAULTS.erode,
