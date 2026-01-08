@@ -125,7 +125,7 @@ python scripts/run_batch.py \
   - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
   - `--rife_model`：RIFE 模型目录（可选）。
   - `--rife_backend {ncnn_vulkan,pytorch}`：RIFE 后端选择（默认 ncnn_vulkan）。
-  - `--rife_pytorch_repo`：Practical-RIFE 仓库路径（pytorch 后端必填）。
+  - `--rife_pytorch_repo`：Practical-RIFE 仓库路径（pytorch 后端必填，默认 `/mnt/data/ganrunhe/Practical-RIFE`）。
   - `--rife_pytorch_model_dir`：Practical-RIFE 权重目录（默认 `<repo>/train_log`）。
   - `--rife_pytorch_env`：Practical-RIFE conda 环境（默认 rife）。
   - `--rife_scale`：RIFE scale（默认 1.0，0.5 可加速）。
