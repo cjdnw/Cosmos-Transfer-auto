@@ -325,9 +325,7 @@ def restore_duration(
     *,
     output_dir: Path,
     original_stats: VideoStats,
-    pre_fps: int | None,
     mode: str,
-    fps_mode: str,
     rife_bin: str | None,
     rife_model: str | None,
     rife_backend: str,
@@ -368,25 +366,13 @@ def restore_duration(
             )
 
     if target_fps is None:
-        if fps_mode == "original":
-            target_fps = original_stats.fps or 0.0
-            if target_fps <= 0:
-                if pre_fps is not None:
-                    append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to pre_fps")
-                    target_fps = float(pre_fps)
-                elif current_stats.fps and current_stats.fps > 0:
-                    append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to current fps")
-                    target_fps = current_stats.fps
-                else:
-                    raise RuntimeError("Unable to resolve target fps for post-restore.")
-        else:
-            if pre_fps is None:
-                append_log(log_path, "[POST_RESTORE] pre_fps=none, fallback to original fps")
-                target_fps = original_stats.fps or 0.0
-                if target_fps <= 0:
-                    raise RuntimeError("Original fps unavailable for post-restore.")
+        target_fps = original_stats.fps or 0.0
+        if target_fps <= 0:
+            if current_stats.fps and current_stats.fps > 0:
+                append_log(log_path, "[POST_RESTORE] original fps unavailable, fallback to current fps")
+                target_fps = current_stats.fps
             else:
-                target_fps = float(pre_fps)
+                raise RuntimeError("Unable to resolve target fps for post-restore.")
 
     if target_fps <= 0:
         raise RuntimeError("Target fps invalid for post-restore.")
