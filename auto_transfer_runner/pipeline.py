@@ -9,7 +9,7 @@ from typing import Callable, Dict, TypeVar
 from .config import GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control, generate_controls_combo
-from .steps.preprocess import preprocess_video, PreprocessSettings
+from .steps.preprocess import preprocess_video, PreprocessSettings, frame_map_path_for
 from .steps.json_spec import (
     write_json_spec_blur,
     write_json_spec_depth,
@@ -141,6 +141,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     arm_swap_output: Path | None = None
     preprocessed_video: Path | None = None
     original_stats: VideoStats | None = None
+    frame_map_path: Path | None = None
 
     try:
         if cfg.postprocess.restore_duration:
@@ -172,6 +173,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 stale_lock_sec=cfg.cache.stale_lock_sec,
             ),
         )
+        if preprocessed_video is not None:
+            candidate_map_path = frame_map_path_for(preprocessed_video)
+            if candidate_map_path.exists():
+                frame_map_path = candidate_map_path
 
         # Step2: prompt
         if marker_exists(step2_marker) and paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
@@ -421,6 +426,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         rife_pytorch_env=cfg.postprocess.rife_pytorch_env,
                         rife_scale=cfg.postprocess.rife_scale,
                         rife_keep_audio=cfg.postprocess.rife_keep_audio,
+                        frame_map_path=frame_map_path,
                         env=env,
                         log_path=paths.log_path,
                     ),

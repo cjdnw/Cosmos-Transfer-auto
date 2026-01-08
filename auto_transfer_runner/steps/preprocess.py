@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import os
 import subprocess
@@ -25,6 +26,10 @@ class PreprocessSettings:
     pre_chunk_force_chunks: int | None
     num_video_frames_per_chunk: int
     num_conditional_frames: int
+
+
+def frame_map_path_for(pre_video_path: Path) -> Path:
+    return pre_video_path.with_name(f"{pre_video_path.stem}__frame_map.json")
 
 
 def preprocess_video(
@@ -352,6 +357,15 @@ def _align_preprocess_chunks(
         )
         tmp_path.replace(aligned_path)
 
+        if mode == "speed":
+            frame_map_path = frame_map_path_for(aligned_path)
+            frame_map = _build_frame_map(total_frames, target_frames)
+            frame_map_payload = {
+                "original_total_frames": total_frames,
+                "sampled_indices": frame_map,
+            }
+            frame_map_path.write_text(json.dumps(frame_map_payload, ensure_ascii=False), encoding="utf-8")
+
         log_parts = [
             f"[PRE_CHUNK DONE] mode={mode}",
             f"policy={policy_label}",
@@ -366,6 +380,28 @@ def _align_preprocess_chunks(
         append_log(log_path, " ".join(log_parts))
         console_print(" ".join(log_parts))
         return aligned_path
+
+
+def _build_frame_map(total_frames: int, target_frames: int) -> list[int]:
+    if total_frames <= 0 or target_frames <= 0:
+        raise ValueError("frame map requires positive frame counts")
+    if target_frames >= total_frames:
+        return list(range(total_frames))
+    if target_frames == 1:
+        return [0]
+    step = (total_frames - 1) / (target_frames - 1)
+    indices: list[int] = []
+    prev = -1
+    for i in range(target_frames):
+        idx = int(round(i * step))
+        if idx <= prev:
+            idx = prev + 1
+        if idx >= total_frames:
+            idx = total_frames - 1
+        indices.append(idx)
+        prev = idx
+    indices[-1] = total_frames - 1
+    return indices
 
 
 def _build_aligned_output_path(

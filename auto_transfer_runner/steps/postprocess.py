@@ -214,6 +214,128 @@ def _check_pytorch_cuda_available(*, conda_env: str, env: Dict[str, str], log_pa
         raise RuntimeError("CUDA is not available for PyTorch RIFE backend.")
 
 
+def _load_frame_map(
+    *,
+    frame_map_path: Path | None,
+    expected_input_frames: int,
+    expected_output_frames: int | None,
+    log_path: Path,
+) -> dict[str, list[int]] | None:
+    if frame_map_path is None:
+        return None
+    if not frame_map_path.exists():
+        append_log(log_path, f"[POST_RESTORE] frame_map not found: {frame_map_path}")
+        return None
+    data = json.loads(frame_map_path.read_text(encoding="utf-8"))
+    sample_indices = data.get("sampled_indices")
+    original_total_frames = data.get("original_total_frames")
+    if not isinstance(sample_indices, list) or not sample_indices:
+        append_log(log_path, f"[POST_RESTORE] invalid frame_map content: {frame_map_path}")
+        return None
+    if expected_input_frames > 0 and len(sample_indices) != expected_input_frames:
+        append_log(
+            log_path,
+            (
+                "[POST_RESTORE] frame_map size mismatch "
+                f"expected={expected_input_frames} got={len(sample_indices)}"
+            ),
+        )
+        return None
+    if sample_indices[0] != 0:
+        append_log(log_path, "[POST_RESTORE] frame_map must start at frame 0")
+        return None
+    if any(sample_indices[i] >= sample_indices[i + 1] for i in range(len(sample_indices) - 1)):
+        append_log(log_path, "[POST_RESTORE] frame_map indices must be strictly increasing")
+        return None
+    if isinstance(original_total_frames, int) and expected_output_frames is not None:
+        if original_total_frames != expected_output_frames:
+            append_log(
+                log_path,
+                (
+                    "[POST_RESTORE] frame_map output mismatch "
+                    f"expected={expected_output_frames} map_total={original_total_frames}"
+                ),
+            )
+            return None
+    return {"sampled_indices": sample_indices}
+
+
+def _run_rife_guided(
+    *,
+    input_frames_dir: Path,
+    output_frames_dir: Path,
+    sample_indices: list[int],
+    rife_bin: str,
+    rife_model: str | None,
+    env: Dict[str, str],
+    log_path: Path,
+) -> None:
+    input_frames = sorted(input_frames_dir.glob("*.png"))
+    if len(input_frames) != len(sample_indices):
+        raise RuntimeError("frame_map does not match extracted frame count")
+    if len(input_frames) < 2:
+        raise RuntimeError("RIFE guided interpolation requires at least 2 frames")
+
+    segment_root = output_frames_dir.parent / "guided_segments"
+    segment_root.mkdir(parents=True, exist_ok=True)
+    out_index = 1
+
+    for idx in range(len(input_frames) - 1):
+        start_idx = sample_indices[idx]
+        end_idx = sample_indices[idx + 1]
+        segment_frames = end_idx - start_idx + 1
+        if segment_frames < 2:
+            raise RuntimeError("Invalid segment length for guided interpolation")
+
+        segment_in = segment_root / f"in_{idx:06d}"
+        segment_out = segment_root / f"out_{idx:06d}"
+        if segment_in.exists():
+            shutil.rmtree(segment_in, ignore_errors=True)
+        if segment_out.exists():
+            shutil.rmtree(segment_out, ignore_errors=True)
+        segment_in.mkdir(parents=True, exist_ok=True)
+        segment_out.mkdir(parents=True, exist_ok=True)
+
+        shutil.copyfile(input_frames[idx], segment_in / "00000001.png")
+        shutil.copyfile(input_frames[idx + 1], segment_in / "00000002.png")
+
+        rife_cmd = [
+            rife_bin,
+            "-i",
+            str(segment_in),
+            "-o",
+            str(segment_out),
+            "-n",
+            str(segment_frames),
+            "-f",
+            "%08d.png",
+        ]
+        if rife_model:
+            rife_cmd += ["-m", rife_model]
+        rife_env = dict(env) if env is not None else dict(os.environ)
+        rife_env.pop("DISPLAY", None)
+        rife_env.pop("WAYLAND_DISPLAY", None)
+        run_cmd(
+            rife_cmd,
+            cwd=None,
+            env=rife_env,
+            log_path=log_path,
+            title=f"STEP5.5 Post-restore RIFE guided segment {idx}",
+        )
+
+        segment_frames_paths = sorted(segment_out.glob("*.png"))
+        if not segment_frames_paths:
+            raise RuntimeError("RIFE guided segment produced no frames")
+        if idx > 0:
+            segment_frames_paths = segment_frames_paths[1:]
+        for frame_path in segment_frames_paths:
+            target_name = f"{out_index:08d}.png"
+            shutil.copyfile(frame_path, output_frames_dir / target_name)
+            out_index += 1
+
+    append_log(log_path, f"[POST_RESTORE] guided RIFE output frames={out_index - 1}")
+
+
 def run_rife_pytorch(
     *,
     input_mp4: Path,
@@ -334,6 +456,7 @@ def restore_duration(
     rife_pytorch_env: str,
     rife_scale: float,
     rife_keep_audio: bool,
+    frame_map_path: Path | None,
     env: Dict[str, str],
     log_path: Path,
 ) -> Path:
@@ -456,29 +579,49 @@ def restore_duration(
                     log_path=log_path,
                     title="STEP5.5 Post-restore RIFE extract frames",
                 )
-                rife_cmd = [
-                    rife_bin,
-                    "-i",
-                    str(input_frames_dir),
-                    "-o",
-                    str(output_frames_dir),
-                    "-n",
-                    str(target_frames),
-                    "-f",
-                    "%08d.png",
-                ]
-                if rife_model:
-                    rife_cmd += ["-m", rife_model]
-                rife_env = dict(env) if env is not None else dict(os.environ)
-                rife_env.pop("DISPLAY", None)
-                rife_env.pop("WAYLAND_DISPLAY", None)
-                run_cmd(
-                    rife_cmd,
-                    cwd=None,
-                    env=rife_env,
+                frame_map = _load_frame_map(
+                    frame_map_path=frame_map_path,
+                    expected_input_frames=len(list(input_frames_dir.glob("*.png"))),
+                    expected_output_frames=target_frames,
                     log_path=log_path,
-                    title="STEP5.5 Post-restore RIFE interpolation",
                 )
+                if frame_map:
+                    guided_dir = rife_workdir / "guided_frames"
+                    guided_dir.mkdir(parents=True, exist_ok=True)
+                    _run_rife_guided(
+                        input_frames_dir=input_frames_dir,
+                        output_frames_dir=guided_dir,
+                        sample_indices=frame_map["sampled_indices"],
+                        rife_bin=rife_bin,
+                        rife_model=rife_model,
+                        env=env,
+                        log_path=log_path,
+                    )
+                    output_frames_dir = guided_dir
+                else:
+                    rife_cmd = [
+                        rife_bin,
+                        "-i",
+                        str(input_frames_dir),
+                        "-o",
+                        str(output_frames_dir),
+                        "-n",
+                        str(target_frames),
+                        "-f",
+                        "%08d.png",
+                    ]
+                    if rife_model:
+                        rife_cmd += ["-m", rife_model]
+                    rife_env = dict(env) if env is not None else dict(os.environ)
+                    rife_env.pop("DISPLAY", None)
+                    rife_env.pop("WAYLAND_DISPLAY", None)
+                    run_cmd(
+                        rife_cmd,
+                        cwd=None,
+                        env=rife_env,
+                        log_path=log_path,
+                        title="STEP5.5 Post-restore RIFE interpolation",
+                    )
                 encode_cmd = [
                     "ffmpeg",
                     "-y",
