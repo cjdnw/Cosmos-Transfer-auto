@@ -194,8 +194,9 @@ def has_audio_stream(video_path: Path, *, env: Dict[str, str], log_path: Path) -
     return has_audio
 
 
-def _check_pytorch_cuda_available(*, env: Dict[str, str], log_path: Path) -> None:
-    cmd = ["python3", "-c", "import torch; print(torch.cuda.is_available())"]
+def _check_pytorch_cuda_available(*, conda_env: str, env: Dict[str, str], log_path: Path) -> None:
+    base_cmd = ["python3", "-c", "import torch; print(torch.cuda.is_available())"]
+    cmd = conda_run(conda_env, base_cmd) if conda_env else base_cmd
     append_log(log_path, f"[POST_RESTORE] PyTorch CUDA check: {' '.join(cmd)}")
     result = subprocess.run(
         cmd,
@@ -233,7 +234,7 @@ def run_rife_pytorch(
     if not model_dir.exists():
         raise FileNotFoundError(f"RIFE model dir not found: {model_dir}")
 
-    _check_pytorch_cuda_available(env=env, log_path=log_path)
+    _check_pytorch_cuda_available(conda_env=conda_env, env=env, log_path=log_path)
 
     start_ts = dt.datetime.now().isoformat(timespec="seconds")
     start_perf = time.perf_counter()
