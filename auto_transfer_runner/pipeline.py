@@ -434,7 +434,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         console_print(f"[JOB DONE]  out={paths.output_dir}")
 
         if cfg.arm_swap.enable:
-            arm_swap_workdir = cfg.arm_swap.workdir_root / paths.output_dir.name
+            arm_swap_relative = paths.output_dir.relative_to(repos.work_dir)
+            arm_swap_workdir = cfg.arm_swap.workdir_root / arm_swap_relative / job.job_id
             arm_swap_output_base_dir = make_output_dir(
                 cfg.arm_swap.output_root,
                 input_root=input_root,
