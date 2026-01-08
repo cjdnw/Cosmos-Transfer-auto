@@ -150,6 +150,7 @@ class ArmSwapConfig:
     conda_env: str = "arm_swap"
     output_root: Path = DEFAULT_ARM_SWAP_OUTPUT_ROOT
     workdir_root: Path = DEFAULT_ARM_SWAP_WORKDIR_ROOT
+    no_workdir_write: bool = True
     qwen_prompt: str = "robotic arm"
     erode: int = 2
     feather: int = 3

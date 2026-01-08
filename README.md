@@ -244,6 +244,7 @@ python -m robot_arm_swap \
   --orig 预处理后的视频（或原视频，见说明） \
   --skin Transfer 输出视频 \
   --workdir /mnt/data/ganrunhe/auto_transfer/arm_swap_cache \
+  --no-workdir-write \
   --fps <与 orig 视频一致> \
   --width <与 orig 视频一致> \
   --qwen-prompt "robotic arm" \
@@ -252,6 +253,7 @@ python -m robot_arm_swap \
   --dilate 0 \
   --out /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/<output_video_name>.mp4
 ```
+默认启用 `--arm_swap_no_workdir_write`（透传为 `--no-workdir-write`），使用内存模式避免中间 PNG 落盘并直接管道编码输出视频；如需落盘中间 PNG，可使用 `--arm_swap_workdir_write`。
 执行完成后会自动清空 workdir。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
 Step6 的 `--orig` 选择规则：
@@ -522,6 +524,7 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-09：Step6 arm swap 新增 `--no-workdir-write`（默认开启内存模式避免 PNG 落盘），CLI 暴露 `--arm_swap_no_workdir_write/--arm_swap_workdir_write` 控制开关。
 - 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。
 - 2026-01-08：`--pre_fps` 缩减为 `none/16`（none=原视频 fps），Step6 arm swap 根据 `--pre_fps` 与 `--post_restore_fps_mode` 选择 orig 视频，并新增 `--disable_guardrails` 透传到 Transfer2.5。
 - 2026-01-07：`--post_restore_duration` 优先对齐原视频帧数与 FPS，保证输出帧数与帧率完全一致（即使时长不再强制百分百对齐）。
