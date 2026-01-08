@@ -127,18 +127,6 @@ def parse_gpus(gpus: str) -> List[str]:
     return [x.strip() for x in gpus.split(",") if x.strip()]
 
 
-def _parse_pre_fps(value: str) -> int | None:
-    if value.lower() == "none":
-        return None
-    try:
-        fps = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("pre_fps must be 'none' or 16") from exc
-    if fps != 16:
-        raise argparse.ArgumentTypeError("pre_fps must be 'none' or 16")
-    return fps
-
-
 def build_config(args: argparse.Namespace) -> GlobalConfig:
     repos = RepoPaths(
         work_dir=Path(args.work_dir),
@@ -191,7 +179,6 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     )
 
     preprocess = PreprocessConfig(
-        fps=args.pre_fps,
         width=args.pre_width,
         height=args.pre_height,
         keep_aspect=(not args.pre_no_keep_aspect),
@@ -205,7 +192,6 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     postprocess = PostprocessConfig(
         restore_duration=args.post_restore_duration,
         restore_mode=args.post_restore_mode,
-        restore_fps_mode=args.post_restore_fps_mode,
         rife_bin=args.rife_bin,
         rife_model=args.rife_model,
         rife_backend=args.rife_backend,
@@ -445,13 +431,6 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--edge_high", type=int, default=CV_DEFAULTS.canny_high, help="Canny high threshold for edge control")
 
     # Step0 (preprocess)
-    ap.add_argument(
-        "--pre_fps",
-        type=_parse_pre_fps,
-        default=PREPROCESS_DEFAULTS.fps,
-        metavar="{none,16}",
-        help="Preprocess output fps (CFR). Choices: none/original or 16 (default: 16)",
-    )
     ap.add_argument("--pre_width", type=int, default=PREPROCESS_DEFAULTS.width,
                     help="Preprocess output width (default: keep original)")
     ap.add_argument("--pre_height", type=int, default=PREPROCESS_DEFAULTS.height,
@@ -463,7 +442,7 @@ def main(argv: List[str] | None = None) -> None:
         type=str,
         default=PREPROCESS_DEFAULTS.pre_chunk_mode,
         choices=["none", "clip", "speed"],
-        help="Align preprocess video to Transfer chunk size; none|clip|speed (default: none)",
+        help="Align preprocess video to Transfer chunk size; none|clip|speed (speed=uniform frame drop, lower fps)",
     )
     ap.add_argument(
         "--pre_chunk_policy",
@@ -489,14 +468,14 @@ def main(argv: List[str] | None = None) -> None:
         "--pre_chunk_force_chunks",
         type=int,
         default=PREPROCESS_DEFAULTS.pre_chunk_force_chunks,
-        help="Force chunk count (uses speed mode and ignores clip/policy options)",
+        help="Force chunk count (uses speed mode, uniform frame drop, ignores clip/policy options)",
     )
 
     # Step5.5 post-restore (duration)
     ap.add_argument(
         "--post_restore_duration",
         action="store_true",
-        help="Restore Transfer output to original duration (keeps pre_fps)",
+        help="Restore Transfer output to original duration",
     )
     ap.add_argument(
         "--post_restore_mode",
@@ -504,13 +483,6 @@ def main(argv: List[str] | None = None) -> None:
         default=POSTPROCESS_DEFAULTS.restore_mode,
         choices=["speed", "minterpolate", "rife"],
         help="Post-restore mode: speed (setpts+fps), minterpolate (smoother, slower), or rife (RIFE interpolation)",
-    )
-    ap.add_argument(
-        "--post_restore_fps_mode",
-        type=str,
-        default=POSTPROCESS_DEFAULTS.restore_fps_mode,
-        choices=["pre_fps", "original"],
-        help="Post-restore fps source: pre_fps (default) or original input fps",
     )
     ap.add_argument(
         "--rife_bin",

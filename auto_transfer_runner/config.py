@@ -84,7 +84,6 @@ class CvControlConfig:
 @dataclass(frozen=True)
 class PreprocessConfig:
     """Video preprocessing config (CFR + resize) before inference."""
-    fps: int | None = 16
     width: int | None = None
     height: int | None = None
     keep_aspect: bool = True
@@ -100,7 +99,6 @@ class PostprocessConfig:
     """Postprocess config (restore duration after Transfer)."""
     restore_duration: bool = False
     restore_mode: str = "speed"  # speed | minterpolate | rife
-    restore_fps_mode: str = "pre_fps"  # pre_fps | original
     rife_bin: str = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan"
     rife_model: str | None = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6"
     rife_backend: str = "ncnn_vulkan"  # ncnn_vulkan | pytorch
