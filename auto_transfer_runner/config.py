@@ -103,6 +103,12 @@ class PostprocessConfig:
     restore_fps_mode: str = "pre_fps"  # pre_fps | original
     rife_bin: str = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan"
     rife_model: str | None = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6"
+    rife_backend: str = "ncnn_vulkan"  # ncnn_vulkan | pytorch
+    rife_pytorch_repo: str | None = "/mnt/data/ganrunhe/Practical-RIFE"
+    rife_pytorch_model_dir: str | None = None
+    rife_pytorch_env: str = "rife"
+    rife_scale: float = 1.0
+    rife_keep_audio: bool = False
 
 
 @dataclass(frozen=True)

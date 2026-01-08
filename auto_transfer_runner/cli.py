@@ -208,6 +208,16 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         restore_fps_mode=args.post_restore_fps_mode,
         rife_bin=args.rife_bin,
         rife_model=args.rife_model,
+        rife_backend=args.rife_backend,
+        rife_pytorch_repo=args.rife_pytorch_repo,
+        rife_pytorch_model_dir=(
+            args.rife_pytorch_model_dir
+            if args.rife_pytorch_model_dir is not None
+            else (str(Path(args.rife_pytorch_repo) / "train_log") if args.rife_pytorch_repo else None)
+        ),
+        rife_pytorch_env=args.rife_pytorch_env,
+        rife_scale=args.rife_scale,
+        rife_keep_audio=args.rife_keep_audio,
     )
 
     transfer = TransferConfig(
@@ -513,6 +523,42 @@ def main(argv: List[str] | None = None) -> None:
         default=POSTPROCESS_DEFAULTS.rife_model,
         help="RIFE model directory (optional; used when --post_restore_mode=rife)",
     )
+    ap.add_argument(
+        "--rife_backend",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_backend,
+        choices=["ncnn_vulkan", "pytorch"],
+        help="RIFE backend: ncnn_vulkan (default) or pytorch (inference_video.py)",
+    )
+    ap.add_argument(
+        "--rife_pytorch_repo",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_pytorch_repo,
+        help="Practical-RIFE repo path (required when --rife_backend=pytorch)",
+    )
+    ap.add_argument(
+        "--rife_pytorch_model_dir",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_pytorch_model_dir,
+        help="Practical-RIFE model dir (default: <rife_pytorch_repo>/train_log)",
+    )
+    ap.add_argument(
+        "--rife_pytorch_env",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_pytorch_env,
+        help="Conda env for Practical-RIFE (default: rife)",
+    )
+    ap.add_argument(
+        "--rife_scale",
+        type=float,
+        default=POSTPROCESS_DEFAULTS.rife_scale,
+        help="RIFE scale (1.0 default; 0.5 can be faster)",
+    )
+    ap.add_argument(
+        "--rife_keep_audio",
+        action="store_true",
+        help="Keep input audio when using RIFE post-restore (default: false)",
+    )
 
     # Step4/5 parameters
     ap.add_argument("--seed", type=int, default=TRANSFER_DEFAULTS.seed, help="Seed in json spec (default: 2025)")
@@ -622,6 +668,11 @@ def main(argv: List[str] | None = None) -> None:
         raise ValueError("--pre_chunk_force_chunks must be >= 1")
     if args.post_restore_mode not in ["speed", "minterpolate", "rife"]:
         raise ValueError("--post_restore_mode must be speed/minterpolate/rife")
+    if args.rife_scale <= 0:
+        raise ValueError("--rife_scale must be > 0")
+    if args.post_restore_mode == "rife" and args.rife_backend == "pytorch":
+        if not args.rife_pytorch_repo:
+            raise ValueError("--rife_pytorch_repo is required when --rife_backend=pytorch")
     if args.resolution not in RESOLUTION_CHOICES:
         raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
 
