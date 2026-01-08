@@ -153,7 +153,6 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             lambda: preprocess_video(
                 video_path=job.video_path,
                 settings=PreprocessSettings(
-                    fps=cfg.preprocess.fps,
                     width=cfg.preprocess.width,
                     height=cfg.preprocess.height,
                     keep_aspect=cfg.preprocess.keep_aspect,
@@ -413,9 +412,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     lambda: restore_duration(
                         output_dir=paths.output_dir,
                         original_stats=original_stats,
-                        pre_fps=cfg.preprocess.fps,
                         mode=cfg.postprocess.restore_mode,
-                        fps_mode=cfg.postprocess.restore_fps_mode,
                         rife_bin=cfg.postprocess.rife_bin,
                         rife_model=cfg.postprocess.rife_model,
                         rife_backend=cfg.postprocess.rife_backend,
@@ -455,13 +452,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         workdir=arm_swap_workdir,
                         no_workdir_write=cfg.arm_swap.no_workdir_write,
                         orig_video=(
-                            preprocessed_video
-                            if (
-                                preprocessed_video is not None
-                                and cfg.postprocess.restore_fps_mode == "pre_fps"
-                                and cfg.preprocess.fps == 16
-                            )
-                            else job.video_path
+                            job.video_path
                         ),
                         qwen_prompt=cfg.arm_swap.qwen_prompt,
                         erode=cfg.arm_swap.erode,

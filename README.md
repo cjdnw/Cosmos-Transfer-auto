@@ -37,29 +37,27 @@ python scripts/run_batch.py \
 ```
 
 ### 例 1.5：开启视频预处理（CFR/对齐 chunk）+ 设置推理 resolution
-预处理会生成 CFR 视频（默认 16fps），输出文件默认保存到 `work_dir/prepro_video/`（保留输入目录结构，文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
+预处理会生成 CFR 视频（默认使用原视频 fps），输出文件默认保存到 `work_dir/prepro_video/`（保留输入目录结构，文件名带 `__pre_...` 后缀），后续控制/推理将复用该预处理结果；Prompt 仍使用原视频。
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
   --gpus 0 \
   --control_type depth \
-  --pre_fps 16 \
   --pre_chunk_mode speed \
   --pre_chunk_force_chunks 8 \
   --resolution 480
 ```
 常用参数说明：
-- `--pre_fps`：输出帧率（none/16，默认 16；none=原视频 fps）。
-说明：`--pre_fps` 影响预处理/控制生成，`--resolution` 决定 STEP5 推理速度（关键加速开关）。
+说明：预处理/控制生成使用原视频 fps；`--resolution` 决定 STEP5 推理速度（关键加速开关）。
 
 预处理/对齐选项（影响控制生成/IO，不影响 STEP5 推理 bucket）：
 - `--pre_width`/`--pre_height`：指定输出宽高，可只填一个；默认不缩放。
 - `--pre_no_keep_aspect`：关闭等比例缩放（默认保持比例）。
-- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=变速补帧，保持输出 fps=pre_fps）。
-- `--pre_chunk_policy {down,up}`：down 减少 chunk，up 增加 chunk（必要时补帧/减速）。
+- `--pre_chunk_mode {none,clip,speed}`：对齐模式（clip=裁剪；speed=均匀抽帧并降低 fps，保持时长不变）。
+- `--pre_chunk_policy {down,up}`：down 减少 chunk，up 增加 chunk（若需要补帧则会跳过对齐）。
 - `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
-- `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/变速）。
-- `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，会忽略 clip/policy/clip_where）。
+- `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/抽帧）。
+- `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，均匀抽帧并降低 fps；忽略 clip/policy/clip_where）。
 
 ## 推理加速：resolution
 `resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：
@@ -115,7 +113,6 @@ python scripts/run_batch.py \
   --post_restore_duration \
   --post_restore_mode rife \
   --rife_backend ncnn_vulkan \
-  --post_restore_fps_mode pre_fps \
   --rife_bin /path/to/rife-ncnn-vulkan \
   --rife_model /path/to/rife-model
 ```
@@ -130,8 +127,6 @@ python scripts/run_batch.py \
   - `--rife_pytorch_env`：Practical-RIFE conda 环境（默认 rife）。
   - `--rife_scale`：RIFE scale（默认 1.0，0.5 可加速）。
   - `--rife_keep_audio`：保留输入音频并 mux 回输出（默认 false）。
-- `--post_restore_fps_mode pre_fps`（默认）：目标 FPS = pre_fps；若能获取原视频帧数与 FPS，则优先与原视频完全一致。
-- `--post_restore_fps_mode original`：目标 FPS = 原始输入视频 FPS（若无法探测则回退为 pre_fps），并优先与原视频帧数一致。
 补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。
 
 ### 例 5：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
@@ -257,8 +252,7 @@ python -m robot_arm_swap \
 执行完成后会自动清空 workdir。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
 Step6 的 `--orig` 选择规则：
-- 当 `--post_restore_fps_mode pre_fps` 且 `--pre_fps 16`：使用预处理 16fps 视频进行 swap。
-- 当 `--pre_fps none` 或 `--post_restore_fps_mode original`：使用原始输入视频进行 swap。
+- 默认使用原始输入视频进行 swap。
 
 ## 输出目录（默认 work_dir=/mnt/data/ganrunhe/auto_transfer）
 - `prompt/`：每个视频（每个 job）独立的 prompt
@@ -470,7 +464,7 @@ python scripts/run_batch.py ... --cleanup_logs
 - `final.txt`（完成替换的最终 prompt）
 
 ## RIFE 补帧（可选）
-用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到目标 FPS（默认 `--pre_fps` 或原视频 fps）。
+用于 `--post_restore_mode rife`，先按时长做变速对齐，再使用 RIFE 插值补帧到目标 FPS（默认原视频 fps）。
 
 ### 安装（示例：rife-ncnn-vulkan）
 1. 从 release 下载 `rife-ncnn-vulkan`（或自行编译）。
@@ -526,13 +520,14 @@ python scripts/run_batch.py \
 ## 更新记录
 - 2026-01-09：Step6 arm swap 新增 `--no-workdir-write`（默认开启内存模式避免 PNG 落盘），CLI 暴露 `--arm_swap_no_workdir_write/--arm_swap_workdir_write` 控制开关。
 - 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。
-- 2026-01-08：`--pre_fps` 缩减为 `none/16`（none=原视频 fps），Step6 arm swap 根据 `--pre_fps` 与 `--post_restore_fps_mode` 选择 orig 视频，并新增 `--disable_guardrails` 透传到 Transfer2.5。
+- 2026-01-10：移除 `--pre_fps` 选项，`pre_chunk_mode=speed` 改为均匀抽帧并降低 fps，保持原视频时长不变。
+- 2026-01-08：Step6 arm swap 根据原视频进行 swap，并新增 `--disable_guardrails` 透传到 Transfer2.5。
 - 2026-01-07：`--post_restore_duration` 优先对齐原视频帧数与 FPS，保证输出帧数与帧率完全一致（即使时长不再强制百分百对齐）。
 - 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
 - 2026-01-07：新增 `--post_restore_mode rife`，支持使用 RIFE 进行补帧（含 `--rife_bin`/`--rife_model`）。
 - 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
-- 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
+- 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
 - 2026-1-4：Step6 机械臂替换切换为单次 `robot_arm_swap` 调用，固定使用 conda 环境 `arm_swap`。
 - 2026-1-4：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
 - 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
@@ -580,4 +575,4 @@ python scripts/run_batch.py \
 - 2025-12-22：Prompt 生成流程适配拆分版 `robot_video_to_prompt.py`（step1~step3），新增基于视频指纹的 base prompt 缓存（`prompt_cache/`），默认使用本仓库内的脚本路径；控制台打印增加 GPU 标签。
 - 2025-12-22：为终端输出统一添加东八区时间戳，并在 Step2~Step5（含清理）及整条流水线上记录耗时，便于观测性能。
 - 2025-12-21：适配新版 `robot_video_to_prompt.py`（支持 Qwen3/Qwen2.5 的 `--model_type` 参数），新增命令行参数 `--prompt_model_type`，默认 conda 环境保持 `qwen25vl`，可选切换为 `qwen3vl`。
-- 2025-12-31：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_fps/--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
+- 2025-12-31：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。

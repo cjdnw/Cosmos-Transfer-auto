@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import os
 import subprocess
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
@@ -15,7 +15,6 @@ from ..utils.subprocess_utils import run_cmd
 
 @dataclass(frozen=True)
 class PreprocessSettings:
-    fps: float | None
     width: int | None
     height: int | None
     keep_aspect: bool
@@ -45,14 +44,14 @@ def preprocess_video(
         output_root=output_root,
         input_root=input_root,
     )
-    effective_fps = _resolve_fps(settings.fps, video_path, env=env, log_path=log_path)
-    settings_for_align = settings if settings.fps is not None else replace(settings, fps=effective_fps)
+    effective_fps = _probe_video_fps(video_path, env=env, log_path=log_path)
     if output_path.exists() and output_path.stat().st_size > 0:
         append_log(log_path, f"[PREPROCESS CACHE HIT] {output_path}")
         console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
         return _align_preprocess_chunks(
             pre_video_path=output_path,
-            settings=settings_for_align,
+            settings=settings,
+            input_fps=effective_fps,
             env=env,
             log_path=log_path,
             lock_timeout_sec=lock_timeout_sec,
@@ -69,7 +68,8 @@ def preprocess_video(
             console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
             return _align_preprocess_chunks(
                 pre_video_path=output_path,
-                settings=settings_for_align,
+                settings=settings,
+                input_fps=effective_fps,
                 env=env,
                 log_path=log_path,
                 lock_timeout_sec=lock_timeout_sec,
@@ -118,7 +118,8 @@ def preprocess_video(
         console_print(f"[PREPROCESS DONE] {output_path.name}")
         return _align_preprocess_chunks(
             pre_video_path=output_path,
-            settings=settings_for_align,
+            settings=settings,
+            input_fps=effective_fps,
             env=env,
             log_path=log_path,
             lock_timeout_sec=lock_timeout_sec,
@@ -145,7 +146,7 @@ def _build_output_path(
 ) -> Path:
     width = _evenize(settings.width)
     height = _evenize(settings.height)
-    fps_label = "orig" if settings.fps is None else str(int(settings.fps))
+    fps_label = "orig"
     w_label = str(width) if width is not None else "auto"
     h_label = str(height) if height is not None else "auto"
     aspect_label = "ka1" if settings.keep_aspect else "ka0"
@@ -164,6 +165,7 @@ def _align_preprocess_chunks(
     *,
     pre_video_path: Path,
     settings: PreprocessSettings,
+    input_fps: float,
     env: Dict[str, str],
     log_path: Path,
     lock_timeout_sec: int,
@@ -226,6 +228,13 @@ def _align_preprocess_chunks(
         )
         console_print("[PRE_CHUNK SKIP] clip cannot increase frames")
         return pre_video_path
+    if mode == "speed" and target_frames > total_frames:
+        append_log(
+            log_path,
+            f"[PRE_CHUNK SKIP] speed cannot increase frames: T={total_frames} T_target={target_frames}",
+        )
+        console_print("[PRE_CHUNK SKIP] speed cannot increase frames")
+        return pre_video_path
 
     aligned_path = _build_aligned_output_path(
         pre_video_path,
@@ -268,7 +277,7 @@ def _align_preprocess_chunks(
                     "-vsync",
                     "cfr",
                     "-r",
-                    str(settings.fps),
+                    str(input_fps),
                     "-c:v",
                     "libx264",
                     "-pix_fmt",
@@ -296,7 +305,7 @@ def _align_preprocess_chunks(
                     "-vsync",
                     "cfr",
                     "-r",
-                    str(settings.fps),
+                    str(input_fps),
                     "-c:v",
                     "libx264",
                     "-pix_fmt",
@@ -307,8 +316,8 @@ def _align_preprocess_chunks(
                 ]
             k_value = None
         elif mode == "speed":
-            k_value = total_frames / target_frames
-            filters = f"setpts=PTS/{k_value},fps={settings.fps}"
+            target_fps = input_fps * (target_frames / total_frames)
+            filters = f"fps={target_fps:.6f}"
             cmd = [
                 "ffmpeg",
                 "-y",
@@ -321,7 +330,7 @@ def _align_preprocess_chunks(
                 "-vsync",
                 "cfr",
                 "-r",
-                str(settings.fps),
+                f"{target_fps:.6f}",
                 "-c:v",
                 "libx264",
                 "-pix_fmt",
@@ -352,7 +361,7 @@ def _align_preprocess_chunks(
             f"n={n}",
         ]
         if mode == "speed":
-            log_parts.append(f"k={k_value}")
+            log_parts.append(f"fps={target_fps:.6f}")
         log_parts.append(f"output={aligned_path}")
         append_log(log_path, " ".join(log_parts))
         console_print(" ".join(log_parts))
@@ -473,15 +482,3 @@ def _probe_video_fps(video_path: Path, *, env: Dict[str, str], log_path: Path) -
         raise RuntimeError("ffprobe returned invalid fps.")
     append_log(log_path, f"[PREPROCESS] probed fps={fps}")
     return fps
-
-
-def _resolve_fps(
-    fps: float | None,
-    video_path: Path,
-    *,
-    env: Dict[str, str],
-    log_path: Path,
-) -> float:
-    if fps is not None:
-        return float(fps)
-    return _probe_video_fps(video_path, env=env, log_path=log_path)
