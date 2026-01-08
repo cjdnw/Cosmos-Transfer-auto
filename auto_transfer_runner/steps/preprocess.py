@@ -43,6 +43,11 @@ def preprocess_video(
     lock_timeout_sec: int,
     stale_lock_sec: int,
 ) -> Path:
+    if _should_skip_preprocess(settings):
+        append_log(log_path, "[PREPROCESS SKIP] pre_fps=none and no resize/chunk alignment")
+        console_print("[PREPROCESS SKIP] use original video")
+        return video_path
+
     output_path = _build_output_path(
         video_path,
         settings,
@@ -164,6 +169,16 @@ def _build_output_path(
             relative_dir = None
     output_dir = output_root if relative_dir is None else output_root / relative_dir
     return output_dir / name
+
+
+def _should_skip_preprocess(settings: PreprocessSettings) -> bool:
+    return (
+        settings.fps is None
+        and settings.width is None
+        and settings.height is None
+        and settings.pre_chunk_mode == "none"
+        and settings.pre_chunk_force_chunks is None
+    )
 
 
 def _align_preprocess_chunks(
