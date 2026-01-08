@@ -205,7 +205,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
     postprocess = PostprocessConfig(
         restore_duration=args.post_restore_duration,
         restore_mode=args.post_restore_mode,
-        restore_fps_mode=args.post_restore_fps_mode,
+        restore_fps_mode="original",
         rife_bin=args.rife_bin,
         rife_model=args.rife_model,
         rife_backend=args.rife_backend,
@@ -496,7 +496,7 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument(
         "--post_restore_duration",
         action="store_true",
-        help="Restore Transfer output to original duration (keeps pre_fps)",
+        help="Restore Transfer output to original duration/fps/frame count",
     )
     ap.add_argument(
         "--post_restore_mode",
@@ -504,13 +504,6 @@ def main(argv: List[str] | None = None) -> None:
         default=POSTPROCESS_DEFAULTS.restore_mode,
         choices=["speed", "minterpolate", "rife"],
         help="Post-restore mode: speed (setpts+fps), minterpolate (smoother, slower), or rife (RIFE interpolation)",
-    )
-    ap.add_argument(
-        "--post_restore_fps_mode",
-        type=str,
-        default=POSTPROCESS_DEFAULTS.restore_fps_mode,
-        choices=["pre_fps", "original"],
-        help="Post-restore fps source: pre_fps (default) or original input fps",
     )
     ap.add_argument(
         "--rife_bin",

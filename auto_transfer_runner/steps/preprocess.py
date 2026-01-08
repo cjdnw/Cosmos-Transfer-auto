@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import os
 import subprocess
@@ -50,7 +51,7 @@ def preprocess_video(
     if output_path.exists() and output_path.stat().st_size > 0:
         append_log(log_path, f"[PREPROCESS CACHE HIT] {output_path}")
         console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
-        return _align_preprocess_chunks(
+        final_path = _align_preprocess_chunks(
             pre_video_path=output_path,
             settings=settings_for_align,
             env=env,
@@ -58,6 +59,13 @@ def preprocess_video(
             lock_timeout_sec=lock_timeout_sec,
             stale_lock_sec=stale_lock_sec,
         )
+        _ensure_frame_map(
+            original_video_path=video_path,
+            pre_video_path=final_path,
+            env=env,
+            log_path=log_path,
+        )
+        return final_path
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = output_path.with_name(f".{output_path.name}.lock")
@@ -67,7 +75,7 @@ def preprocess_video(
         if output_path.exists() and output_path.stat().st_size > 0:
             append_log(log_path, f"[PREPROCESS CACHE HIT AFTER LOCK] {output_path}")
             console_print(f"[PREPROCESS CACHE HIT] {output_path.name}")
-            return _align_preprocess_chunks(
+            final_path = _align_preprocess_chunks(
                 pre_video_path=output_path,
                 settings=settings_for_align,
                 env=env,
@@ -75,6 +83,13 @@ def preprocess_video(
                 lock_timeout_sec=lock_timeout_sec,
                 stale_lock_sec=stale_lock_sec,
             )
+            _ensure_frame_map(
+                original_video_path=video_path,
+                pre_video_path=final_path,
+                env=env,
+                log_path=log_path,
+            )
+            return final_path
 
         tmp_path = output_path.with_name(f".{output_path.stem}__tmp{output_path.suffix}")
         safe_unlink(tmp_path, log_path=log_path)
@@ -116,7 +131,7 @@ def preprocess_video(
         tmp_path.replace(output_path)
         append_log(log_path, f"[PREPROCESS DONE] output={output_path}")
         console_print(f"[PREPROCESS DONE] {output_path.name}")
-        return _align_preprocess_chunks(
+        final_path = _align_preprocess_chunks(
             pre_video_path=output_path,
             settings=settings_for_align,
             env=env,
@@ -124,6 +139,13 @@ def preprocess_video(
             lock_timeout_sec=lock_timeout_sec,
             stale_lock_sec=stale_lock_sec,
         )
+        _ensure_frame_map(
+            original_video_path=video_path,
+            pre_video_path=final_path,
+            env=env,
+            log_path=log_path,
+        )
+        return final_path
 
 
 def _evenize(value: int | None) -> int | None:
@@ -158,6 +180,67 @@ def _build_output_path(
             relative_dir = None
     output_dir = output_root if relative_dir is None else output_root / relative_dir
     return output_dir / name
+
+
+def _frame_map_path(pre_video_path: Path) -> Path:
+    return pre_video_path.with_suffix(".frame_map.jsonl")
+
+
+def frame_map_path_for_video(pre_video_path: Path) -> Path:
+    return _frame_map_path(pre_video_path)
+
+
+def _ensure_frame_map(
+    *,
+    original_video_path: Path,
+    pre_video_path: Path,
+    env: Dict[str, str],
+    log_path: Path,
+) -> Path:
+    map_path = _frame_map_path(pre_video_path)
+    if map_path.exists() and map_path.stat().st_size > 0:
+        append_log(log_path, f"[PREPROCESS] frame map cache hit: {map_path}")
+        return map_path
+
+    original_fps = _probe_video_fps(original_video_path, env=env, log_path=log_path)
+    pre_fps = _probe_video_fps(pre_video_path, env=env, log_path=log_path)
+    original_frames = _probe_frame_count(original_video_path, env=env, log_path=log_path)
+    pre_frames = _probe_frame_count(pre_video_path, env=env, log_path=log_path)
+
+    if original_frames <= 0 or pre_frames <= 0:
+        raise RuntimeError("Invalid frame count while building frame map.")
+    if pre_frames > original_frames:
+        raise RuntimeError(
+            "Preprocessed frames exceed original frames; cannot build strict frame map."
+        )
+
+    map_path.parent.mkdir(parents=True, exist_ok=True)
+    last_original = -1
+    with map_path.open("w", encoding="utf-8") as f:
+        for pre_index in range(pre_frames):
+            timestamp_sec = pre_index / pre_fps
+            original_index = int(round(timestamp_sec * original_fps))
+            original_index = max(0, min(original_index, original_frames - 1))
+            if pre_index == pre_frames - 1:
+                original_index = original_frames - 1
+            if original_index <= last_original:
+                original_index = min(last_original + 1, original_frames - 1)
+            last_original = original_index
+            record = {
+                "pre_index": pre_index,
+                "original_index": original_index,
+                "timestamp_sec": round(timestamp_sec, 6),
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    append_log(
+        log_path,
+        (
+            "[PREPROCESS] frame map written "
+            f"pre_frames={pre_frames} original_frames={original_frames} path={map_path}"
+        ),
+    )
+    return map_path
 
 
 def _align_preprocess_chunks(
