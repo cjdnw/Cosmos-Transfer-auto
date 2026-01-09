@@ -260,6 +260,7 @@ python -m robot_arm_swap \
 ```
 默认启用 `--arm_swap_no_workdir_write`（透传为 `--no-workdir-write`），使用内存模式避免中间 PNG 落盘并直接管道编码输出视频；如需落盘中间 PNG，可使用 `--arm_swap_workdir_write`。
 默认启用 split 模式：会先用 Qwen 生成 bbox JSON，再启动 SAM 处理最终视频，避免单进程占用过高显存；可通过 `--arm_swap_single` 切回单进程模式。
+split 模式的 bbox JSON 默认写入 `workdir/qwen_boxes.json`，再传给 SAM 使用。
 split 模式默认会在完成后清理 bbox JSON，如需保留可加 `--arm_swap_keep_bbox_json`。
 执行完成后会自动清空 workdir。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。

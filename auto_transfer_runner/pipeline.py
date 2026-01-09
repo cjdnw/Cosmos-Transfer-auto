@@ -454,8 +454,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             else:
                 bbox_json = cfg.arm_swap.bbox_json
                 if cfg.arm_swap.split_run and bbox_json is None:
-                    transfer_mp4 = find_transfer_output_mp4(paths.output_dir)
-                    bbox_json = (arm_swap_output_base_dir / transfer_mp4.name).with_suffix(".bbox.json")
+                    bbox_json = arm_swap_workdir / "qwen_boxes.json"
                 if cfg.arm_swap.split_run:
                     _run_with_timing(
                         "STEP6 Arm Swap (Qwen)",
