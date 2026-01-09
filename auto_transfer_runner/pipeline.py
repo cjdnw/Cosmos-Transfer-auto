@@ -168,6 +168,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     keyframe_target_frames=cfg.preprocess.keyframe_target_frames,
                     keyframe_smooth_win=cfg.preprocess.keyframe_smooth_win,
                     keyframe_max_gap=cfg.preprocess.keyframe_max_gap,
+                    parquet_pose_subset=cfg.preprocess.parquet_pose_subset,
                 ),
                 output_root=repos.work_dir / "prepro_video",
                 input_root=input_root,
