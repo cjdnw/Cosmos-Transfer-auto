@@ -243,6 +243,11 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         erode=args.arm_swap_erode,
         feather=args.arm_swap_feather,
         dilate=args.arm_swap_dilate,
+        split_run=(args.arm_swap_split and not (args.arm_swap_qwen_only or args.arm_swap_sam_only)),
+        cleanup_bbox_json=(not args.arm_swap_keep_bbox_json),
+        qwen_only=args.arm_swap_qwen_only,
+        sam_only=args.arm_swap_sam_only,
+        bbox_json=(Path(args.arm_swap_bbox_json) if args.arm_swap_bbox_json else None),
     )
 
     cache = CacheConfig(
@@ -640,6 +645,39 @@ def main(argv: List[str] | None = None) -> None:
                     help="Feather size for arm swap mask (default: 3)")
     ap.add_argument("--arm_swap_dilate", type=int, default=ARM_SWAP_DEFAULTS.dilate,
                     help="Dilate size for arm swap mask (default: 0)")
+    ap.add_argument(
+        "--arm_swap_split",
+        action="store_true",
+        default=ARM_SWAP_DEFAULTS.split_run,
+        help="Run arm swap in two passes (Qwen-only then SAM-only, default: enabled)",
+    )
+    ap.add_argument(
+        "--arm_swap_single",
+        action="store_false",
+        dest="arm_swap_split",
+        help="Run arm swap in a single process (disable split mode)",
+    )
+    ap.add_argument(
+        "--arm_swap_qwen_only",
+        action="store_true",
+        help="Run arm swap in Qwen-only mode to emit bbox JSON",
+    )
+    ap.add_argument(
+        "--arm_swap_sam_only",
+        action="store_true",
+        help="Run arm swap in SAM-only mode (requires --arm_swap_bbox_json)",
+    )
+    ap.add_argument(
+        "--arm_swap_bbox_json",
+        type=str,
+        default=None,
+        help="Path to bbox JSON for arm swap (output for Qwen-only or input for SAM-only)",
+    )
+    ap.add_argument(
+        "--arm_swap_keep_bbox_json",
+        action="store_true",
+        help="Keep arm swap bbox JSON after split run completes (default: delete)",
+    )
 
     # Depth cache
     ap.add_argument("--no_cache_control", action="store_true", help="Disable depth control cache (default: enabled)")
@@ -686,6 +724,10 @@ def main(argv: List[str] | None = None) -> None:
             raise ValueError("--rife_pytorch_repo is required when --rife_backend=pytorch")
     if args.resolution not in RESOLUTION_CHOICES:
         raise ValueError(f"--resolution must be one of: {', '.join(RESOLUTION_CHOICES)}")
+    if args.arm_swap_qwen_only and args.arm_swap_sam_only:
+        raise ValueError("--arm_swap_qwen_only and --arm_swap_sam_only are mutually exclusive")
+    if args.arm_swap_sam_only and not args.arm_swap_bbox_json:
+        raise ValueError("--arm_swap_bbox_json is required when --arm_swap_sam_only is set")
 
     cfg = build_config(args)
 
