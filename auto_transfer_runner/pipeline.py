@@ -6,7 +6,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Callable, Dict, TypeVar
 
-from .config import GlobalConfig
+from .config import ArmSwapConfig, GlobalConfig
 from .steps.prompt import generate_prompt
 from .steps.control import ControlType, generate_control, generate_controls_combo
 from .steps.preprocess import preprocess_video, PreprocessSettings, frame_map_path_for
@@ -452,26 +452,77 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 append_log(paths.log_path, f"[SKIP] step6 checkpoint exists: {step6_marker}")
                 console_print(f"[SKIP] step6 arm swap (checkpoint): {paths.output_dir.name}")
             else:
-                arm_swap_output = _run_with_timing(
-                    "STEP6 Arm Swap",
-                    lambda: run_arm_swap(
-                        project_root=cfg.arm_swap.project_root,
-                        conda_env=cfg.arm_swap.conda_env,
-                        output_dir=paths.output_dir,
-                        output_base_dir=arm_swap_output_base_dir,
-                        workdir=arm_swap_workdir,
-                        no_workdir_write=cfg.arm_swap.no_workdir_write,
-                        orig_video=(
-                            job.video_path
+                bbox_json = cfg.arm_swap.bbox_json
+                if cfg.arm_swap.split_run and bbox_json is None:
+                    transfer_mp4 = find_transfer_output_mp4(paths.output_dir)
+                    bbox_json = (arm_swap_output_base_dir / transfer_mp4.name).with_suffix(".bbox.json")
+                if cfg.arm_swap.split_run:
+                    _run_with_timing(
+                        "STEP6 Arm Swap (Qwen)",
+                        lambda: run_arm_swap(
+                            project_root=cfg.arm_swap.project_root,
+                            conda_env=cfg.arm_swap.conda_env,
+                            output_dir=paths.output_dir,
+                            output_base_dir=arm_swap_output_base_dir,
+                            workdir=arm_swap_workdir,
+                            no_workdir_write=cfg.arm_swap.no_workdir_write,
+                            orig_video=job.video_path,
+                            qwen_prompt=cfg.arm_swap.qwen_prompt,
+                            erode=cfg.arm_swap.erode,
+                            feather=cfg.arm_swap.feather,
+                            dilate=cfg.arm_swap.dilate,
+                            qwen_only=True,
+                            sam_only=False,
+                            bbox_json=bbox_json,
+                            env=env,
+                            log_path=paths.log_path,
                         ),
-                        qwen_prompt=cfg.arm_swap.qwen_prompt,
-                        erode=cfg.arm_swap.erode,
-                        feather=cfg.arm_swap.feather,
-                        dilate=cfg.arm_swap.dilate,
-                        env=env,
-                        log_path=paths.log_path,
-                    ),
-                )
+                    )
+                    arm_swap_output = _run_with_timing(
+                        "STEP6 Arm Swap (SAM)",
+                        lambda: run_arm_swap(
+                            project_root=cfg.arm_swap.project_root,
+                            conda_env=cfg.arm_swap.conda_env,
+                            output_dir=paths.output_dir,
+                            output_base_dir=arm_swap_output_base_dir,
+                            workdir=arm_swap_workdir,
+                            no_workdir_write=cfg.arm_swap.no_workdir_write,
+                            orig_video=job.video_path,
+                            qwen_prompt=cfg.arm_swap.qwen_prompt,
+                            erode=cfg.arm_swap.erode,
+                            feather=cfg.arm_swap.feather,
+                            dilate=cfg.arm_swap.dilate,
+                            qwen_only=False,
+                            sam_only=True,
+                            bbox_json=bbox_json,
+                            env=env,
+                            log_path=paths.log_path,
+                        ),
+                    )
+                    if cfg.arm_swap.cleanup_bbox_json and bbox_json is not None and bbox_json.exists():
+                        bbox_json.unlink()
+                else:
+                    arm_swap_output = _run_with_timing(
+                        "STEP6 Arm Swap",
+                        lambda: run_arm_swap(
+                            project_root=cfg.arm_swap.project_root,
+                            conda_env=cfg.arm_swap.conda_env,
+                            output_dir=paths.output_dir,
+                            output_base_dir=arm_swap_output_base_dir,
+                            workdir=arm_swap_workdir,
+                            no_workdir_write=cfg.arm_swap.no_workdir_write,
+                            orig_video=job.video_path,
+                            qwen_prompt=cfg.arm_swap.qwen_prompt,
+                            erode=cfg.arm_swap.erode,
+                            feather=cfg.arm_swap.feather,
+                            dilate=cfg.arm_swap.dilate,
+                            qwen_only=cfg.arm_swap.qwen_only,
+                            sam_only=cfg.arm_swap.sam_only,
+                            bbox_json=bbox_json,
+                            env=env,
+                            log_path=paths.log_path,
+                        ),
+                    )
                 append_log(paths.log_path, f"[DONE] arm_swap_output={arm_swap_output}")
                 console_print(f"[ARM SWAP DONE] out={arm_swap_output}")
                 mark_done(step6_marker)
@@ -589,7 +640,7 @@ def _bootstrap_checkpoints(
                 video_path=job.video_path,
                 variant_idx=job.variant_idx,
             )
-            if _arm_swap_output_exists(paths.output_dir, arm_swap_output_base_dir):
+            if _arm_swap_output_exists(paths.output_dir, arm_swap_output_base_dir, cfg.arm_swap):
                 mark_done(step6_marker)
                 if not cfg.postprocess.restore_duration or marker_exists(step5_restore_marker):
                     mark_done(job_done_marker)
@@ -600,7 +651,15 @@ def _bootstrap_checkpoints(
             mark_done(job_done_marker)
 
 
-def _arm_swap_output_exists(output_dir: Path, output_base_dir: Path) -> bool:
+def _arm_swap_output_exists(
+    output_dir: Path,
+    output_base_dir: Path,
+    arm_swap_cfg: ArmSwapConfig,
+) -> bool:
+    if arm_swap_cfg.qwen_only and not arm_swap_cfg.sam_only:
+        if arm_swap_cfg.bbox_json is None:
+            return False
+        return arm_swap_cfg.bbox_json.exists() and arm_swap_cfg.bbox_json.stat().st_size > 0
     if not output_dir.exists():
         return False
     mp4s = sorted([p for p in output_dir.glob("*.mp4") if p.is_file()])

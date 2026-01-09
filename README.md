@@ -259,6 +259,8 @@ python -m robot_arm_swap \
   --out /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/<output_video_name>.mp4
 ```
 默认启用 `--arm_swap_no_workdir_write`（透传为 `--no-workdir-write`），使用内存模式避免中间 PNG 落盘并直接管道编码输出视频；如需落盘中间 PNG，可使用 `--arm_swap_workdir_write`。
+默认启用 split 模式：会先用 Qwen 生成 bbox JSON，再启动 SAM 处理最终视频，避免单进程占用过高显存；可通过 `--arm_swap_single` 切回单进程模式。
+split 模式默认会在完成后清理 bbox JSON，如需保留可加 `--arm_swap_keep_bbox_json`。
 执行完成后会自动清空 workdir。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
 Step6 的 `--orig` 选择规则：
@@ -528,6 +530,7 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-09：Step6 arm swap 默认拆成 Qwen+SAM 两步运行，新增 `--arm_swap_split/--arm_swap_single` 控制；split 产物 bbox JSON 默认清理，可用 `--arm_swap_keep_bbox_json` 保留。
 - 2026-01-09：Step6 arm swap 新增 `--no-workdir-write`（默认开启内存模式避免 PNG 落盘），CLI 暴露 `--arm_swap_no_workdir_write/--arm_swap_workdir_write` 控制开关。
 - 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。
 - 2026-01-10：移除 `--pre_fps` 选项，`pre_chunk_mode=speed` 改为均匀抽帧并降低 fps，保持原视频时长不变。

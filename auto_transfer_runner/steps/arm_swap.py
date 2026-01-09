@@ -81,6 +81,9 @@ def run_arm_swap(
     erode: int,
     feather: int,
     dilate: int,
+    qwen_only: bool,
+    sam_only: bool,
+    bbox_json: Path | None,
     env: Dict[str, str],
     log_path: Path,
 ) -> Path:
@@ -90,6 +93,7 @@ def run_arm_swap(
     Command:
       python -m robot_arm_swap --orig <input> --skin <transfer_output> --workdir <dir>
         --fps <fps> --width <width> --qwen-prompt "<prompt>" --out <output>
+        [--qwen-only | --sam-only --bbox-json <path>]
     """
     output_base_dir.mkdir(parents=True, exist_ok=True)
     workdir.parent.mkdir(parents=True, exist_ok=True)
@@ -127,10 +131,22 @@ def run_arm_swap(
             str(output_path),
         ],
     )
+    if qwen_only:
+        cmd.append("--qwen-only")
+    if sam_only:
+        cmd.append("--sam-only")
+    if bbox_json is not None:
+        cmd.extend(["--bbox-json", str(bbox_json)])
     if no_workdir_write:
         cmd.append("--no-workdir-write")
     try:
         run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap")
+        if qwen_only:
+            if bbox_json is not None:
+                if not bbox_json.exists() or bbox_json.stat().st_size == 0:
+                    raise FileNotFoundError(f"Arm swap bbox json not found after run: {bbox_json}")
+                return bbox_json
+            return output_path
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
         return output_path

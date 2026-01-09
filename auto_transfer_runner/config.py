@@ -157,6 +157,11 @@ class ArmSwapConfig:
     erode: int = 2
     feather: int = 3
     dilate: int = 0
+    split_run: bool = True
+    cleanup_bbox_json: bool = True
+    qwen_only: bool = False
+    sam_only: bool = False
+    bbox_json: Path | None = None
 
 
 @dataclass(frozen=True)
