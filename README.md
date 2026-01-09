@@ -19,6 +19,7 @@
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
 - 可选：安装 `rife-ncnn-vulkan` 或 Practical-RIFE（PyTorch/CUDA）以启用 `--post_restore_mode rife`（RIFE 补帧）
+- 本仓库自身依赖（用于 base 环境运行）见 `requirements.txt`：`numpy`、`pyarrow`。
 
 ## 工程结构
 - `scripts/run_batch.py`：主入口（命令行运行）
@@ -585,3 +586,5 @@ python scripts/run_batch.py \
 - 2025-12-22：为终端输出统一添加东八区时间戳，并在 Step2~Step5（含清理）及整条流水线上记录耗时，便于观测性能。
 - 2025-12-21：适配新版 `robot_video_to_prompt.py`（支持 Qwen3/Qwen2.5 的 `--model_type` 参数），新增命令行参数 `--prompt_model_type`，默认 conda 环境保持 `qwen25vl`，可选切换为 `qwen3vl`。
 - 2025-12-31：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
+- 2025-xx-xx：新增 parquet-motion 关键帧采样，输出 16fps 的 `keyframes.mp4` 并作为 Transfer2.5 输入；支持按 chunk 数自动计算目标帧数。
+- 2025-xx-xx：新增 `requirements.txt`，列出本仓库自身依赖（`numpy`、`pyarrow`），便于 base 环境安装。
