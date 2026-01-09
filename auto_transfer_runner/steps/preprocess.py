@@ -764,7 +764,7 @@ def _maybe_generate_keyframes(
         "-i",
         str(video_path),
         "-vf",
-        f"{scale_filter},select='{select_filter}',fps=16",
+        f"{scale_filter},select='{select_filter}',setpts=N/(16*TB)",
         "-vsync",
         "cfr",
         "-r",
