@@ -76,6 +76,7 @@ def run_arm_swap(
     output_base_dir: Path,
     workdir: Path,
     no_workdir_write: bool,
+    cleanup_workdir: bool,
     orig_video: Path,
     qwen_prompt: str,
     erode: int,
@@ -151,4 +152,5 @@ def run_arm_swap(
             raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
         return output_path
     finally:
-        _cleanup_workdir(workdir)
+        if cleanup_workdir:
+            _cleanup_workdir(workdir)
