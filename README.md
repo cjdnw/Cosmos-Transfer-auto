@@ -58,6 +58,15 @@ python scripts/run_batch.py \
 - `--pre_chunk_clip_where {tail,head,center}`：clip 模式裁剪位置。
 - `--pre_chunk_max_adjust N`：当 |T - T_target| > N 时跳过对齐（避免过度裁剪/抽帧）。
 - `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，均匀抽帧并降低 fps；忽略 clip/policy/clip_where）。
+- `--keyframe_sampling {uniform,parquet_motion}`：使用 parquet 的 observation.state 变化进行非均匀抽帧。
+- `--keyframe_target_frames N`：目标关键帧数（默认使用 `--num_video_frames_per_chunk`；若开启 `--pre_chunk_mode speed` 或 `--pre_chunk_force_chunks`，则按 chunk 数自动计算）。
+- `--keyframe_smooth_win N`：运动分数平滑窗口（默认 5）。
+- `--keyframe_max_gap N`：最大帧间隔约束（默认 8）。
+
+当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）：
+- `keyframes.mp4`：抽取的关键帧视频（固定 16fps）
+- `keyframe_indices.txt`：每行一个原视频帧号
+- `keyframe_meta.json`：包含输入视频、parquet 路径、关键帧索引等信息
 
 ## 推理加速：resolution
 `resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：
@@ -85,7 +94,7 @@ python scripts/run_batch.py \
 ```
 
 ### 例 2.5：按 task.parquet 分组抽样（每个任务最多选 N 个）
-`task.parquet` 默认位于 `meta/` 目录下，视频位于 `videos/` 子目录；程序会向上查找同级 `meta/task.parquet` 并按内容分组。
+`task.parquet` 默认位于数据集根目录下的 `meta/` 目录（与 `videos/` 同级）；程序会根据 `videos/` 的父目录定位 `meta/task.parquet` 并按内容分组。
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
