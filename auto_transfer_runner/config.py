@@ -92,6 +92,10 @@ class PreprocessConfig:
     pre_chunk_clip_where: str = "tail"
     pre_chunk_max_adjust: int = 40
     pre_chunk_force_chunks: int | None = None
+    keyframe_sampling: str = "uniform"  # uniform | parquet_motion
+    keyframe_target_frames: int | None = None
+    keyframe_smooth_win: int = 5
+    keyframe_max_gap: int = 8
 
 
 @dataclass(frozen=True)

@@ -6,9 +6,12 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Iterable
+
+import numpy as np
 
 from ..utils.cleanup import safe_unlink
+from ..utils.dataset_paths import parquet_path_for_video
 from ..utils.locking import FileLock, FileLockConfig
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import run_cmd
@@ -26,6 +29,10 @@ class PreprocessSettings:
     pre_chunk_force_chunks: int | None
     num_video_frames_per_chunk: int
     num_conditional_frames: int
+    keyframe_sampling: str
+    keyframe_target_frames: int | None
+    keyframe_smooth_win: int
+    keyframe_max_gap: int
 
 
 def frame_map_path_for(pre_video_path: Path) -> Path:
@@ -43,6 +50,18 @@ def preprocess_video(
     lock_timeout_sec: int,
     stale_lock_sec: int,
 ) -> Path:
+    keyframe_video = _maybe_generate_keyframes(
+        video_path=video_path,
+        settings=settings,
+        output_root=output_root,
+        input_root=input_root,
+        env=env,
+        log_path=log_path,
+    )
+    if keyframe_video is not None:
+        append_log(log_path, f"[PREPROCESS KEYFRAME] output={keyframe_video}")
+        console_print(f"[PREPROCESS KEYFRAME] {keyframe_video.name}")
+        return keyframe_video
     output_path = _build_output_path(
         video_path,
         settings,
@@ -475,6 +494,313 @@ def _build_scale_filter(*, width: int | None, height: int | None, keep_aspect: b
             return f"scale=trunc(iw/2)*2:{height}"
 
     return "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+
+
+def _keyframe_output_dir(video_path: Path, *, output_root: Path, input_root: Path | None) -> Path:
+    relative_dir = None
+    if input_root is not None:
+        try:
+            relative_dir = video_path.parent.relative_to(input_root)
+        except ValueError:
+            relative_dir = None
+    base_dir = output_root if relative_dir is None else output_root / relative_dir
+    return base_dir / f"{video_path.stem}__keyframes"
+
+
+def _keyframe_target_from_chunks(
+    *,
+    total_frames: int,
+    settings: PreprocessSettings,
+) -> int:
+    L = settings.num_video_frames_per_chunk
+    C = settings.num_conditional_frames
+    S = L - C
+    if S <= 0:
+        return L
+    if settings.pre_chunk_force_chunks is not None:
+        n = settings.pre_chunk_force_chunks
+    else:
+        if total_frames <= L:
+            n_up = 1
+            n_down = 1
+        else:
+            n_up = 1 + math.ceil((total_frames - L) / S)
+            n_down = 1 + math.floor((total_frames - L) / S)
+        n = n_up if settings.pre_chunk_policy == "up" else n_down
+    return L + (n - 1) * S
+
+
+def _load_parquet_states(parquet_path: Path) -> tuple[np.ndarray, list[int]]:
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(parquet_path)
+    names = set(table.schema.names)
+    if "observation.state" in names:
+        state_values = table.column("observation.state").to_pylist()
+    elif "observation" in names:
+        obs_values = table.column("observation").to_pylist()
+        state_values = []
+        for item in obs_values:
+            if isinstance(item, dict):
+                state_values.append(item.get("state"))
+            else:
+                try:
+                    state_values.append(item["state"])
+                except Exception as exc:
+                    raise ValueError("Unable to parse observation.state from parquet observation column") from exc
+    else:
+        raise ValueError("Parquet missing observation.state column")
+
+    if "frame_index" in names:
+        frame_indices = [int(x) for x in table.column("frame_index").to_pylist()]
+    else:
+        frame_indices = list(range(len(state_values)))
+
+    states = np.asarray(state_values, dtype=float)
+    if states.ndim == 1 and len(states) > 0:
+        try:
+            states = np.stack(state_values, axis=0).astype(float)
+        except Exception as exc:
+            raise ValueError(f"Unexpected observation.state shape: {states.shape}") from exc
+    if states.ndim != 2:
+        raise ValueError(f"Unexpected observation.state shape: {states.shape}")
+    return states, frame_indices
+
+
+def _moving_average(values: np.ndarray, win: int) -> np.ndarray:
+    if win <= 1:
+        return values
+    kernel = np.ones(win, dtype=float) / float(win)
+    return np.convolve(values, kernel, mode="same")
+
+
+def _enforce_max_gap(
+    indices: list[int],
+    motion_scores: np.ndarray,
+    *,
+    max_gap: int,
+    target_frames: int,
+) -> list[int]:
+    if max_gap <= 0:
+        return indices
+
+    indices = sorted(set(indices))
+    if indices[0] != 0:
+        indices[0] = 0
+
+    expanded: list[int] = [indices[0]]
+    for start, end in zip(indices[:-1], indices[1:]):
+        gap = end - start
+        if gap > max_gap:
+            inserts = int(math.ceil(gap / max_gap)) - 1
+            for step in range(1, inserts + 1):
+                pos = int(round(start + (gap * step) / (inserts + 1)))
+                if pos <= expanded[-1]:
+                    pos = expanded[-1] + 1
+                if pos < end:
+                    expanded.append(pos)
+        expanded.append(end)
+
+    expanded = sorted(set(expanded))
+    while len(expanded) > target_frames:
+        removable: list[int] = []
+        for i in range(1, len(expanded) - 1):
+            prev_idx = expanded[i - 1]
+            next_idx = expanded[i + 1]
+            if next_idx - prev_idx <= max_gap:
+                removable.append(expanded[i])
+        if not removable:
+            break
+        removable.sort(key=lambda idx: motion_scores[idx])
+        expanded.remove(removable[0])
+
+    if len(expanded) > target_frames:
+        expanded = expanded[:target_frames - 1] + [expanded[-1]]
+
+    expanded[0] = 0
+    return expanded
+
+
+def _select_keyframes_from_states(
+    states: np.ndarray,
+    *,
+    target_frames: int,
+    smooth_win: int,
+    max_gap: int,
+) -> list[int]:
+    T = states.shape[0]
+    if target_frames <= 0:
+        raise ValueError("target_frames must be positive")
+    if T < target_frames:
+        raise ValueError(f"Video frame count T={T} is less than target N={target_frames}")
+
+    diffs = np.zeros(T, dtype=float)
+    diffs[1:] = np.linalg.norm(states[1:] - states[:-1], axis=1)
+    diffs = _moving_average(diffs, smooth_win)
+    nonzero = diffs[diffs > 0]
+    if nonzero.size > 0:
+        eps = 0.2 * float(np.percentile(nonzero, 10))
+    else:
+        eps = 1e-6
+    diffs = np.maximum(diffs, eps)
+
+    cumulative = np.cumsum(diffs)
+    if target_frames == 1:
+        indices = [0]
+    else:
+        delta = (cumulative[-1] - cumulative[0]) / (target_frames - 1)
+        indices = []
+        prev = -1
+        for m in range(target_frames):
+            target = cumulative[0] + delta * m
+            idx = int(np.searchsorted(cumulative, target, side="left"))
+            if idx <= prev:
+                idx = prev + 1
+            if idx >= T:
+                idx = T - 1
+            indices.append(idx)
+            prev = idx
+        indices[-1] = T - 1
+
+    indices = _enforce_max_gap(indices, diffs, max_gap=max_gap, target_frames=target_frames)
+    if len(indices) != target_frames:
+        if len(indices) < target_frames:
+            raise ValueError("Failed to sample enough keyframes after enforcing max_gap")
+        indices = indices[:target_frames - 1] + [indices[-1]]
+    indices[0] = 0
+    indices[-1] = T - 1
+    return indices
+
+
+def _build_select_filter(indices: Iterable[int]) -> str:
+    parts = [f"eq(n\\,{idx})" for idx in indices]
+    return "+".join(parts)
+
+
+def _maybe_generate_keyframes(
+    *,
+    video_path: Path,
+    settings: PreprocessSettings,
+    output_root: Path,
+    input_root: Path | None,
+    env: Dict[str, str],
+    log_path: Path,
+) -> Path | None:
+    if settings.keyframe_sampling != "parquet_motion":
+        return None
+
+    try:
+        parquet_path = parquet_path_for_video(video_path)
+    except ValueError as exc:
+        raise ValueError(f"Failed to derive parquet path for input_video_path={video_path}") from exc
+    if not parquet_path.exists():
+        raise FileNotFoundError(
+            f"Parquet not found for input video.\n"
+            f"input_video_path={video_path}\n"
+            f"parquet_path={parquet_path}"
+        )
+
+    states, frame_indices = _load_parquet_states(parquet_path)
+    total_frames = states.shape[0]
+    video_frames = _probe_frame_count(video_path, env=env, log_path=log_path)
+    append_log(log_path, f"[KEYFRAME] parquet={parquet_path}")
+    append_log(log_path, f"[KEYFRAME] video_frames={video_frames} parquet_frames={total_frames}")
+    console_print(f"[KEYFRAME] parquet={parquet_path}")
+    console_print(f"[KEYFRAME] video_frames={video_frames} parquet_frames={total_frames}")
+    if settings.keyframe_target_frames is not None:
+        target_frames = settings.keyframe_target_frames
+    elif settings.pre_chunk_mode == "speed" or settings.pre_chunk_force_chunks is not None:
+        target_frames = _keyframe_target_from_chunks(total_frames=video_frames, settings=settings)
+    else:
+        target_frames = settings.num_video_frames_per_chunk
+    if target_frames <= 0:
+        raise ValueError("keyframe_target_frames must be positive")
+    if total_frames < target_frames:
+        raise ValueError(f"Video frames too short: T={total_frames} < N={target_frames}")
+
+    keyframe_indices = _select_keyframes_from_states(
+        states,
+        target_frames=target_frames,
+        smooth_win=settings.keyframe_smooth_win,
+        max_gap=settings.keyframe_max_gap,
+    )
+    mapped_indices = [frame_indices[idx] for idx in keyframe_indices]
+    if any(mapped_indices[i] >= mapped_indices[i + 1] for i in range(len(mapped_indices) - 1)):
+        raise ValueError("Keyframe indices are not strictly increasing after mapping frame_index")
+    if max(mapped_indices) >= video_frames:
+        raise ValueError(
+            f"Keyframe index exceeds video frame count: max={max(mapped_indices)} video_frames={video_frames}"
+        )
+
+    output_dir = _keyframe_output_dir(video_path, output_root=output_root, input_root=input_root)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    keyframe_indices_path = output_dir / "keyframe_indices.txt"
+    keyframe_indices_path.write_text(
+        "\n".join(str(idx) for idx in mapped_indices) + "\n",
+        encoding="utf-8",
+    )
+    output_video_path = output_dir / "keyframes.mp4"
+    meta = {
+        "input_video_path": str(video_path),
+        "parquet_path": str(parquet_path),
+        "N": target_frames,
+        "max_gap": settings.keyframe_max_gap,
+        "smooth_win": settings.keyframe_smooth_win,
+        "keyframe_indices": mapped_indices,
+        "output_video_path": str(output_video_path),
+        "output_fps": 16,
+    }
+    (output_dir / "keyframe_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    select_filter = _build_select_filter(mapped_indices)
+    scale_filter = _build_scale_filter(
+        width=settings.width,
+        height=settings.height,
+        keep_aspect=settings.keep_aspect,
+    )
+    extract_cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"{scale_filter},select='{select_filter}',setpts=N/(16*TB)",
+        "-vsync",
+        "cfr",
+        "-r",
+        "16",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(output_video_path),
+    ]
+    run_cmd(
+        extract_cmd,
+        cwd=None,
+        env=env or dict(os.environ),
+        log_path=log_path,
+        title="STEP1 Keyframe extract (parquet motion)",
+    )
+
+    gaps = [b - a for a, b in zip(mapped_indices[:-1], mapped_indices[1:])]
+    max_gap_actual = max(gaps) if gaps else 0
+    append_log(
+        log_path,
+        (
+            "[KEYFRAME] "
+            f"min={min(mapped_indices)} max={max(mapped_indices)} "
+            f"max_gap_actual={max_gap_actual}"
+        ),
+    )
+    console_print(
+        "[KEYFRAME] "
+        f"min={min(mapped_indices)} max={max(mapped_indices)} "
+        f"max_gap_actual={max_gap_actual}"
+    )
+    return output_video_path
 
 
 def _parse_fraction(value: str) -> float:
