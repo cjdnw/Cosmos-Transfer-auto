@@ -63,6 +63,7 @@ python scripts/run_batch.py \
 - `--keyframe_target_frames N`：目标关键帧数（默认使用 `--num_video_frames_per_chunk`；若开启 `--pre_chunk_mode speed` 或 `--pre_chunk_force_chunks`，则按 chunk 数自动计算）。
 - `--keyframe_smooth_win N`：运动分数平滑窗口（默认 5）。
 - `--keyframe_max_gap N`：最大帧间隔约束（默认 8）。
+- `--parquet_pose_subset {zarm_pos,zarm_pos_vel,zarm_pos_vel_hand,full}`：parquet_motion 的姿态维度子集（默认 `zarm_pos_vel`，可过滤非机械臂维度）。
 
 当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）：
 - `keyframes.mp4`：抽取的关键帧视频（固定 16fps）
@@ -531,6 +532,7 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-11：parquet_motion 新增 `--parquet_pose_subset`（可选 zarm pos/vel/hand 子集或 full），并在 keyframe 运动量计算中按 meta/info.json 名称选择维度，支持 stats.json 标准化与更稳健的 parquet 路径解析。
 - 2026-01-09：Step6 arm swap 默认拆成 Qwen+SAM 两步运行，新增 `--arm_swap_split/--arm_swap_single` 控制；split 产物 bbox JSON 默认清理，可用 `--arm_swap_keep_bbox_json` 保留。
 - 2026-01-09：Step6 arm swap 新增 `--no-workdir-write`（默认开启内存模式避免 PNG 落盘），CLI 暴露 `--arm_swap_no_workdir_write/--arm_swap_workdir_write` 控制开关。
 - 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。

@@ -96,6 +96,7 @@ class PreprocessConfig:
     keyframe_target_frames: int | None = None
     keyframe_smooth_win: int = 5
     keyframe_max_gap: int = 8
+    parquet_pose_subset: str = "zarm_pos_vel"
 
 
 @dataclass(frozen=True)
