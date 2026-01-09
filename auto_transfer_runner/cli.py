@@ -188,6 +188,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         keyframe_target_frames=args.keyframe_target_frames,
         keyframe_smooth_win=args.keyframe_smooth_win,
         keyframe_max_gap=args.keyframe_max_gap,
+        parquet_pose_subset=args.parquet_pose_subset,
     )
 
     postprocess = PostprocessConfig(
@@ -500,6 +501,13 @@ def main(argv: List[str] | None = None) -> None:
         type=int,
         default=PREPROCESS_DEFAULTS.keyframe_max_gap,
         help="Max gap between sampled frames for parquet motion sampling (default: 8)",
+    )
+    ap.add_argument(
+        "--parquet_pose_subset",
+        type=str,
+        default=PREPROCESS_DEFAULTS.parquet_pose_subset,
+        choices=["zarm_pos", "zarm_pos_vel", "zarm_pos_vel_hand", "full"],
+        help="Pose subset for parquet_motion diffs (default: zarm_pos_vel)",
     )
 
     # Step5.5 post-restore (duration)

@@ -11,7 +11,7 @@ from typing import Dict, Iterable
 import numpy as np
 
 from ..utils.cleanup import safe_unlink
-from ..utils.dataset_paths import parquet_path_for_video
+from ..utils.dataset_paths import find_dataset_root, parquet_path_for_video
 from ..utils.locking import FileLock, FileLockConfig
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import run_cmd
@@ -33,6 +33,7 @@ class PreprocessSettings:
     keyframe_target_frames: int | None
     keyframe_smooth_win: int
     keyframe_max_gap: int
+    parquet_pose_subset: str
 
 
 def frame_map_path_for(pre_video_path: Path) -> Path:
@@ -530,7 +531,91 @@ def _keyframe_target_from_chunks(
     return L + (n - 1) * S
 
 
-def _load_parquet_states(parquet_path: Path) -> tuple[np.ndarray, list[int]]:
+def _log_warning(log_path: Path, message: str) -> None:
+    append_log(log_path, f"[WARN] {message}")
+    console_print(f"[WARN] {message}")
+
+
+def _log_info(log_path: Path, message: str) -> None:
+    append_log(log_path, message)
+    console_print(message)
+
+
+def _load_state_names(dataset_root: Path, *, state_dim: int) -> tuple[list[str], set[str]]:
+    info_path = dataset_root / "meta" / "info.json"
+    with info_path.open("r", encoding="utf-8") as f:
+        info = json.load(f)
+
+    state_info = None
+    if isinstance(info.get("observation"), dict):
+        state_info = info["observation"].get("state")
+    if state_info is None and isinstance(info.get("observations"), dict):
+        state_info = info["observations"].get("state")
+    if state_info is None and isinstance(info.get("observation.state"), dict):
+        state_info = info.get("observation.state")
+    if state_info is None and isinstance(info.get("features"), dict):
+        features = info["features"]
+        if isinstance(features.get("observation.state"), dict):
+            state_info = features.get("observation.state")
+
+    names = None
+    dexhand_names: list[str] = []
+    if isinstance(state_info, dict):
+        names = state_info.get("names")
+    if isinstance(names, dict):
+        dexhand_names = list(names.get("dexhand", []))
+        sensors_names = list(names.get("sensors_raw", []))
+        names = dexhand_names + sensors_names
+    if not isinstance(names, list):
+        raise ValueError("Unable to parse observation.state names from meta/info.json")
+    if len(names) != state_dim:
+        raise ValueError(
+            f"observation.state names length mismatch: got {len(names)} expected {state_dim}"
+        )
+    return names, set(dexhand_names)
+
+
+def _load_state_stats(dataset_root: Path, *, state_dim: int, log_path: Path) -> tuple[np.ndarray | None, np.ndarray | None]:
+    stats_path = dataset_root / "meta" / "stats.json"
+    if not stats_path.exists():
+        _log_warning(log_path, f"stats.json not found at {stats_path}; skipping normalization")
+        return None, None
+    with stats_path.open("r", encoding="utf-8") as f:
+        stats = json.load(f)
+    state_stats = None
+    if isinstance(stats.get("observation"), dict):
+        state_stats = stats["observation"].get("state")
+    if state_stats is None and isinstance(stats.get("observations"), dict):
+        state_stats = stats["observations"].get("state")
+    if state_stats is None and isinstance(stats.get("observation.state"), dict):
+        state_stats = stats.get("observation.state")
+    if state_stats is None and isinstance(stats.get("features"), dict):
+        features = stats["features"]
+        if isinstance(features.get("observation.state"), dict):
+            state_stats = features.get("observation.state")
+    if not isinstance(state_stats, dict):
+        _log_warning(log_path, "stats.json missing observation.state; skipping normalization")
+        return None, None
+    mean = state_stats.get("mean")
+    std = state_stats.get("std")
+    if not isinstance(mean, list) or not isinstance(std, list):
+        _log_warning(log_path, "stats.json missing mean/std arrays; skipping normalization")
+        return None, None
+    if len(mean) != state_dim or len(std) != state_dim:
+        _log_warning(
+            log_path,
+            f"stats.json mean/std length mismatch (mean={len(mean)} std={len(std)} expected={state_dim}); skipping",
+        )
+        return None, None
+    return np.asarray(mean, dtype=float), np.asarray(std, dtype=float)
+
+
+def _load_parquet_states(
+    parquet_path: Path,
+    *,
+    dataset_root: Path,
+    log_path: Path,
+) -> tuple[np.ndarray, list[int], list[str], set[str]]:
     import pyarrow.parquet as pq
 
     table = pq.read_table(parquet_path)
@@ -564,7 +649,8 @@ def _load_parquet_states(parquet_path: Path) -> tuple[np.ndarray, list[int]]:
             raise ValueError(f"Unexpected observation.state shape: {states.shape}") from exc
     if states.ndim != 2:
         raise ValueError(f"Unexpected observation.state shape: {states.shape}")
-    return states, frame_indices
+    state_names, dexhand_names = _load_state_names(dataset_root, state_dim=states.shape[1])
+    return states, frame_indices, state_names, dexhand_names
 
 
 def _moving_average(values: np.ndarray, win: int) -> np.ndarray:
@@ -621,12 +707,90 @@ def _enforce_max_gap(
     return expanded
 
 
+def _select_pose_indices(
+    state_names: list[str],
+    dexhand_names: set[str],
+    *,
+    subset: str,
+    log_path: Path,
+) -> tuple[list[int], str]:
+    subset = subset or "full"
+    if subset == "full":
+        keep_idx = list(range(len(state_names)))
+    else:
+        prefixes: list[str] = []
+        if subset in {"zarm_pos", "zarm_pos_vel", "zarm_pos_vel_hand"}:
+            prefixes.append("position.zarm_")
+        if subset in {"zarm_pos_vel", "zarm_pos_vel_hand"}:
+            prefixes.append("velocity.zarm_")
+        include_dexhand = subset == "zarm_pos_vel_hand"
+        keep_idx = [
+            idx
+            for idx, name in enumerate(state_names)
+            if any(name.startswith(prefix) for prefix in prefixes)
+            or (include_dexhand and name in dexhand_names)
+        ]
+    if not keep_idx:
+        _log_warning(
+            log_path,
+            (
+                f"parquet_pose_subset={subset} produced 0 dims "
+                f"(prefixes={prefixes}); falling back to full"
+            ),
+        )
+        keep_idx = list(range(len(state_names)))
+        subset = "full"
+
+    sample_names = [state_names[idx] for idx in keep_idx[:10]]
+    _log_info(
+        log_path,
+        (
+            "[KEYFRAME] parquet_pose_subset="
+            f"{subset} dims={len(keep_idx)} sample_names={sample_names}"
+        ),
+    )
+    return keep_idx, subset
+
+
+def _compute_motion_diffs(
+    states: np.ndarray,
+    *,
+    keep_idx: list[int],
+    stats_mean: np.ndarray | None,
+    stats_std: np.ndarray | None,
+    smooth_win: int,
+    log_path: Path,
+) -> np.ndarray:
+    pose = states[:, keep_idx]
+    if stats_mean is not None and stats_std is not None:
+        mean_sel = stats_mean[keep_idx]
+        std_sel = stats_std[keep_idx]
+        pose = (pose - mean_sel) / (std_sel + 1e-6)
+    else:
+        _log_warning(log_path, "Normalization skipped (stats.json unavailable or invalid)")
+
+    T = pose.shape[0]
+    diffs = np.zeros(T, dtype=float)
+    diffs[1:] = np.linalg.norm(pose[1:] - pose[:-1], axis=1)
+    diffs = _moving_average(diffs, smooth_win)
+    if diffs.size:
+        p10, p50, p90 = np.percentile(diffs, [10, 50, 90]).tolist()
+        _log_info(log_path, f"[KEYFRAME] diffs_p10={p10:.6f} p50={p50:.6f} p90={p90:.6f}")
+    return diffs
+
+
 def _select_keyframes_from_states(
     states: np.ndarray,
     *,
+    state_names: list[str],
+    dexhand_names: set[str],
     target_frames: int,
     smooth_win: int,
     max_gap: int,
+    pose_subset: str,
+    stats_mean: np.ndarray | None,
+    stats_std: np.ndarray | None,
+    log_path: Path,
 ) -> list[int]:
     T = states.shape[0]
     if target_frames <= 0:
@@ -634,9 +798,20 @@ def _select_keyframes_from_states(
     if T < target_frames:
         raise ValueError(f"Video frame count T={T} is less than target N={target_frames}")
 
-    diffs = np.zeros(T, dtype=float)
-    diffs[1:] = np.linalg.norm(states[1:] - states[:-1], axis=1)
-    diffs = _moving_average(diffs, smooth_win)
+    keep_idx, _ = _select_pose_indices(
+        state_names,
+        dexhand_names,
+        subset=pose_subset,
+        log_path=log_path,
+    )
+    diffs = _compute_motion_diffs(
+        states,
+        keep_idx=keep_idx,
+        stats_mean=stats_mean,
+        stats_std=stats_std,
+        smooth_win=smooth_win,
+        log_path=log_path,
+    )
     nonzero = diffs[diffs > 0]
     if nonzero.size > 0:
         eps = 0.2 * float(np.percentile(nonzero, 10))
@@ -690,7 +865,8 @@ def _maybe_generate_keyframes(
         return None
 
     try:
-        parquet_path = parquet_path_for_video(video_path)
+        dataset_root = find_dataset_root(video_path)
+        parquet_path = parquet_path_for_video(video_path, dataset_root=dataset_root)
     except ValueError as exc:
         raise ValueError(f"Failed to derive parquet path for input_video_path={video_path}") from exc
     if not parquet_path.exists():
@@ -700,7 +876,12 @@ def _maybe_generate_keyframes(
             f"parquet_path={parquet_path}"
         )
 
-    states, frame_indices = _load_parquet_states(parquet_path)
+    states, frame_indices, state_names, dexhand_names = _load_parquet_states(
+        parquet_path,
+        dataset_root=dataset_root,
+        log_path=log_path,
+    )
+    stats_mean, stats_std = _load_state_stats(dataset_root, state_dim=states.shape[1], log_path=log_path)
     total_frames = states.shape[0]
     video_frames = _probe_frame_count(video_path, env=env, log_path=log_path)
     append_log(log_path, f"[KEYFRAME] parquet={parquet_path}")
@@ -720,9 +901,15 @@ def _maybe_generate_keyframes(
 
     keyframe_indices = _select_keyframes_from_states(
         states,
+        state_names=state_names,
+        dexhand_names=dexhand_names,
         target_frames=target_frames,
         smooth_win=settings.keyframe_smooth_win,
         max_gap=settings.keyframe_max_gap,
+        pose_subset=settings.parquet_pose_subset,
+        stats_mean=stats_mean,
+        stats_std=stats_std,
+        log_path=log_path,
     )
     mapped_indices = [frame_indices[idx] for idx in keyframe_indices]
     if any(mapped_indices[i] >= mapped_indices[i + 1] for i in range(len(mapped_indices) - 1)):
