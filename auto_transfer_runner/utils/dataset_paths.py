@@ -15,11 +15,15 @@ def find_videos_root(video_path: Path) -> Path:
 
 
 def find_dataset_root(video_path: Path) -> Path:
-    """Locate the dataset root by searching for meta/info.json from the video path."""
-    for parent in [video_path.parent, *video_path.parents]:
-        if (parent / "meta" / "info.json").exists():
-            return parent
-    raise ValueError(f"Cannot locate dataset root (meta/info.json) for input video: {video_path}")
+    """Locate the dataset root by using videos/ parent, with meta/info.json fallback."""
+    try:
+        videos_root = find_videos_root(video_path)
+        return videos_root.parent
+    except ValueError:
+        for parent in [video_path.parent, *video_path.parents]:
+            if (parent / "meta" / "info.json").exists():
+                return parent
+    raise ValueError(f"Cannot locate dataset root for input video: {video_path}")
 
 
 def _load_info(dataset_root: Path) -> Dict[str, Any]:
@@ -80,9 +84,13 @@ def parquet_path_for_video(video_path: Path, *, dataset_root: Path | None = None
     data_template = _get_template(info, "data_path")
     if video_template and data_template:
         relative_path = video_path.relative_to(dataset_root).as_posix()
-        values = _parse_template_values(video_template, relative_path)
-        data_relative = data_template.format(**values)
-        return dataset_root / data_relative
+        try:
+            values = _parse_template_values(video_template, relative_path)
+        except ValueError:
+            values = None
+        if values is not None:
+            data_relative = data_template.format(**values)
+            return dataset_root / data_relative
 
     videos_root = find_videos_root(video_path)
     dataset_root = videos_root.parent
