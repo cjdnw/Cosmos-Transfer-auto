@@ -541,7 +541,7 @@ def _log_info(log_path: Path, message: str) -> None:
     console_print(message)
 
 
-def _load_state_names(dataset_root: Path, *, state_dim: int) -> list[str]:
+def _load_state_names(dataset_root: Path, *, state_dim: int) -> tuple[list[str], set[str]]:
     info_path = dataset_root / "meta" / "info.json"
     with info_path.open("r", encoding="utf-8") as f:
         info = json.load(f)
@@ -553,21 +553,26 @@ def _load_state_names(dataset_root: Path, *, state_dim: int) -> list[str]:
         state_info = info["observations"].get("state")
     if state_info is None and isinstance(info.get("observation.state"), dict):
         state_info = info.get("observation.state")
+    if state_info is None and isinstance(info.get("features"), dict):
+        features = info["features"]
+        if isinstance(features.get("observation.state"), dict):
+            state_info = features.get("observation.state")
 
     names = None
+    dexhand_names: list[str] = []
     if isinstance(state_info, dict):
         names = state_info.get("names")
     if isinstance(names, dict):
-        dexhand_names = names.get("dexhand", [])
-        sensors_names = names.get("sensors_raw", [])
-        names = list(dexhand_names) + list(sensors_names)
+        dexhand_names = list(names.get("dexhand", []))
+        sensors_names = list(names.get("sensors_raw", []))
+        names = dexhand_names + sensors_names
     if not isinstance(names, list):
         raise ValueError("Unable to parse observation.state names from meta/info.json")
     if len(names) != state_dim:
         raise ValueError(
             f"observation.state names length mismatch: got {len(names)} expected {state_dim}"
         )
-    return names
+    return names, set(dexhand_names)
 
 
 def _load_state_stats(dataset_root: Path, *, state_dim: int, log_path: Path) -> tuple[np.ndarray | None, np.ndarray | None]:
@@ -584,6 +589,10 @@ def _load_state_stats(dataset_root: Path, *, state_dim: int, log_path: Path) -> 
         state_stats = stats["observations"].get("state")
     if state_stats is None and isinstance(stats.get("observation.state"), dict):
         state_stats = stats.get("observation.state")
+    if state_stats is None and isinstance(stats.get("features"), dict):
+        features = stats["features"]
+        if isinstance(features.get("observation.state"), dict):
+            state_stats = features.get("observation.state")
     if not isinstance(state_stats, dict):
         _log_warning(log_path, "stats.json missing observation.state; skipping normalization")
         return None, None
@@ -601,7 +610,12 @@ def _load_state_stats(dataset_root: Path, *, state_dim: int, log_path: Path) -> 
     return np.asarray(mean, dtype=float), np.asarray(std, dtype=float)
 
 
-def _load_parquet_states(parquet_path: Path, *, dataset_root: Path, log_path: Path) -> tuple[np.ndarray, list[int], list[str]]:
+def _load_parquet_states(
+    parquet_path: Path,
+    *,
+    dataset_root: Path,
+    log_path: Path,
+) -> tuple[np.ndarray, list[int], list[str], set[str]]:
     import pyarrow.parquet as pq
 
     table = pq.read_table(parquet_path)
@@ -635,8 +649,8 @@ def _load_parquet_states(parquet_path: Path, *, dataset_root: Path, log_path: Pa
             raise ValueError(f"Unexpected observation.state shape: {states.shape}") from exc
     if states.ndim != 2:
         raise ValueError(f"Unexpected observation.state shape: {states.shape}")
-    state_names = _load_state_names(dataset_root, state_dim=states.shape[1])
-    return states, frame_indices, state_names
+    state_names, dexhand_names = _load_state_names(dataset_root, state_dim=states.shape[1])
+    return states, frame_indices, state_names, dexhand_names
 
 
 def _moving_average(values: np.ndarray, win: int) -> np.ndarray:
@@ -695,6 +709,7 @@ def _enforce_max_gap(
 
 def _select_pose_indices(
     state_names: list[str],
+    dexhand_names: set[str],
     *,
     subset: str,
     log_path: Path,
@@ -708,12 +723,12 @@ def _select_pose_indices(
             prefixes.append("position.zarm_")
         if subset in {"zarm_pos_vel", "zarm_pos_vel_hand"}:
             prefixes.append("velocity.zarm_")
-        if subset == "zarm_pos_vel_hand":
-            prefixes.append("dexhand")
+        include_dexhand = subset == "zarm_pos_vel_hand"
         keep_idx = [
             idx
             for idx, name in enumerate(state_names)
             if any(name.startswith(prefix) for prefix in prefixes)
+            or (include_dexhand and name in dexhand_names)
         ]
     if not keep_idx:
         _log_warning(
@@ -768,6 +783,7 @@ def _select_keyframes_from_states(
     states: np.ndarray,
     *,
     state_names: list[str],
+    dexhand_names: set[str],
     target_frames: int,
     smooth_win: int,
     max_gap: int,
@@ -782,7 +798,12 @@ def _select_keyframes_from_states(
     if T < target_frames:
         raise ValueError(f"Video frame count T={T} is less than target N={target_frames}")
 
-    keep_idx, _ = _select_pose_indices(state_names, subset=pose_subset, log_path=log_path)
+    keep_idx, _ = _select_pose_indices(
+        state_names,
+        dexhand_names,
+        subset=pose_subset,
+        log_path=log_path,
+    )
     diffs = _compute_motion_diffs(
         states,
         keep_idx=keep_idx,
@@ -855,7 +876,7 @@ def _maybe_generate_keyframes(
             f"parquet_path={parquet_path}"
         )
 
-    states, frame_indices, state_names = _load_parquet_states(
+    states, frame_indices, state_names, dexhand_names = _load_parquet_states(
         parquet_path,
         dataset_root=dataset_root,
         log_path=log_path,
@@ -881,6 +902,7 @@ def _maybe_generate_keyframes(
     keyframe_indices = _select_keyframes_from_states(
         states,
         state_names=state_names,
+        dexhand_names=dexhand_names,
         target_frames=target_frames,
         smooth_win=settings.keyframe_smooth_win,
         max_gap=settings.keyframe_max_gap,
