@@ -43,6 +43,7 @@ from .pipeline import Job, run_job
 from .utils.hashing import short_hash
 from .utils.logging_utils import format_console_line
 from .utils.paths import make_output_dir
+from .utils.dataset_paths import task_parquet_for_video
 from .utils.checkpoints import (
     CHECKPOINT_DIRNAME,
     checkpoint_dir_for_job,
@@ -68,16 +69,12 @@ def now_tag() -> str:
 
 
 def _task_parquet_for_video(video_path: Path, input_root: Path) -> Optional[Path]:
-    """Find task.parquet by searching parents for a sibling meta/task.parquet."""
-    for parent in [video_path.parent, *video_path.parents[1:]]:
-        try:
-            parent.relative_to(input_root)
-        except ValueError:
-            break
-        candidate = parent / "meta" / "task.parquet"
-        if candidate.is_file():
-            return candidate
-    return None
+    """Find task.parquet using the dataset root derived from videos/."""
+    try:
+        candidate = task_parquet_for_video(video_path)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
 
 
 def _hash_file(path: Path) -> str:
@@ -187,6 +184,10 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         pre_chunk_clip_where=args.pre_chunk_clip_where,
         pre_chunk_max_adjust=args.pre_chunk_max_adjust,
         pre_chunk_force_chunks=args.pre_chunk_force_chunks,
+        keyframe_sampling=args.keyframe_sampling,
+        keyframe_target_frames=args.keyframe_target_frames,
+        keyframe_smooth_win=args.keyframe_smooth_win,
+        keyframe_max_gap=args.keyframe_max_gap,
     )
 
     postprocess = PostprocessConfig(
@@ -469,6 +470,31 @@ def main(argv: List[str] | None = None) -> None:
         type=int,
         default=PREPROCESS_DEFAULTS.pre_chunk_force_chunks,
         help="Force chunk count (uses speed mode, uniform frame drop, ignores clip/policy options)",
+    )
+    ap.add_argument(
+        "--keyframe_sampling",
+        type=str,
+        default=PREPROCESS_DEFAULTS.keyframe_sampling,
+        choices=["uniform", "parquet_motion"],
+        help="Keyframe sampling mode during preprocess: uniform (default) or parquet_motion",
+    )
+    ap.add_argument(
+        "--keyframe_target_frames",
+        type=int,
+        default=PREPROCESS_DEFAULTS.keyframe_target_frames,
+        help="Target keyframe count when keyframe_sampling is enabled (default: num_video_frames_per_chunk)",
+    )
+    ap.add_argument(
+        "--keyframe_smooth_win",
+        type=int,
+        default=PREPROCESS_DEFAULTS.keyframe_smooth_win,
+        help="Moving average window for parquet motion smoothing (default: 5)",
+    )
+    ap.add_argument(
+        "--keyframe_max_gap",
+        type=int,
+        default=PREPROCESS_DEFAULTS.keyframe_max_gap,
+        help="Max gap between sampled frames for parquet motion sampling (default: 8)",
     )
 
     # Step5.5 post-restore (duration)
