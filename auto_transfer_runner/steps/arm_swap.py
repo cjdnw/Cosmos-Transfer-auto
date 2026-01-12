@@ -103,8 +103,6 @@ def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
     return width, height
 
 
-
-
 def run_arm_swap(
     *,
     project_root: Path,
@@ -185,7 +183,6 @@ def run_arm_swap(
                     raise FileNotFoundError(f"Arm swap bbox json not found after run: {bbox_json}")
                 return bbox_json
             return output_path
-        _log_mask_iou(workdir, log_path)
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
         return output_path
