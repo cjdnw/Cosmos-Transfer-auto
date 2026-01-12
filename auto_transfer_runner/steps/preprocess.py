@@ -927,6 +927,12 @@ def _maybe_generate_keyframes(
         encoding="utf-8",
     )
     output_video_path = output_dir / "keyframes.mp4"
+    frame_map_path = frame_map_path_for(output_video_path)
+    frame_map_payload = {
+        "original_total_frames": video_frames,
+        "sampled_indices": mapped_indices,
+    }
+    frame_map_path.write_text(json.dumps(frame_map_payload, ensure_ascii=False), encoding="utf-8")
     meta = {
         "input_video_path": str(video_path),
         "parquet_path": str(parquet_path),
