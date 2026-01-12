@@ -12,9 +12,11 @@ import numpy as np
 
 from ..utils.cleanup import safe_unlink
 from ..utils.dataset_paths import find_dataset_root, parquet_path_for_video
+from ..utils.hashing import short_hash
 from ..utils.locking import FileLock, FileLockConfig
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import run_cmd
+from ..utils.text import sanitize_name
 
 
 @dataclass(frozen=True)
@@ -497,7 +499,13 @@ def _build_scale_filter(*, width: int | None, height: int | None, keep_aspect: b
     return "scale=trunc(iw/2)*2:trunc(ih/2)*2"
 
 
-def _keyframe_output_dir(video_path: Path, *, output_root: Path, input_root: Path | None) -> Path:
+def _keyframe_output_dir(
+    video_path: Path,
+    *,
+    output_root: Path,
+    input_root: Path | None,
+    tag: str | None,
+) -> Path:
     relative_dir = None
     if input_root is not None:
         try:
@@ -505,7 +513,43 @@ def _keyframe_output_dir(video_path: Path, *, output_root: Path, input_root: Pat
         except ValueError:
             relative_dir = None
     base_dir = output_root if relative_dir is None else output_root / relative_dir
-    return base_dir / f"{video_path.stem}__keyframes"
+    tag_suffix = f"__{tag}" if tag else ""
+    return base_dir / f"{video_path.stem}__keyframes{tag_suffix}"
+
+
+def _keyframe_dir_tag(settings: PreprocessSettings, *, target_frames: int) -> str:
+    payload = {
+        "sampling": settings.keyframe_sampling,
+        "target_frames": target_frames,
+        "smooth_win": settings.keyframe_smooth_win,
+        "max_gap": settings.keyframe_max_gap,
+        "pose_subset": settings.parquet_pose_subset,
+        "pre_chunk_mode": settings.pre_chunk_mode,
+        "pre_chunk_policy": settings.pre_chunk_policy,
+        "pre_chunk_force_chunks": settings.pre_chunk_force_chunks,
+        "num_video_frames_per_chunk": settings.num_video_frames_per_chunk,
+        "num_conditional_frames": settings.num_conditional_frames,
+        "width": settings.width,
+        "height": settings.height,
+        "keep_aspect": settings.keep_aspect,
+    }
+    digest = short_hash(json.dumps(payload, sort_keys=True, ensure_ascii=False), 10)
+    descriptor = (
+        f"kf_{settings.keyframe_sampling}"
+        f"_t{target_frames}"
+        f"_gap{settings.keyframe_max_gap}"
+        f"_win{settings.keyframe_smooth_win}"
+        f"_subset{settings.parquet_pose_subset}"
+        f"_pc{settings.pre_chunk_mode}"
+        f"_pp{settings.pre_chunk_policy}"
+        f"_f{settings.pre_chunk_force_chunks or 0}"
+        f"_nv{settings.num_video_frames_per_chunk}"
+        f"_nc{settings.num_conditional_frames}"
+        f"_s{settings.width or 0}x{settings.height or 0}"
+        f"_k{1 if settings.keep_aspect else 0}"
+        f"_{digest}"
+    )
+    return sanitize_name(descriptor)
 
 
 def _keyframe_target_from_chunks(
@@ -919,7 +963,13 @@ def _maybe_generate_keyframes(
             f"Keyframe index exceeds video frame count: max={max(mapped_indices)} video_frames={video_frames}"
         )
 
-    output_dir = _keyframe_output_dir(video_path, output_root=output_root, input_root=input_root)
+    keyframe_tag = _keyframe_dir_tag(settings, target_frames=target_frames)
+    output_dir = _keyframe_output_dir(
+        video_path,
+        output_root=output_root,
+        input_root=input_root,
+        tag=keyframe_tag,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     keyframe_indices_path = output_dir / "keyframe_indices.txt"
     keyframe_indices_path.write_text(
