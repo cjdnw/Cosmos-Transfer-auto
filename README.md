@@ -65,7 +65,7 @@ python scripts/run_batch.py \
 - `--keyframe_max_gap N`：最大帧间隔约束（默认 8）。
 - `--parquet_pose_subset {zarm_pos,zarm_pos_vel,zarm_pos_vel_hand,full}`：parquet_motion 的姿态维度子集（默认 `zarm_pos_vel`，可过滤非机械臂维度）。
 
-当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）：
+当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes__<sampling_tag>/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）。`sampling_tag` 会编码关键帧抽样配置（如 target_frames/max_gap/smooth_win/pose_subset 等），避免不同抽样配置互相覆盖：
 - `keyframes.mp4`：抽取的关键帧视频（固定 16fps）
 - `keyframe_indices.txt`：每行一个原视频帧号
 - `keyframe_meta.json`：包含输入视频、parquet 路径、关键帧索引等信息
@@ -532,6 +532,7 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-12：parquet_motion 关键帧输出目录新增 sampling_tag（包含关键帧抽样配置与哈希），避免不同抽样参数互相覆盖。
 - 2026-01-12：parquet_motion 关键帧输出新增 frame_map（与 keyframes.mp4 同名），用于 RIFE guided 补帧按原始帧索引恢复非均匀间隔。
 - 2026-01-11：parquet_motion 新增 `--parquet_pose_subset`（可选 zarm pos/vel/hand 子集或 full），并在 keyframe 运动量计算中按 meta/info.json 名称选择维度，支持 stats.json 标准化与更稳健的 parquet 路径解析。
 - 2026-01-09：Step6 arm swap 默认拆成 Qwen+SAM 两步运行，新增 `--arm_swap_split/--arm_swap_single` 控制；split 产物 bbox JSON 默认清理，可用 `--arm_swap_keep_bbox_json` 保留。
