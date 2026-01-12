@@ -6,7 +6,10 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
+import numpy as np
+
 from ..utils.logging_utils import append_log
+from ..utils.logging_utils import console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
 
 
@@ -182,6 +185,7 @@ def run_arm_swap(
                     raise FileNotFoundError(f"Arm swap bbox json not found after run: {bbox_json}")
                 return bbox_json
             return output_path
+        _log_mask_iou(workdir, log_path)
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
         return output_path
