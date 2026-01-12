@@ -148,7 +148,7 @@ def _compute_mean_iou_from_frames(
     frames_b: Path,
     *,
     log_path: Path,
-) -> float | None:
+) -> tuple[float, float, float] | None:
     sample_a = next(iter(sorted(frames_a.glob("*.png"))), None)
     sample_b = next(iter(sorted(frames_b.glob("*.png"))), None)
     if sample_a is None or sample_b is None:
@@ -195,6 +195,8 @@ def _compute_mean_iou_from_frames(
     proc_a = subprocess.Popen(cmd_a, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc_b = subprocess.Popen(cmd_b, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     total_iou = 0.0
+    min_iou = float("inf")
+    max_iou = 0.0
     frame_count = 0
     try:
         while True:
@@ -213,6 +215,8 @@ def _compute_mean_iou_from_frames(
                 intersection = np.logical_and(mask_a_frame, mask_b_frame).sum()
                 iou = float(intersection) / float(union)
             total_iou += iou
+            min_iou = min(min_iou, iou)
+            max_iou = max(max_iou, iou)
             frame_count += 1
     finally:
         if proc_a.stdout:
@@ -230,7 +234,10 @@ def _compute_mean_iou_from_frames(
     if frame_count == 0:
         append_log(log_path, "[STEP6] no overlapping frame images; skip IoU")
         return None
-    return total_iou / float(frame_count)
+    mean_iou = total_iou / float(frame_count)
+    if min_iou == float("inf"):
+        min_iou = mean_iou
+    return mean_iou, min_iou, max_iou
 
 
 def _log_mask_iou(workdir: Path, log_path: Path) -> None:
@@ -240,11 +247,15 @@ def _log_mask_iou(workdir: Path, log_path: Path) -> None:
         console_print("[STEP6] mask frames not found; skip mean IoU")
         return
     append_log(log_path, f"[STEP6] mask frames candidates: {orig_frames} | {skin_frames}")
-    mean_iou = _compute_mean_iou_from_frames(orig_frames, skin_frames, log_path=log_path)
-    if mean_iou is None:
+    iou_stats = _compute_mean_iou_from_frames(orig_frames, skin_frames, log_path=log_path)
+    if iou_stats is None:
         return
-    append_log(log_path, f"[STEP6] mask mean IoU={mean_iou:.6f}")
-    console_print(f"[STEP6] mask mean IoU={mean_iou:.6f}")
+    mean_iou, min_iou, max_iou = iou_stats
+    append_log(
+        log_path,
+        f"[STEP6] mask IoU mean={mean_iou:.6f} min={min_iou:.6f} max={max_iou:.6f}",
+    )
+    console_print(f"[STEP6] mask IoU mean={mean_iou:.6f} min={min_iou:.6f} max={max_iou:.6f}")
 
 
 def run_arm_swap(
