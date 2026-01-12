@@ -68,6 +68,40 @@ def _probe_video_info(video_path: Path, log_path: Path) -> tuple[int, int]:
     return fps, width
 
 
+def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "json",
+        str(video_path),
+    ]
+    append_log(log_path, f"[STEP6] ffprobe dims: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        append_log(log_path, result.stdout)
+        append_log(log_path, result.stderr)
+        raise RuntimeError(f"ffprobe failed for {video_path} (code={result.returncode}). See log: {log_path}")
+    data = json.loads(result.stdout)
+    streams = data.get("streams", [])
+    if not streams:
+        raise RuntimeError(f"ffprobe returned no video streams for {video_path}")
+    stream = streams[0]
+    width = int(stream["width"])
+    height = int(stream["height"])
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Invalid video dims from ffprobe: width={width}, height={height}")
+    append_log(log_path, f"[STEP6] ffprobe parsed width={width} height={height}")
+    return width, height
+
+
+
+
 def run_arm_swap(
     *,
     project_root: Path,
@@ -152,5 +186,5 @@ def run_arm_swap(
             raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
         return output_path
     finally:
-        if cleanup_workdir:
+        if cleanup_workdir and no_workdir_write:
             _cleanup_workdir(workdir)
