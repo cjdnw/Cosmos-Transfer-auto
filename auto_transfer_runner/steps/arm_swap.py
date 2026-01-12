@@ -103,46 +103,64 @@ def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
     return width, height
 
 
-def _mask_candidates(workdir: Path) -> list[Path]:
-    if not workdir.exists():
-        return []
-    return [path for path in workdir.rglob("*.mp4") if "mask" in path.name.lower()]
+def _probe_image_dims(image_path: Path, log_path: Path) -> tuple[int, int]:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "json",
+        str(image_path),
+    ]
+    append_log(log_path, f"[STEP6] ffprobe image dims: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        append_log(log_path, result.stdout)
+        append_log(log_path, result.stderr)
+        raise RuntimeError(f"ffprobe failed for {image_path} (code={result.returncode}). See log: {log_path}")
+    data = json.loads(result.stdout)
+    streams = data.get("streams", [])
+    if not streams:
+        raise RuntimeError(f"ffprobe returned no image streams for {image_path}")
+    stream = streams[0]
+    width = int(stream["width"])
+    height = int(stream["height"])
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Invalid image dims from ffprobe: width={width}, height={height}")
+    append_log(log_path, f"[STEP6] ffprobe parsed image width={width} height={height}")
+    return width, height
 
 
-def _select_mask_pair(mask_videos: list[Path]) -> tuple[Path, Path] | None:
-    if len(mask_videos) < 2:
-        return None
-    if len(mask_videos) == 2:
-        return mask_videos[0], mask_videos[1]
-    tag_groups = {
-        "orig": {"orig", "source", "input"},
-        "skin": {"skin", "swap", "transfer", "target", "output"},
-    }
-    lower_map = {path: path.name.lower() for path in mask_videos}
-    orig_candidates = [p for p in mask_videos if any(tag in lower_map[p] for tag in tag_groups["orig"])]
-    skin_candidates = [p for p in mask_videos if any(tag in lower_map[p] for tag in tag_groups["skin"])]
-    if orig_candidates and skin_candidates:
-        orig = max(orig_candidates, key=lambda p: p.stat().st_size)
-        skin = max(skin_candidates, key=lambda p: p.stat().st_size)
-        if orig != skin:
-            return orig, skin
-    sorted_masks = sorted(mask_videos, key=lambda p: p.stat().st_size, reverse=True)
-    return sorted_masks[0], sorted_masks[1]
+def _frames_dir_candidates(workdir: Path) -> tuple[Path | None, Path | None]:
+    orig_dir = workdir / "frames_orig"
+    skin_dir = workdir / "frames_skin"
+    if orig_dir.is_dir() and skin_dir.is_dir():
+        return orig_dir, skin_dir
+    return None, None
 
 
-def _compute_mean_mask_iou(
-    mask_a: Path,
-    mask_b: Path,
+def _compute_mean_iou_from_frames(
+    frames_a: Path,
+    frames_b: Path,
     *,
     log_path: Path,
 ) -> float | None:
-    width_a, height_a = _probe_video_dims(mask_a, log_path)
-    width_b, height_b = _probe_video_dims(mask_b, log_path)
+    sample_a = next(iter(sorted(frames_a.glob("*.png"))), None)
+    sample_b = next(iter(sorted(frames_b.glob("*.png"))), None)
+    if sample_a is None or sample_b is None:
+        append_log(log_path, "[STEP6] frames missing pngs; skip IoU")
+        return None
+    width_a, height_a = _probe_image_dims(sample_a, log_path)
+    width_b, height_b = _probe_image_dims(sample_b, log_path)
     if (width_a, height_a) != (width_b, height_b):
         append_log(
             log_path,
-            f"[STEP6] mask dims mismatch: {mask_a.name} ({width_a}x{height_a}) vs "
-            f"{mask_b.name} ({width_b}x{height_b}); skip IoU",
+            f"[STEP6] frames dims mismatch: {frames_a} ({width_a}x{height_a}) vs "
+            f"{frames_b} ({width_b}x{height_b}); skip IoU",
         )
         return None
     frame_size = width_a * height_a
@@ -150,8 +168,10 @@ def _compute_mean_mask_iou(
         "ffmpeg",
         "-v",
         "error",
+        "-start_number",
+        "1",
         "-i",
-        str(mask_a),
+        str(frames_a / "%08d.png"),
         "-f",
         "rawvideo",
         "-pix_fmt",
@@ -162,8 +182,10 @@ def _compute_mean_mask_iou(
         "ffmpeg",
         "-v",
         "error",
+        "-start_number",
+        "1",
         "-i",
-        str(mask_b),
+        str(frames_b / "%08d.png"),
         "-f",
         "rawvideo",
         "-pix_fmt",
@@ -183,7 +205,7 @@ def _compute_mean_mask_iou(
             if len(data_a) < frame_size or len(data_b) < frame_size:
                 break
             mask_a_frame = np.frombuffer(data_a, dtype=np.uint8).reshape(height_a, width_a) > 0
-            mask_b_frame = np.frombuffer(data_b, dtype=np.uint8).reshape(height_a, width_a) > 0
+            mask_b_frame = np.frombuffer(data_b, dtype=np.uint8).reshape(height_b, width_b) > 0
             union = np.logical_or(mask_a_frame, mask_b_frame).sum()
             if union == 0:
                 iou = 1.0
@@ -202,24 +224,23 @@ def _compute_mean_mask_iou(
         proc_a.wait()
         proc_b.wait()
         if proc_a.returncode != 0:
-            append_log(log_path, f"[STEP6] ffmpeg mask decode failed for {mask_a}: {stderr_a}")
+            append_log(log_path, f"[STEP6] ffmpeg frames decode failed for {frames_a}: {stderr_a}")
         if proc_b.returncode != 0:
-            append_log(log_path, f"[STEP6] ffmpeg mask decode failed for {mask_b}: {stderr_b}")
+            append_log(log_path, f"[STEP6] ffmpeg frames decode failed for {frames_b}: {stderr_b}")
     if frame_count == 0:
-        append_log(log_path, "[STEP6] no overlapping mask frames; skip IoU")
+        append_log(log_path, "[STEP6] no overlapping frame images; skip IoU")
         return None
     return total_iou / float(frame_count)
 
 
 def _log_mask_iou(workdir: Path, log_path: Path) -> None:
-    mask_videos = _mask_candidates(workdir)
-    mask_pair = _select_mask_pair(mask_videos)
-    if mask_pair is None:
-        append_log(log_path, "[STEP6] mask videos not found; skip mean IoU")
+    orig_frames, skin_frames = _frames_dir_candidates(workdir)
+    if not orig_frames or not skin_frames:
+        append_log(log_path, "[STEP6] mask frames not found; skip mean IoU")
+        console_print("[STEP6] mask frames not found; skip mean IoU")
         return
-    mask_a, mask_b = mask_pair
-    append_log(log_path, f"[STEP6] mask IoU candidates: {mask_a} | {mask_b}")
-    mean_iou = _compute_mean_mask_iou(mask_a, mask_b, log_path=log_path)
+    append_log(log_path, f"[STEP6] mask frames candidates: {orig_frames} | {skin_frames}")
+    mean_iou = _compute_mean_iou_from_frames(orig_frames, skin_frames, log_path=log_path)
     if mean_iou is None:
         return
     append_log(log_path, f"[STEP6] mask mean IoU={mean_iou:.6f}")
