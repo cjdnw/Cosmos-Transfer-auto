@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from ..utils.cleanup import safe_unlink
+from ..utils.hashing import short_hash
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
 
@@ -515,7 +516,7 @@ def restore_duration(
             if not rife_bin:
                 raise ValueError("rife_bin must be set when post_restore_mode=rife")
             rife_cache_root = Path("/mnt/data/ganrunhe/auto_transfer/rife_cache")
-            rife_workdir = rife_cache_root / output_dir.name
+            rife_workdir = rife_cache_root / f"{output_dir.name}_{short_hash(str(output_dir.resolve()), 8)}"
             if rife_workdir.exists():
                 shutil.rmtree(rife_workdir, ignore_errors=True)
             rife_workdir.mkdir(parents=True, exist_ok=True)

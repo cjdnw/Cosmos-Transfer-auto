@@ -6,7 +6,10 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
+import numpy as np
+
 from ..utils.logging_utils import append_log
+from ..utils.logging_utils import console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
 
 
@@ -66,6 +69,182 @@ def _probe_video_info(video_path: Path, log_path: Path) -> tuple[int, int]:
         raise RuntimeError(f"Invalid video info from ffprobe: fps={fps}, width={width}")
     append_log(log_path, f"[STEP6] ffprobe parsed fps={fps} width={width}")
     return fps, width
+
+
+def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "json",
+        str(video_path),
+    ]
+    append_log(log_path, f"[STEP6] ffprobe dims: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        append_log(log_path, result.stdout)
+        append_log(log_path, result.stderr)
+        raise RuntimeError(f"ffprobe failed for {video_path} (code={result.returncode}). See log: {log_path}")
+    data = json.loads(result.stdout)
+    streams = data.get("streams", [])
+    if not streams:
+        raise RuntimeError(f"ffprobe returned no video streams for {video_path}")
+    stream = streams[0]
+    width = int(stream["width"])
+    height = int(stream["height"])
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Invalid video dims from ffprobe: width={width}, height={height}")
+    append_log(log_path, f"[STEP6] ffprobe parsed width={width} height={height}")
+    return width, height
+
+
+def _probe_image_dims(image_path: Path, log_path: Path) -> tuple[int, int]:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "json",
+        str(image_path),
+    ]
+    append_log(log_path, f"[STEP6] ffprobe image dims: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        append_log(log_path, result.stdout)
+        append_log(log_path, result.stderr)
+        raise RuntimeError(f"ffprobe failed for {image_path} (code={result.returncode}). See log: {log_path}")
+    data = json.loads(result.stdout)
+    streams = data.get("streams", [])
+    if not streams:
+        raise RuntimeError(f"ffprobe returned no image streams for {image_path}")
+    stream = streams[0]
+    width = int(stream["width"])
+    height = int(stream["height"])
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Invalid image dims from ffprobe: width={width}, height={height}")
+    append_log(log_path, f"[STEP6] ffprobe parsed image width={width} height={height}")
+    return width, height
+
+
+def _frames_dir_candidates(workdir: Path) -> tuple[Path | None, Path | None]:
+    orig_dir = workdir / "frames_orig"
+    skin_dir = workdir / "frames_skin"
+    if orig_dir.is_dir() and skin_dir.is_dir():
+        return orig_dir, skin_dir
+    return None, None
+
+
+def _compute_mean_iou_from_frames(
+    frames_a: Path,
+    frames_b: Path,
+    *,
+    log_path: Path,
+) -> float | None:
+    sample_a = next(iter(sorted(frames_a.glob("*.png"))), None)
+    sample_b = next(iter(sorted(frames_b.glob("*.png"))), None)
+    if sample_a is None or sample_b is None:
+        append_log(log_path, "[STEP6] frames missing pngs; skip IoU")
+        return None
+    width_a, height_a = _probe_image_dims(sample_a, log_path)
+    width_b, height_b = _probe_image_dims(sample_b, log_path)
+    if (width_a, height_a) != (width_b, height_b):
+        append_log(
+            log_path,
+            f"[STEP6] frames dims mismatch: {frames_a} ({width_a}x{height_a}) vs "
+            f"{frames_b} ({width_b}x{height_b}); skip IoU",
+        )
+        return None
+    frame_size = width_a * height_a
+    cmd_a = [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-start_number",
+        "1",
+        "-i",
+        str(frames_a / "%08d.png"),
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "gray",
+        "-",
+    ]
+    cmd_b = [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-start_number",
+        "1",
+        "-i",
+        str(frames_b / "%08d.png"),
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "gray",
+        "-",
+    ]
+    proc_a = subprocess.Popen(cmd_a, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc_b = subprocess.Popen(cmd_b, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    total_iou = 0.0
+    frame_count = 0
+    try:
+        while True:
+            if proc_a.stdout is None or proc_b.stdout is None:
+                break
+            data_a = proc_a.stdout.read(frame_size)
+            data_b = proc_b.stdout.read(frame_size)
+            if len(data_a) < frame_size or len(data_b) < frame_size:
+                break
+            mask_a_frame = np.frombuffer(data_a, dtype=np.uint8).reshape(height_a, width_a) > 0
+            mask_b_frame = np.frombuffer(data_b, dtype=np.uint8).reshape(height_b, width_b) > 0
+            union = np.logical_or(mask_a_frame, mask_b_frame).sum()
+            if union == 0:
+                iou = 1.0
+            else:
+                intersection = np.logical_and(mask_a_frame, mask_b_frame).sum()
+                iou = float(intersection) / float(union)
+            total_iou += iou
+            frame_count += 1
+    finally:
+        if proc_a.stdout:
+            proc_a.stdout.close()
+        if proc_b.stdout:
+            proc_b.stdout.close()
+        stderr_a = proc_a.stderr.read().decode("utf-8", errors="ignore") if proc_a.stderr else ""
+        stderr_b = proc_b.stderr.read().decode("utf-8", errors="ignore") if proc_b.stderr else ""
+        proc_a.wait()
+        proc_b.wait()
+        if proc_a.returncode != 0:
+            append_log(log_path, f"[STEP6] ffmpeg frames decode failed for {frames_a}: {stderr_a}")
+        if proc_b.returncode != 0:
+            append_log(log_path, f"[STEP6] ffmpeg frames decode failed for {frames_b}: {stderr_b}")
+    if frame_count == 0:
+        append_log(log_path, "[STEP6] no overlapping frame images; skip IoU")
+        return None
+    return total_iou / float(frame_count)
+
+
+def _log_mask_iou(workdir: Path, log_path: Path) -> None:
+    orig_frames, skin_frames = _frames_dir_candidates(workdir)
+    if not orig_frames or not skin_frames:
+        append_log(log_path, "[STEP6] mask frames not found; skip mean IoU")
+        console_print("[STEP6] mask frames not found; skip mean IoU")
+        return
+    append_log(log_path, f"[STEP6] mask frames candidates: {orig_frames} | {skin_frames}")
+    mean_iou = _compute_mean_iou_from_frames(orig_frames, skin_frames, log_path=log_path)
+    if mean_iou is None:
+        return
+    append_log(log_path, f"[STEP6] mask mean IoU={mean_iou:.6f}")
+    console_print(f"[STEP6] mask mean IoU={mean_iou:.6f}")
 
 
 def run_arm_swap(
@@ -148,6 +327,7 @@ def run_arm_swap(
                     raise FileNotFoundError(f"Arm swap bbox json not found after run: {bbox_json}")
                 return bbox_json
             return output_path
+        _log_mask_iou(workdir, log_path)
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
         return output_path
