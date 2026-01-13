@@ -14,6 +14,8 @@ from ..utils.cleanup import safe_unlink
 from ..utils.hashing import short_hash
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
+from ..utils.warp_time import compute_time_steps, count_guided_output_frames, validate_time_steps
+from ..utils.dataset_paths import parquet_path_for_video
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,13 @@ def probe_video_stats(video_path: Path, *, env: Dict[str, str], log_path: Path) 
     return VideoStats(duration_sec=duration_sec, frame_count=frame_count, fps=fps)
 
 
+def _probe_frame_count(video_path: Path, *, env: Dict[str, str], log_path: Path) -> int:
+    stats = probe_video_stats(video_path, env=env, log_path=log_path)
+    if stats.frame_count is None or stats.frame_count <= 0:
+        raise RuntimeError(f"Failed to resolve frame count for {video_path}")
+    return stats.frame_count
+
+
 def _build_atempo_filter(tempo: float) -> str:
     if tempo <= 0:
         raise ValueError("Audio tempo must be > 0.")
@@ -274,6 +283,27 @@ def _select_rife_gpu_id(
     if run_gpus:
         return run_gpus[job_index % len(run_gpus)]
     return None
+
+
+def _segment_frames_from_map(sample_indices: list[int]) -> list[int]:
+    segment_frames = []
+    for start, end in zip(sample_indices[:-1], sample_indices[1:]):
+        frames = end - start + 1
+        if frames < 2:
+            raise RuntimeError("Invalid segment length for guided interpolation")
+        segment_frames.append(frames)
+    return segment_frames
+
+
+def _pose_prefixes_for_subset(subset: str) -> list[str] | None:
+    if subset == "full":
+        return None
+    prefixes: list[str] = []
+    if subset in {"zarm_pos", "zarm_pos_vel", "zarm_pos_vel_hand"}:
+        prefixes.append("position.zarm_")
+    if subset in {"zarm_pos_vel", "zarm_pos_vel_hand"}:
+        prefixes.append("velocity.zarm_")
+    return prefixes or ["position.zarm_"]
 
 
 def _run_rife_guided(
@@ -463,9 +493,71 @@ def run_rife_pytorch(
     )
 
 
+def run_rife_pytorch_guided(
+    *,
+    input_frames_dir: Path,
+    output_frames_dir: Path,
+    frame_map: list[int],
+    segment_frames: list[int],
+    time_steps: list[list[float]],
+    scale: float,
+    repo_dir: Path,
+    model_dir: Path,
+    conda_env: str,
+    env: Dict[str, str],
+    log_path: Path,
+) -> None:
+    repo_dir = repo_dir.resolve()
+    script_path = repo_dir / "guided_interpolation_cli.py"
+    if not script_path.is_file():
+        raise FileNotFoundError(f"guided_interpolation_cli.py not found under {repo_dir}")
+    if not model_dir.exists():
+        raise FileNotFoundError(f"RIFE model dir not found: {model_dir}")
+    if not input_frames_dir.exists():
+        raise FileNotFoundError(f"Input frames dir missing: {input_frames_dir}")
+
+    validate_time_steps(time_steps, segment_frames)
+    count_guided_output_frames(range(len(frame_map)), segment_frames, time_steps)
+
+    frame_map_path = output_frames_dir.parent / "frame_map.json"
+    frame_map_payload = {"sampled_indices": frame_map}
+    frame_map_path.write_text(json.dumps(frame_map_payload, ensure_ascii=False), encoding="utf-8")
+
+    time_steps_path = output_frames_dir.parent / "time_steps.json"
+    time_steps_path.write_text(json.dumps(time_steps, ensure_ascii=False), encoding="utf-8")
+
+    output_frames_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "python3",
+        str(script_path),
+        "--input_dir",
+        str(input_frames_dir),
+        "--output_dir",
+        str(output_frames_dir),
+        "--model",
+        str(model_dir),
+        "--scale",
+        str(scale),
+        "--frame_map_json",
+        str(frame_map_path),
+        "--time_steps_json",
+        str(time_steps_path),
+    ]
+    cmd = conda_run(conda_env, cmd) if conda_env else cmd
+    run_cmd(
+        cmd,
+        cwd=repo_dir,
+        env=env or dict(os.environ),
+        log_path=log_path,
+        title="STEP5.5 Post-restore RIFE (pytorch) guided interpolation",
+    )
+
+
 def restore_duration(
     *,
     output_dir: Path,
+    input_video_path: Path,
     original_stats: VideoStats,
     mode: str,
     rife_bin: str | None,
@@ -476,6 +568,12 @@ def restore_duration(
     rife_pytorch_env: str,
     rife_scale: float,
     rife_keep_audio: bool,
+    rife_time_steps_mode: str,
+    rife_time_steps_cache: Path | None,
+    rife_sam_mask_dir: Path | None,
+    rife_pose_subset: str,
+    rife_time_steps_debug: bool,
+    rife_cache_root: Path,
     frame_map_path: Path | None,
     run_gpus: list[str] | None,
     job_index: int,
@@ -539,7 +637,6 @@ def restore_duration(
             rife_gpu_id = _select_rife_gpu_id(run_gpus=run_gpus, job_index=job_index, env=env)
             append_log(log_path, f"[POST_RESTORE] rife_gpu_id={rife_gpu_id}")
             console_print(f"[POST_RESTORE] rife_gpu_id={rife_gpu_id}")
-            rife_cache_root = Path("/mnt/data/ganrunhe/auto_transfer/rife_cache")
             rife_workdir = rife_cache_root / f"{output_dir.name}_{short_hash(str(output_dir.resolve()), 8)}"
             if rife_workdir.exists():
                 shutil.rmtree(rife_workdir, ignore_errors=True)
@@ -705,7 +802,11 @@ def restore_duration(
             else:
                 speed_fps = target_fps / ratio
             append_log(log_path, f"[POST_RESTORE] pytorch speed_fps={speed_fps:.6f}")
+            rife_workdir = rife_cache_root / f"{output_dir.name}_{short_hash(str(output_dir.resolve()), 8)}__pytorch"
             try:
+                if rife_workdir.exists():
+                    shutil.rmtree(rife_workdir, ignore_errors=True)
+                rife_workdir.mkdir(parents=True, exist_ok=True)
                 safe_unlink(speed_path, log_path=log_path)
                 if rife_keep_audio and has_audio_stream(transfer_mp4, env=env, log_path=log_path):
                     tempo = 1.0 / ratio
@@ -760,20 +861,174 @@ def restore_duration(
                     log_path=log_path,
                     title="STEP5.5 Post-restore speed adjust (RIFE pytorch prep)",
                 )
-                run_rife_pytorch(
-                    input_mp4=speed_path,
-                    output_mp4=transfer_mp4,
-                    target_fps=target_fps,
-                    scale=rife_scale,
-                    repo_dir=repo_dir,
-                    model_dir=model_dir,
-                    keep_audio=rife_keep_audio,
-                    conda_env=rife_pytorch_env,
-                    env=env,
+                frame_map = _load_frame_map(
+                    frame_map_path=frame_map_path,
+                    expected_input_frames=_probe_frame_count(speed_path, env=env, log_path=log_path),
+                    expected_output_frames=target_frames,
                     log_path=log_path,
                 )
+                if frame_map:
+                    input_frames_dir = rife_workdir / "input_frames"
+                    output_frames_dir = rife_workdir / "output_frames"
+                    if input_frames_dir.exists():
+                        shutil.rmtree(input_frames_dir, ignore_errors=True)
+                    if output_frames_dir.exists():
+                        shutil.rmtree(output_frames_dir, ignore_errors=True)
+                    input_frames_dir.mkdir(parents=True, exist_ok=True)
+                    output_frames_dir.mkdir(parents=True, exist_ok=True)
+                    orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
+                    pad_w, pad_h = get_pad_dims(orig_w, orig_h, align=32)
+                    pad_filter = None
+                    if pad_w != orig_w or pad_h != orig_h:
+                        pad_filter = f"pad=ceil(iw/32)*32:ceil(ih/32)*32:(ow-iw)/2:(oh-ih)/2"
+                    extract_cmd = [
+                        "ffmpeg",
+                        "-y",
+                        "-vsync",
+                        "0",
+                        "-i",
+                        str(speed_path),
+                    ]
+                    if pad_filter:
+                        extract_cmd += ["-vf", pad_filter]
+                    extract_cmd.append(str(input_frames_dir / "%08d.png"))
+                    run_cmd(
+                        extract_cmd,
+                        cwd=None,
+                        env=env or dict(os.environ),
+                        log_path=log_path,
+                        title="STEP5.5 Post-restore RIFE pytorch extract frames",
+                    )
+                    segment_frames = _segment_frames_from_map(frame_map["sampled_indices"])
+                    if rife_time_steps_cache is None:
+                        rife_time_steps_cache = rife_cache_root / "time_steps.json"
+                    parquet_path = None
+                    if rife_time_steps_mode != "uniform":
+                        try:
+                            parquet_path = parquet_path_for_video(input_video_path)
+                        except ValueError as exc:
+                            append_log(log_path, f"[POST_RESTORE] parquet lookup failed: {exc}")
+                    image_w, image_h = probe_video_dimensions(input_video_path, env=env, log_path=log_path)
+                    time_steps_result = compute_time_steps(
+                        frame_map=frame_map["sampled_indices"],
+                        segment_frames=segment_frames,
+                        parquet_path=str(parquet_path) if parquet_path else None,
+                        pose_indices=None,
+                        pose_name_prefix=_pose_prefixes_for_subset(rife_pose_subset),
+                        sam_masks=rife_sam_mask_dir,
+                        image_wh=(image_w, image_h),
+                        mode=rife_time_steps_mode,
+                        cache_path=rife_time_steps_cache,
+                        debug=rife_time_steps_debug,
+                    )
+                    if rife_time_steps_debug:
+                        time_steps, debug_info = time_steps_result
+                    else:
+                        time_steps = time_steps_result
+                        debug_info = None
+                    validate_time_steps(time_steps, segment_frames)
+                    if debug_info:
+                        append_log(
+                            log_path,
+                            (
+                                "[POST_RESTORE] time_steps mode="
+                                f"{debug_info.mode_requested} used={debug_info.mode_used} "
+                                f"fallback={debug_info.fallback_reason} sam_quality={debug_info.sam_quality_ratio}"
+                            ),
+                        )
+                        if debug_info.alpha_stats:
+                            append_log(
+                                log_path,
+                                (
+                                    "[POST_RESTORE] time_steps alpha_stats="
+                                    f"{debug_info.alpha_stats}"
+                                ),
+                            )
+                        for idx, steps in enumerate(time_steps):
+                            if steps:
+                                stats = {
+                                    "min": min(steps),
+                                    "mean": sum(steps) / len(steps),
+                                    "max": max(steps),
+                                }
+                            else:
+                                stats = {"min": 0.0, "mean": 0.0, "max": 0.0}
+                            sam_ratio = None
+                            if debug_info.sam_q is not None:
+                                start = frame_map["sampled_indices"][idx]
+                                end = frame_map["sampled_indices"][idx + 1]
+                                sam_slice = debug_info.sam_q[start + 1 : end + 1]
+                                if sam_slice:
+                                    sam_ratio = sum(1 for val in sam_slice if val >= 0.7) / len(sam_slice)
+                            append_log(
+                                log_path,
+                                (
+                                    f"[POST_RESTORE] segment={idx} t_stats={stats} "
+                                    f"sam_ratio={sam_ratio}"
+                                ),
+                            )
+                    run_rife_pytorch_guided(
+                        input_frames_dir=input_frames_dir,
+                        output_frames_dir=output_frames_dir,
+                        frame_map=frame_map["sampled_indices"],
+                        segment_frames=segment_frames,
+                        time_steps=time_steps,
+                        scale=rife_scale,
+                        repo_dir=repo_dir,
+                        model_dir=model_dir,
+                        conda_env=rife_pytorch_env,
+                        env=env,
+                        log_path=log_path,
+                    )
+                    output_frames = sorted(output_frames_dir.glob("*.png"))
+                    if len(output_frames) != target_frames:
+                        raise RuntimeError(
+                            f"RIFE pytorch guided output frame mismatch: got={len(output_frames)} expected={target_frames}"
+                        )
+                    encode_cmd = [
+                        "ffmpeg",
+                        "-y",
+                        "-framerate",
+                        str(target_fps),
+                        "-i",
+                        str(output_frames_dir / "%08d.png"),
+                    ]
+                    if pad_w != orig_w or pad_h != orig_h:
+                        crop_filter = f"crop={orig_w}:{orig_h}:(in_w-{orig_w})/2:(in_h-{orig_h})/2"
+                        encode_cmd += ["-vf", crop_filter]
+                    encode_cmd += [
+                        "-c:v",
+                        "libx264",
+                        "-pix_fmt",
+                        "yuv420p",
+                        "-movflags",
+                        "+faststart",
+                        str(transfer_mp4),
+                    ]
+                    run_cmd(
+                        encode_cmd,
+                        cwd=None,
+                        env=env or dict(os.environ),
+                        log_path=log_path,
+                        title="STEP5.5 Post-restore RIFE pytorch encode",
+                    )
+                else:
+                    run_rife_pytorch(
+                        input_mp4=speed_path,
+                        output_mp4=transfer_mp4,
+                        target_fps=target_fps,
+                        scale=rife_scale,
+                        repo_dir=repo_dir,
+                        model_dir=model_dir,
+                        keep_audio=rife_keep_audio,
+                        conda_env=rife_pytorch_env,
+                        env=env,
+                        log_path=log_path,
+                    )
             finally:
                 safe_unlink(speed_path, log_path=log_path)
+                if rife_workdir.exists():
+                    shutil.rmtree(rife_workdir, ignore_errors=True)
             append_log(
                 log_path,
                 (
