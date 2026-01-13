@@ -406,6 +406,7 @@ python scripts/run_batch.py ... --cleanup_logs
 ## 待完成项目
 - depth 控制信号质量不佳，需研究提升方案。
 - seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
+- 排查 `rife-ncnn-vulkan` 多卡并发调用时 `vkEnumeratePhysicalDevices failed 5` / `invalid gpu device` 的设备枚举报错与限制。
 
 ## 词表维护说明
 这些词表集中在 `robot_video_to_prompt.py` 顶部常量区。即使 Step3 使用大模型生成替换词，词表仍承担“约束、纠正、扩展”的控制层职责：
@@ -484,6 +485,11 @@ python scripts/run_batch.py ... --cleanup_logs
 1. 从 release 下载 `rife-ncnn-vulkan`（或自行编译）。
 2. 解压后保证可执行文件在 PATH，或通过 `--rife_bin` 指定完整路径。
 3. （可选）下载模型目录，并用 `--rife_model` 指定。
+
+**已知问题（ncnn 版本）**：
+- 当同时在多卡并发调用 `rife-ncnn-vulkan` 时，可能会直接报错：
+  `vkEnumeratePhysicalDevices failed 5` / `invalid gpu device`。
+- 该现象会导致进程无法枚举 CUDA/Vulkan 设备，目前只能稳定在 `cuda 0` 上运行。
 
 ### 安装（Practical-RIFE，PyTorch/CUDA）
 ```bash
