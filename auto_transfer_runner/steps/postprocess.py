@@ -523,26 +523,34 @@ def run_rife_pytorch_guided(
     frame_map_payload = {"sampled_indices": frame_map}
     frame_map_path.write_text(json.dumps(frame_map_payload, ensure_ascii=False), encoding="utf-8")
 
+    time_steps_payload = json.dumps(time_steps, ensure_ascii=False)
     time_steps_path = output_frames_dir.parent / "time_steps.json"
-    time_steps_path.write_text(json.dumps(time_steps, ensure_ascii=False), encoding="utf-8")
+    time_steps_path.write_text(time_steps_payload, encoding="utf-8")
 
     output_frames_dir.mkdir(parents=True, exist_ok=True)
 
+    input_frames = sorted(p for p in input_frames_dir.iterdir() if p.is_file())
+    if not input_frames:
+        raise FileNotFoundError(f"No input frames found in {input_frames_dir}")
+
+    output_prefix = output_frames_dir.as_posix().rstrip("/") + "/"
     cmd = [
         "python3",
         str(script_path),
-        "--input_dir",
-        str(input_frames_dir),
-        "--output_dir",
-        str(output_frames_dir),
+        "--imgs",
+        *[str(p) for p in input_frames],
+        "--output",
+        output_prefix,
         "--model",
         str(model_dir),
         "--scale",
         str(scale),
-        "--frame_map_json",
-        str(frame_map_path),
+        "--frame_map",
+        *[str(idx) for idx in frame_map],
+        "--segment_frames",
+        *[str(count) for count in segment_frames],
         "--time_steps_json",
-        str(time_steps_path),
+        time_steps_payload,
     ]
     cmd = conda_run(conda_env, cmd) if conda_env else cmd
     run_cmd(
@@ -981,6 +989,16 @@ def restore_duration(
                         log_path=log_path,
                     )
                     output_frames = sorted(output_frames_dir.glob("*.png"))
+                    if not output_frames:
+                        prefix = output_frames_dir.name
+                        misplaced = sorted(output_frames_dir.parent.glob(f"{prefix}*.png"))
+                        if misplaced:
+                            output_frames_dir.mkdir(parents=True, exist_ok=True)
+                            for frame_path in misplaced:
+                                suffix = frame_path.name[len(prefix) :].lstrip("_")
+                                target = output_frames_dir / (suffix or frame_path.name)
+                                shutil.move(str(frame_path), str(target))
+                            output_frames = sorted(output_frames_dir.glob("*.png"))
                     if len(output_frames) != target_frames:
                         raise RuntimeError(
                             f"RIFE pytorch guided output frame mismatch: got={len(output_frames)} expected={target_frames}"
