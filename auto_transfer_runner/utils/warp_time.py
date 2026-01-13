@@ -456,11 +456,13 @@ def _find_dataset_root(parquet_path: Path) -> Path:
     for parent in [parquet_path.parent, *parquet_path.parents]:
         if (parent / "meta" / "info.json").exists():
             return parent
-    raise ValueError(f"Cannot locate dataset root for parquet: {parquet_path}")
+    return parquet_path.parent
 
 
 def _load_state_names(dataset_root: Path, *, state_dim: int) -> list[str]:
     info_path = dataset_root / "meta" / "info.json"
+    if not info_path.exists():
+        return [f"state_{idx}" for idx in range(state_dim)]
     info = json.loads(info_path.read_text(encoding="utf-8"))
     state_info = None
     if isinstance(info.get("observation"), dict):
@@ -476,8 +478,12 @@ def _load_state_names(dataset_root: Path, *, state_dim: int) -> list[str]:
     names = None
     if isinstance(state_info, dict):
         names = state_info.get("names")
+    if isinstance(names, dict):
+        dexhand_names = list(names.get("dexhand", []))
+        sensors_names = list(names.get("sensors_raw", []))
+        names = dexhand_names + sensors_names
     if not isinstance(names, list) or len(names) != state_dim:
-        raise ValueError("Unable to parse observation.state names from meta/info.json")
+        return [f"state_{idx}" for idx in range(state_dim)]
     return names
 
 
