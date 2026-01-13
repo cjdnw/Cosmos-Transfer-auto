@@ -115,6 +115,10 @@ class PostprocessConfig:
     rife_time_steps_mode: str = "sam_zarm_hybrid"
     rife_time_steps_cache: str | None = None
     rife_sam_mask_dir: str | None = None
+    rife_time_steps_force_sam: bool = False
+    rife_sam_generate: bool = False
+    rife_sam_bbox_json: str | None = None
+    rife_sam_cleanup_workdir: bool = True
     rife_pose_subset: str = "zarm_pos"
     rife_time_steps_debug: bool = False
 

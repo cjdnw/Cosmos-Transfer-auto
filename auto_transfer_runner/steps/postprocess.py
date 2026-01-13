@@ -15,6 +15,7 @@ from ..utils.hashing import short_hash
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
 from ..utils.warp_time import compute_time_steps, count_guided_output_frames, validate_time_steps
+from .arm_swap import run_arm_swap_sam_masks
 from ..utils.dataset_paths import parquet_path_for_video
 
 
@@ -94,6 +95,14 @@ def has_transfer_output_mp4(output_dir: Path) -> bool:
         return False
     for mp4 in output_dir.glob("*.mp4"):
         if mp4.is_file() and mp4.stat().st_size > 0:
+            return True
+    return False
+
+
+def _mask_dir_has_files(mask_dir: Path) -> bool:
+    patterns = ["*.png", "*.jpg", "*.jpeg", "*.npy"]
+    for pattern in patterns:
+        if any(mask_dir.glob(pattern)):
             return True
     return False
 
@@ -579,6 +588,12 @@ def restore_duration(
     rife_time_steps_mode: str,
     rife_time_steps_cache: Path | None,
     rife_sam_mask_dir: Path | None,
+    rife_time_steps_force_sam: bool,
+    rife_sam_generate: bool,
+    rife_sam_bbox_json: Path | None,
+    rife_sam_cleanup_workdir: bool,
+    rife_sam_project_root: Path,
+    rife_sam_conda_env: str,
     rife_pose_subset: str,
     rife_time_steps_debug: bool,
     rife_cache_root: Path,
@@ -917,17 +932,49 @@ def restore_duration(
                         except ValueError as exc:
                             append_log(log_path, f"[POST_RESTORE] parquet lookup failed: {exc}")
                     image_w, image_h = probe_video_dimensions(input_video_path, env=env, log_path=log_path)
+                    sam_mask_dir = rife_sam_mask_dir
+                    if rife_time_steps_mode in {"sam", "sam_zarm_hybrid"}:
+                        if sam_mask_dir is None:
+                            sam_mask_dir = rife_cache_root / f"{output_dir.name}_sam_masks"
+                        if not _mask_dir_has_files(sam_mask_dir):
+                            if rife_sam_generate:
+                                if rife_sam_bbox_json is None:
+                                    raise ValueError(
+                                        "rife_sam_bbox_json must be set when rife_sam_generate is enabled."
+                                    )
+                                if not rife_sam_bbox_json.exists():
+                                    raise FileNotFoundError(
+                                        f"rife_sam_bbox_json not found: {rife_sam_bbox_json}"
+                                    )
+                                sam_workdir = rife_cache_root / f"{output_dir.name}_sam_workdir"
+                                run_arm_swap_sam_masks(
+                                    project_root=rife_sam_project_root,
+                                    conda_env=rife_sam_conda_env,
+                                    orig_video=input_video_path,
+                                    workdir=sam_workdir,
+                                    bbox_json=rife_sam_bbox_json,
+                                    mask_dir=sam_mask_dir,
+                                    cleanup_workdir=rife_sam_cleanup_workdir,
+                                    env=env,
+                                    log_path=log_path,
+                                )
+                            else:
+                                append_log(
+                                    log_path,
+                                    f"[POST_RESTORE] SAM mask dir missing or empty: {sam_mask_dir}",
+                                )
                     time_steps_result = compute_time_steps(
                         frame_map=frame_map["sampled_indices"],
                         segment_frames=segment_frames,
                         parquet_path=str(parquet_path) if parquet_path else None,
                         pose_indices=None,
                         pose_name_prefix=_pose_prefixes_for_subset(rife_pose_subset),
-                        sam_masks=rife_sam_mask_dir,
+                        sam_masks=sam_mask_dir,
                         image_wh=(image_w, image_h),
                         mode=rife_time_steps_mode,
                         cache_path=rife_time_steps_cache,
                         debug=rife_time_steps_debug,
+                        force_mode=rife_time_steps_force_sam,
                     )
                     if rife_time_steps_debug:
                         time_steps, debug_info = time_steps_result

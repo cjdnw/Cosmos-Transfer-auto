@@ -27,6 +27,16 @@ def _cleanup_workdir(workdir: Path) -> None:
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def _has_mask_files(mask_dir: Path) -> bool:
+    if not mask_dir.exists():
+        return False
+    patterns = ["*.png", "*.jpg", "*.jpeg", "*.npy"]
+    for pattern in patterns:
+        if any(mask_dir.glob(pattern)):
+            return True
+    return False
+
+
 def _parse_fraction(value: str) -> float:
     if "/" in value:
         num_str, den_str = value.split("/", 1)
@@ -188,4 +198,60 @@ def run_arm_swap(
         return output_path
     finally:
         if cleanup_workdir and no_workdir_write:
+            _cleanup_workdir(workdir)
+
+
+def run_arm_swap_sam_masks(
+    *,
+    project_root: Path,
+    conda_env: str,
+    orig_video: Path,
+    workdir: Path,
+    bbox_json: Path,
+    mask_dir: Path,
+    cleanup_workdir: bool,
+    env: Dict[str, str],
+    log_path: Path,
+) -> Path:
+    """
+    Generate SAM masks only (no skin swap).
+
+    Command:
+      python -m robot_arm_swap --orig <input> --workdir <dir> --fps <fps> --width <width>
+        --sam-only --sam-only-mode mask --bbox-json <path>
+        --mask-lossless-frames-dir <mask_dir>
+    """
+    workdir.parent.mkdir(parents=True, exist_ok=True)
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    fps, width = _probe_video_info(orig_video, log_path)
+    cmd = conda_run(
+        conda_env,
+        [
+            "python",
+            "-m",
+            "robot_arm_swap",
+            "--orig",
+            str(orig_video),
+            "--workdir",
+            str(workdir),
+            "--fps",
+            str(fps),
+            "--width",
+            str(width),
+            "--sam-only",
+            "--sam-only-mode",
+            "mask",
+            "--bbox-json",
+            str(bbox_json),
+            "--mask-lossless-frames-dir",
+            str(mask_dir),
+        ],
+    )
+    try:
+        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP5.5: SAM mask generation")
+        if not _has_mask_files(mask_dir):
+            raise FileNotFoundError(f"SAM mask output not found after run: {mask_dir}")
+        return mask_dir
+    finally:
+        if cleanup_workdir:
             _cleanup_workdir(workdir)
