@@ -442,7 +442,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         rife_sam_mask_dir=(
                             Path(cfg.postprocess.rife_sam_mask_dir)
                             if cfg.postprocess.rife_sam_mask_dir
-                            else None
+                            else (cfg.repos.work_dir / "rife_sam_cache")
                         ),
                         rife_pose_subset=cfg.postprocess.rife_pose_subset,
                         rife_time_steps_debug=cfg.postprocess.rife_time_steps_debug,

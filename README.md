@@ -140,7 +140,7 @@ python scripts/run_batch.py \
   - `--rife_keep_audio`：保留输入音频并 mux 回输出（默认 false）。
   - `--rife_time_steps_mode {uniform,zarm_pos,sam,sam_zarm_hybrid}`：PyTorch guided 补帧的时间步策略（默认 sam_zarm_hybrid）。
   - `--rife_time_steps_cache`：time_steps 缓存路径（默认 `<work_dir>/rife_cache/time_steps.json`）。
-  - `--rife_sam_mask_dir`：可选 SAM mask 目录（png/jpg/npy），用于 guided 非均匀 time_steps。
+  - `--rife_sam_mask_dir`：SAM mask 目录（png/jpg/npy），默认 `<work_dir>/rife_sam_cache`，用于 guided 非均匀 time_steps。
   - `--rife_pose_subset {zarm_pos,zarm_pos_vel,zarm_pos_vel_hand,full}`：guided time_steps 的 parquet pose 子集。
   - `--rife_time_steps_debug`：打印每段 time_steps 的 min/mean/max 与 SAM 可信比例。
 补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。

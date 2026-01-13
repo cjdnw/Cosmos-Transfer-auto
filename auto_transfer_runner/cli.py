@@ -596,7 +596,7 @@ def main(argv: List[str] | None = None) -> None:
         "--rife_sam_mask_dir",
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_sam_mask_dir,
-        help="Optional SAM mask directory for guided time_steps (png/jpg/npy)",
+        help="SAM mask directory for guided time_steps (default: <work_dir>/rife_sam_cache)",
     )
     ap.add_argument(
         "--rife_pose_subset",
