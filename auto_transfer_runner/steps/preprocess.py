@@ -1034,6 +1034,28 @@ def _maybe_generate_keyframes(
     if total_frames < target_frames:
         raise ValueError(f"Video frames too short: T={total_frames} < N={target_frames}")
 
+    keyframe_tag = _keyframe_dir_tag(settings, target_frames=target_frames)
+    output_dir = _keyframe_output_dir(
+        video_path,
+        output_root=output_root,
+        input_root=input_root,
+        tag=keyframe_tag,
+    )
+    output_video_path = output_dir / "keyframes.mp4"
+    keyframe_indices_path = output_dir / "keyframe_indices.txt"
+    frame_map_path = frame_map_path_for(output_video_path)
+    if (
+        output_video_path.exists()
+        and output_video_path.stat().st_size > 0
+        and keyframe_indices_path.exists()
+        and keyframe_indices_path.stat().st_size > 0
+        and frame_map_path.exists()
+        and frame_map_path.stat().st_size > 0
+    ):
+        append_log(log_path, f"[PREPROCESS KEYFRAME CACHE HIT] output={output_video_path}")
+        console_print(f"[PREPROCESS KEYFRAME CACHE HIT] {output_video_path.name}")
+        return output_video_path
+
     keyframe_indices = _select_keyframes_from_states(
         states,
         state_names=state_names,
@@ -1054,21 +1076,11 @@ def _maybe_generate_keyframes(
             f"Keyframe index exceeds video frame count: max={max(mapped_indices)} video_frames={video_frames}"
         )
 
-    keyframe_tag = _keyframe_dir_tag(settings, target_frames=target_frames)
-    output_dir = _keyframe_output_dir(
-        video_path,
-        output_root=output_root,
-        input_root=input_root,
-        tag=keyframe_tag,
-    )
     output_dir.mkdir(parents=True, exist_ok=True)
-    keyframe_indices_path = output_dir / "keyframe_indices.txt"
     keyframe_indices_path.write_text(
         "\n".join(str(idx) for idx in mapped_indices) + "\n",
         encoding="utf-8",
     )
-    output_video_path = output_dir / "keyframes.mp4"
-    frame_map_path = frame_map_path_for(output_video_path)
     frame_map_payload = {
         "original_total_frames": video_frames,
         "sampled_indices": mapped_indices,
