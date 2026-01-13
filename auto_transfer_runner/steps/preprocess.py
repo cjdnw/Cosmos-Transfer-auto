@@ -715,6 +715,7 @@ def _enforce_max_gap(
         return indices
 
     indices = sorted(set(indices))
+    original_set = set(indices)
     if indices[0] != 0:
         indices[0] = 0
 
@@ -741,7 +742,12 @@ def _enforce_max_gap(
                 removable.append(expanded[i])
         if not removable:
             break
-        removable.sort(key=lambda idx: motion_scores[idx])
+        removable.sort(
+            key=lambda idx: (
+                0 if idx not in original_set else 1,
+                motion_scores[idx],
+            ),
+        )
         expanded.remove(removable[0])
 
     if len(expanded) > target_frames:
@@ -749,6 +755,91 @@ def _enforce_max_gap(
 
     expanded[0] = 0
     return expanded
+
+
+def _select_unique_by_cumulative(
+    cumulative: np.ndarray,
+    *,
+    target_frames: int,
+    log_path: Path,
+) -> tuple[list[int], int]:
+    if target_frames <= 0:
+        raise ValueError("target_frames must be positive")
+    T = cumulative.shape[0]
+    if target_frames > T:
+        _log_warning(
+            log_path,
+            f"[KEYFRAME] target_frames={target_frames} > video_frames={T}, clamping to {T}",
+        )
+        target_frames = T
+        return list(range(T)), target_frames
+    if target_frames == 1:
+        return [0], target_frames
+
+    cumulative = np.maximum.accumulate(cumulative)
+    total = float(cumulative[-1])
+    targets = np.linspace(cumulative[0], total, target_frames)
+    raw = np.searchsorted(cumulative, targets, side="left")
+    raw = np.clip(raw, 0, T - 1)
+
+    unique_raw = np.unique(raw)
+    if total <= 1e-6 or unique_raw.size < int(0.8 * target_frames):
+        reason = (
+            f"[KEYFRAME] fallback uniform sampling: total_motion={total:.6f} "
+            f"unique_raw={unique_raw.size}/{target_frames}"
+        )
+        _log_warning(log_path, reason)
+        uniform = np.rint(np.linspace(0, T - 1, target_frames)).astype(int).tolist()
+        indices: list[int] = []
+        prev = -1
+        used: set[int] = set()
+        for idx in uniform:
+            candidate = max(idx, prev + 1)
+            while candidate < T and candidate in used:
+                candidate += 1
+            if candidate >= T:
+                candidate = prev + 1
+                while candidate < T and candidate in used:
+                    candidate += 1
+            indices.append(candidate)
+            used.add(candidate)
+            prev = candidate
+        indices[0] = 0
+        indices[-1] = T - 1
+        return indices, target_frames
+
+    max_offset = max(32, T // max(target_frames, 1))
+
+    frames: list[int] = []
+    prev = -1
+    used: set[int] = set()
+    for k in range(target_frames):
+        center = int(raw[k])
+        found: int | None = None
+        for d in range(max_offset + 1):
+            if d == 0:
+                candidates = [center]
+            else:
+                candidates = [center - d, center + d]
+            for cand in candidates:
+                if cand <= prev or cand < 0 or cand >= T or cand in used:
+                    continue
+                found = cand
+                break
+            if found is not None:
+                break
+        if found is None:
+            candidate = prev + 1
+            while candidate < T and candidate in used:
+                candidate += 1
+            found = candidate
+        frames.append(found)
+        used.add(found)
+        prev = found
+
+    frames[0] = 0
+    frames[-1] = T - 1
+    return frames, target_frames
 
 
 def _select_pose_indices(
@@ -840,7 +931,11 @@ def _select_keyframes_from_states(
     if target_frames <= 0:
         raise ValueError("target_frames must be positive")
     if T < target_frames:
-        raise ValueError(f"Video frame count T={T} is less than target N={target_frames}")
+        _log_warning(
+            log_path,
+            f"[KEYFRAME] target_frames={target_frames} > video_frames={T}, clamping to {T}",
+        )
+        target_frames = T
 
     keep_idx, _ = _select_pose_indices(
         state_names,
@@ -864,28 +959,24 @@ def _select_keyframes_from_states(
     diffs = np.maximum(diffs, eps)
 
     cumulative = np.cumsum(diffs)
-    if target_frames == 1:
-        indices = [0]
-    else:
-        delta = (cumulative[-1] - cumulative[0]) / (target_frames - 1)
-        indices = []
-        prev = -1
-        for m in range(target_frames):
-            target = cumulative[0] + delta * m
-            idx = int(np.searchsorted(cumulative, target, side="left"))
-            if idx <= prev:
-                idx = prev + 1
-            if idx >= T:
-                idx = T - 1
-            indices.append(idx)
-            prev = idx
-        indices[-1] = T - 1
+    indices, target_frames = _select_unique_by_cumulative(
+        cumulative,
+        target_frames=target_frames,
+        log_path=log_path,
+    )
 
     indices = _enforce_max_gap(indices, diffs, max_gap=max_gap, target_frames=target_frames)
     if len(indices) != target_frames:
         if len(indices) < target_frames:
-            raise ValueError("Failed to sample enough keyframes after enforcing max_gap")
-        indices = indices[:target_frames - 1] + [indices[-1]]
+            remaining = [idx for idx in range(T) if idx not in set(indices)]
+            remaining.sort(key=lambda idx: diffs[idx], reverse=True)
+            for idx in remaining:
+                if len(indices) >= target_frames:
+                    break
+                indices.append(idx)
+            indices = sorted(set(indices))
+        if len(indices) > target_frames:
+            indices = indices[:target_frames - 1] + [indices[-1]]
     indices[0] = 0
     indices[-1] = T - 1
     return indices
