@@ -261,6 +261,21 @@ def _load_frame_map(
     return {"sampled_indices": sample_indices}
 
 
+def _select_rife_gpu_id(
+    *,
+    run_gpus: list[str] | None,
+    job_index: int,
+    env: Dict[str, str] | None,
+) -> str | None:
+    if env:
+        explicit_gpu = env.get("AUTO_TRANSFER_RIFE_GPU_ID")
+        if explicit_gpu:
+            return explicit_gpu
+    if run_gpus:
+        return run_gpus[job_index % len(run_gpus)]
+    return None
+
+
 def _run_rife_guided(
     *,
     input_frames_dir: Path,
@@ -268,6 +283,7 @@ def _run_rife_guided(
     sample_indices: list[int],
     rife_bin: str,
     rife_model: str | None,
+    rife_gpu_id: str | None,
     env: Dict[str, str],
     log_path: Path,
 ) -> None:
@@ -311,8 +327,11 @@ def _run_rife_guided(
             "-f",
             "%08d.png",
         ]
+        if rife_gpu_id is not None:
+            rife_cmd += ["-g", str(rife_gpu_id)]
         if rife_model:
             rife_cmd += ["-m", rife_model]
+        append_log(log_path, f"[POST_RESTORE] RIFE guided segment {idx} cmd: {' '.join(rife_cmd)}")
         rife_env = dict(env) if env is not None else dict(os.environ)
         rife_env.pop("DISPLAY", None)
         rife_env.pop("WAYLAND_DISPLAY", None)
@@ -458,6 +477,8 @@ def restore_duration(
     rife_scale: float,
     rife_keep_audio: bool,
     frame_map_path: Path | None,
+    run_gpus: list[str] | None,
+    job_index: int,
     env: Dict[str, str],
     log_path: Path,
 ) -> Path:
@@ -515,6 +536,9 @@ def restore_duration(
         if rife_backend == "ncnn_vulkan":
             if not rife_bin:
                 raise ValueError("rife_bin must be set when post_restore_mode=rife")
+            rife_gpu_id = _select_rife_gpu_id(run_gpus=run_gpus, job_index=job_index, env=env)
+            append_log(log_path, f"[POST_RESTORE] rife_gpu_id={rife_gpu_id}")
+            console_print(f"[POST_RESTORE] rife_gpu_id={rife_gpu_id}")
             rife_cache_root = Path("/mnt/data/ganrunhe/auto_transfer/rife_cache")
             rife_workdir = rife_cache_root / f"{output_dir.name}_{short_hash(str(output_dir.resolve()), 8)}"
             if rife_workdir.exists():
@@ -595,6 +619,7 @@ def restore_duration(
                         sample_indices=frame_map["sampled_indices"],
                         rife_bin=rife_bin,
                         rife_model=rife_model,
+                        rife_gpu_id=rife_gpu_id,
                         env=env,
                         log_path=log_path,
                     )
@@ -611,8 +636,11 @@ def restore_duration(
                         "-f",
                         "%08d.png",
                     ]
+                    if rife_gpu_id is not None:
+                        rife_cmd += ["-g", str(rife_gpu_id)]
                     if rife_model:
                         rife_cmd += ["-m", rife_model]
+                    append_log(log_path, f"[POST_RESTORE] RIFE cmd: {' '.join(rife_cmd)}")
                     rife_env = dict(env) if env is not None else dict(os.environ)
                     rife_env.pop("DISPLAY", None)
                     rife_env.pop("WAYLAND_DISPLAY", None)
