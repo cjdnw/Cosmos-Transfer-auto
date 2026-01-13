@@ -12,20 +12,25 @@ from auto_transfer_runner.steps.preprocess import (  # noqa: E402
 )
 
 
-def test_unique_sampling_handles_plateaus():
+def test_unique_sampling_handles_plateaus(tmp_path: Path):
     video_frames = 447
     diffs = np.zeros(video_frames, dtype=float)
     diffs[::50] = 1.0
     cumulative = np.cumsum(diffs)
 
     target_frames = 93
-    indices = _select_unique_by_cumulative(cumulative, target_frames=target_frames)
+    indices, resolved_target = _select_unique_by_cumulative(
+        cumulative,
+        target_frames=target_frames,
+        log_path=tmp_path / "keyframe.log",
+    )
 
+    assert resolved_target == target_frames
     assert len(indices) == target_frames
     assert indices == sorted(indices)
     assert len(set(indices)) == target_frames
-    assert indices[0] >= 0
-    assert indices[-1] < video_frames
+    assert indices[0] == 0
+    assert indices[-1] == video_frames - 1
 
 
 def test_parquet_motion_sampling_survives_large_max_gap(tmp_path: Path):

@@ -597,3 +597,4 @@ python scripts/run_batch.py \
 - 2025-xx-xx：新增 parquet-motion 关键帧采样，输出 16fps 的 `keyframes.mp4` 并作为 Transfer2.5 输入；支持按 chunk 数自动计算目标帧数。
 - 2025-xx-xx：新增 `requirements.txt`，列出本仓库自身依赖（`numpy`、`pyarrow`），便于 base 环境安装。
 - 2026-01-13：parquet_motion 关键帧采样改为累计运动量目标的唯一化映射，确保严格递增且数量等于目标帧数，并补充 plateau 场景回归测试。
+- 2026-01-13：parquet_motion 关键帧采样在运动不足时退化为均匀采样并打印原因，且保证包含首尾帧与严格递增。
