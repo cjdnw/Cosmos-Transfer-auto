@@ -112,6 +112,11 @@ class PostprocessConfig:
     rife_pytorch_env: str = "rife"
     rife_scale: float = 1.0
     rife_keep_audio: bool = False
+    rife_time_steps_mode: str = "sam_zarm_hybrid"
+    rife_time_steps_cache: str | None = None
+    rife_sam_mask_dir: str | None = None
+    rife_pose_subset: str = "zarm_pos"
+    rife_time_steps_debug: bool = False
 
 
 @dataclass(frozen=True)

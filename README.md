@@ -19,7 +19,7 @@
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
 - 可选：安装 `rife-ncnn-vulkan` 或 Practical-RIFE（PyTorch/CUDA）以启用 `--post_restore_mode rife`（RIFE 补帧）
-- 本仓库自身依赖（用于 base 环境运行）见 `requirements.txt`：`numpy`、`pyarrow`。
+- 本仓库自身依赖（用于 base 环境运行）见 `requirements.txt`：`numpy`、`pyarrow`、`pillow`。
 
 ## 工程结构
 - `scripts/run_batch.py`：主入口（命令行运行）
@@ -138,6 +138,11 @@ python scripts/run_batch.py \
   - `--rife_pytorch_env`：Practical-RIFE conda 环境（默认 rife）。
   - `--rife_scale`：RIFE scale（默认 1.0，0.5 可加速）。
   - `--rife_keep_audio`：保留输入音频并 mux 回输出（默认 false）。
+  - `--rife_time_steps_mode {uniform,zarm_pos,sam,sam_zarm_hybrid}`：PyTorch guided 补帧的时间步策略（默认 sam_zarm_hybrid）。
+  - `--rife_time_steps_cache`：time_steps 缓存路径（默认 `<work_dir>/rife_cache/time_steps.json`）。
+  - `--rife_sam_mask_dir`：SAM mask 目录（png/jpg/npy），默认 `<work_dir>/rife_sam_cache`，用于 guided 非均匀 time_steps。
+  - `--rife_pose_subset {zarm_pos,zarm_pos_vel,zarm_pos_vel_hand,full}`：guided time_steps 的 parquet pose 子集。
+  - `--rife_time_steps_debug`：打印每段 time_steps 的 min/mean/max 与 SAM 可信比例。
 补充：需要关闭官方 guardrails 时可以追加 `--disable_guardrails`，该参数会透传到 Transfer2.5 推理脚本。
 
 ### 例 5：指定 Qwen 模型族（默认 Qwen2.5，可切换为 Qwen3）
@@ -534,10 +539,15 @@ python scripts/run_batch.py \
   --rife_backend pytorch \
   --rife_pytorch_repo /path/to/Practical-RIFE \
   --rife_pytorch_env rife \
-  --rife_scale 1.0
+  --rife_scale 1.0 \
+  --rife_time_steps_mode sam_zarm_hybrid \
+  --rife_time_steps_debug
 ```
 
+当使用 `--rife_backend pytorch` 且存在 `frame_map`（如 parquet_motion 关键帧采样），会自动调用 Practical-RIFE 的 guided 非均匀补帧接口，并支持显式/自动 `time_steps`（含 SAM+zarm_pos 融合与回退策略）。
+
 ## 更新记录
+- 2026-01-13：RIFE pytorch 后端新增 guided 非均匀补帧（frame_map/segment_frames + time_steps），支持 SAM+zarm_pos 融合自动生成并带缓存与调试日志。
 - 2026-01-13：parquet_motion 关键帧采样改为累计运动量目标的唯一化映射，确保严格递增且数量等于目标帧数，并补充 plateau 场景回归测试。
 - 2026-01-13：parquet_motion 关键帧采样在运动不足时退化为均匀采样并打印原因，且保证包含首尾帧与严格递增。
 - 2026-01-13：新增 parquet-motion 关键帧采样，输出 16fps 的 `keyframes.mp4` 并作为 Transfer2.5 输入；支持按 chunk 数自动计算目标帧数。
