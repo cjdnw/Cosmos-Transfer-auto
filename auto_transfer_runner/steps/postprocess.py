@@ -523,8 +523,9 @@ def run_rife_pytorch_guided(
     frame_map_payload = {"sampled_indices": frame_map}
     frame_map_path.write_text(json.dumps(frame_map_payload, ensure_ascii=False), encoding="utf-8")
 
+    time_steps_payload = json.dumps(time_steps, ensure_ascii=False)
     time_steps_path = output_frames_dir.parent / "time_steps.json"
-    time_steps_path.write_text(json.dumps(time_steps, ensure_ascii=False), encoding="utf-8")
+    time_steps_path.write_text(time_steps_payload, encoding="utf-8")
 
     output_frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -548,7 +549,7 @@ def run_rife_pytorch_guided(
         "--segment_frames",
         *[str(count) for count in segment_frames],
         "--time_steps_json",
-        str(time_steps_path),
+        time_steps_payload,
     ]
     cmd = conda_run(conda_env, cmd) if conda_env else cmd
     run_cmd(
