@@ -51,6 +51,7 @@ class Job:
     video_path: Path
     job_id: str
     variant_idx: int = 0
+    job_index: int = 0
     input_root: Path | None = None
 
 
@@ -432,6 +433,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         rife_scale=cfg.postprocess.rife_scale,
                         rife_keep_audio=cfg.postprocess.rife_keep_audio,
                         frame_map_path=frame_map_path,
+                        run_gpus=cfg.run.gpus,
+                        job_index=job.job_index,
                         env=env,
                         log_path=paths.log_path,
                     ),

@@ -294,8 +294,10 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
     """One GPU == one worker process. Each worker runs Step2->Step5 for jobs it pulls."""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    env["AUTO_TRANSFER_RIFE_GPU_ID"] = str(gpu_id)
     # Also update the process environment so console logs include the GPU tag.
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ["AUTO_TRANSFER_RIFE_GPU_ID"] = str(gpu_id)
 
     while True:
         item = q.get()
@@ -306,6 +308,7 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
             video_path=Path(item["video_path"]),
             job_id=item["job_id"],
             variant_idx=item.get("variant_idx", 0),
+            job_index=item.get("job_index", 0),
             input_root=Path(item["input_root"]),
         )
         try:
@@ -757,6 +760,7 @@ def main(argv: List[str] | None = None) -> None:
     batch_tag = now_tag()
     base_hashes = [short_hash(str(vp.resolve()), 8) for vp in videos]
 
+    job_index = 0
     for v in range(args.variants_per_video):
         for idx, vp in enumerate(videos):
             base_hash = base_hashes[idx]
@@ -766,9 +770,11 @@ def main(argv: List[str] | None = None) -> None:
                     "video_path": str(vp),
                     "job_id": job_id,
                     "variant_idx": v,
+                    "job_index": job_index,
                     "input_root": str(input_dir),
                 }
             )
+            job_index += 1
 
     # Start one worker per GPU
     procs: List[mp.Process] = []
