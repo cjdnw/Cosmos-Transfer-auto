@@ -596,3 +596,4 @@ python scripts/run_batch.py \
 - 2025-12-31：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
 - 2025-xx-xx：新增 parquet-motion 关键帧采样，输出 16fps 的 `keyframes.mp4` 并作为 Transfer2.5 输入；支持按 chunk 数自动计算目标帧数。
 - 2025-xx-xx：新增 `requirements.txt`，列出本仓库自身依赖（`numpy`、`pyarrow`），便于 base 环境安装。
+- 2026-01-13：parquet_motion 关键帧采样改为累计运动量目标的唯一化映射，确保严格递增且数量等于目标帧数，并补充 plateau 场景回归测试。

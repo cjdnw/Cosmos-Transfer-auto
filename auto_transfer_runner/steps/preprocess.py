@@ -715,6 +715,7 @@ def _enforce_max_gap(
         return indices
 
     indices = sorted(set(indices))
+    original_set = set(indices)
     if indices[0] != 0:
         indices[0] = 0
 
@@ -741,7 +742,12 @@ def _enforce_max_gap(
                 removable.append(expanded[i])
         if not removable:
             break
-        removable.sort(key=lambda idx: motion_scores[idx])
+        removable.sort(
+            key=lambda idx: (
+                0 if idx not in original_set else 1,
+                motion_scores[idx],
+            ),
+        )
         expanded.remove(removable[0])
 
     if len(expanded) > target_frames:
@@ -749,6 +755,72 @@ def _enforce_max_gap(
 
     expanded[0] = 0
     return expanded
+
+
+def _select_unique_by_cumulative(
+    cumulative: np.ndarray,
+    *,
+    target_frames: int,
+) -> list[int]:
+    if target_frames <= 0:
+        raise ValueError("target_frames must be positive")
+    T = cumulative.shape[0]
+    if target_frames > T:
+        raise ValueError(f"Video frame count T={T} is less than target N={target_frames}")
+    if target_frames == 1:
+        return [0]
+
+    cumulative = np.maximum.accumulate(cumulative)
+    total = cumulative[-1]
+    targets = np.linspace(cumulative[0], total, target_frames)
+    initial = np.searchsorted(cumulative, targets, side="left")
+    initial = np.clip(initial, 0, T - 1)
+
+    max_offset = max(32, T // max(target_frames, 1))
+    max_offset *= 4
+
+    frames: list[int] = []
+    prev = -1
+    used: set[int] = set()
+    for k in range(target_frames):
+        target = targets[k]
+        center = int(initial[k])
+        found: int | None = None
+        for d in range(max_offset + 1):
+            if d == 0:
+                candidates = [center]
+            elif center <= prev:
+                candidates = [center + d, center - d]
+            else:
+                candidates = [center - d, center + d]
+            for cand in candidates:
+                if cand <= prev or cand < 0 or cand >= T or cand in used:
+                    continue
+                found = cand
+                break
+            if found is not None:
+                break
+
+        if found is None:
+            start = prev + 1
+            if start >= T:
+                raise ValueError("Unable to sample enough unique keyframes")
+            idx = int(np.searchsorted(cumulative, target, side="left"))
+            if idx < start:
+                idx = start
+            if idx >= T:
+                idx = T - 1
+            best = idx
+            if idx - 1 >= start:
+                if abs(cumulative[idx - 1] - target) <= abs(cumulative[idx] - target):
+                    best = idx - 1
+            found = best
+
+        frames.append(found)
+        used.add(found)
+        prev = found
+
+    return frames
 
 
 def _select_pose_indices(
@@ -864,28 +936,20 @@ def _select_keyframes_from_states(
     diffs = np.maximum(diffs, eps)
 
     cumulative = np.cumsum(diffs)
-    if target_frames == 1:
-        indices = [0]
-    else:
-        delta = (cumulative[-1] - cumulative[0]) / (target_frames - 1)
-        indices = []
-        prev = -1
-        for m in range(target_frames):
-            target = cumulative[0] + delta * m
-            idx = int(np.searchsorted(cumulative, target, side="left"))
-            if idx <= prev:
-                idx = prev + 1
-            if idx >= T:
-                idx = T - 1
-            indices.append(idx)
-            prev = idx
-        indices[-1] = T - 1
+    indices = _select_unique_by_cumulative(cumulative, target_frames=target_frames)
 
     indices = _enforce_max_gap(indices, diffs, max_gap=max_gap, target_frames=target_frames)
     if len(indices) != target_frames:
         if len(indices) < target_frames:
-            raise ValueError("Failed to sample enough keyframes after enforcing max_gap")
-        indices = indices[:target_frames - 1] + [indices[-1]]
+            remaining = [idx for idx in range(T) if idx not in set(indices)]
+            remaining.sort(key=lambda idx: diffs[idx], reverse=True)
+            for idx in remaining:
+                if len(indices) >= target_frames:
+                    break
+                indices.append(idx)
+            indices = sorted(set(indices))
+        if len(indices) > target_frames:
+            indices = indices[:target_frames - 1] + [indices[-1]]
     indices[0] = 0
     indices[-1] = T - 1
     return indices
