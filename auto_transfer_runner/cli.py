@@ -206,6 +206,11 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         rife_pytorch_env=args.rife_pytorch_env,
         rife_scale=args.rife_scale,
         rife_keep_audio=args.rife_keep_audio,
+        rife_time_steps_mode=args.rife_time_steps_mode,
+        rife_time_steps_cache=args.rife_time_steps_cache,
+        rife_sam_mask_dir=args.rife_sam_mask_dir,
+        rife_pose_subset=args.rife_pose_subset,
+        rife_time_steps_debug=args.rife_time_steps_debug,
     )
 
     transfer = TransferConfig(
@@ -573,6 +578,37 @@ def main(argv: List[str] | None = None) -> None:
         "--rife_keep_audio",
         action="store_true",
         help="Keep input audio when using RIFE post-restore (default: false)",
+    )
+    ap.add_argument(
+        "--rife_time_steps_mode",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_time_steps_mode,
+        choices=["uniform", "zarm_pos", "sam", "sam_zarm_hybrid"],
+        help="Guided interpolation time steps mode for RIFE pytorch (default: sam_zarm_hybrid)",
+    )
+    ap.add_argument(
+        "--rife_time_steps_cache",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_time_steps_cache,
+        help="Cache path for guided time_steps (default: <work_dir>/rife_cache/time_steps.json)",
+    )
+    ap.add_argument(
+        "--rife_sam_mask_dir",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_sam_mask_dir,
+        help="SAM mask directory for guided time_steps (default: <work_dir>/rife_sam_cache)",
+    )
+    ap.add_argument(
+        "--rife_pose_subset",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_pose_subset,
+        choices=["zarm_pos", "zarm_pos_vel", "zarm_pos_vel_hand", "full"],
+        help="Pose subset for guided time_steps (default: zarm_pos)",
+    )
+    ap.add_argument(
+        "--rife_time_steps_debug",
+        action="store_true",
+        help="Log per-segment time_steps stats and SAM reliability ratios",
     )
 
     # Step4/5 parameters

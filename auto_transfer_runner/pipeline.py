@@ -422,6 +422,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     "STEP5.5 Post-restore",
                     lambda: restore_duration(
                         output_dir=paths.output_dir,
+                        input_video_path=job.video_path,
                         original_stats=original_stats,
                         mode=cfg.postprocess.restore_mode,
                         rife_bin=cfg.postprocess.rife_bin,
@@ -432,6 +433,20 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         rife_pytorch_env=cfg.postprocess.rife_pytorch_env,
                         rife_scale=cfg.postprocess.rife_scale,
                         rife_keep_audio=cfg.postprocess.rife_keep_audio,
+                        rife_time_steps_mode=cfg.postprocess.rife_time_steps_mode,
+                        rife_time_steps_cache=(
+                            Path(cfg.postprocess.rife_time_steps_cache)
+                            if cfg.postprocess.rife_time_steps_cache
+                            else None
+                        ),
+                        rife_sam_mask_dir=(
+                            Path(cfg.postprocess.rife_sam_mask_dir)
+                            if cfg.postprocess.rife_sam_mask_dir
+                            else (cfg.repos.work_dir / "rife_sam_cache")
+                        ),
+                        rife_pose_subset=cfg.postprocess.rife_pose_subset,
+                        rife_time_steps_debug=cfg.postprocess.rife_time_steps_debug,
+                        rife_cache_root=cfg.repos.work_dir / "rife_cache",
                         frame_map_path=frame_map_path,
                         run_gpus=cfg.run.gpus,
                         job_index=job.job_index,
