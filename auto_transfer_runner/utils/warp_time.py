@@ -67,6 +67,7 @@ def compute_time_steps(
     mode: str = "sam_zarm_hybrid",
     cache_path: Optional[str | Path] = None,
     debug: bool = False,
+    force_mode: bool = False,
 ) -> List[List[float]] | tuple[List[List[float]], TimeStepDebug]:
     if len(frame_map) < 2:
         raise ValueError("frame_map must have at least 2 entries")
@@ -125,12 +126,14 @@ def compute_time_steps(
             )
             if q is not None:
                 sam_quality_ratio = float(np.mean(np.asarray(q) >= 0.7))
-                if np.mean(np.asarray(q) <= 0.0) > 0.5:
+                if not force_mode and np.mean(np.asarray(q) <= 0.0) > 0.5:
                     d_vis = None
                     q = None
                     fallback_reason = "sam_quality_too_low"
 
         if mode == "sam" and d_vis is None:
+            if force_mode:
+                raise RuntimeError("SAM masks unavailable for time_steps mode=sam (force_mode enabled)")
             if d_state is None:
                 mode_used = "uniform"
                 fallback_reason = fallback_reason or "sam_unavailable_no_state"
@@ -140,6 +143,8 @@ def compute_time_steps(
 
         if mode == "sam_zarm_hybrid":
             if d_vis is None:
+                if force_mode:
+                    raise RuntimeError("SAM masks unavailable for time_steps mode=sam_zarm_hybrid (force_mode enabled)")
                 mode_used = "zarm_pos"
                 fallback_reason = fallback_reason or "sam_unavailable"
             elif d_state is None:
@@ -156,6 +161,8 @@ def compute_time_steps(
             d = None
 
         if d is None:
+            if force_mode:
+                raise RuntimeError("Unable to compute time_steps from SAM masks (force_mode enabled)")
             time_steps = _uniform_time_steps(frame_map, segment_frames)
             mode_used = "uniform"
             fallback_reason = fallback_reason or "no_motion_signal"

@@ -444,6 +444,16 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                             if cfg.postprocess.rife_sam_mask_dir
                             else (cfg.repos.work_dir / "rife_sam_cache")
                         ),
+                        rife_time_steps_force_sam=cfg.postprocess.rife_time_steps_force_sam,
+                        rife_sam_generate=cfg.postprocess.rife_sam_generate,
+                        rife_sam_bbox_json=(
+                            Path(cfg.postprocess.rife_sam_bbox_json)
+                            if cfg.postprocess.rife_sam_bbox_json
+                            else None
+                        ),
+                        rife_sam_cleanup_workdir=cfg.postprocess.rife_sam_cleanup_workdir,
+                        rife_sam_project_root=cfg.arm_swap.project_root,
+                        rife_sam_conda_env=cfg.arm_swap.conda_env,
                         rife_pose_subset=cfg.postprocess.rife_pose_subset,
                         rife_time_steps_debug=cfg.postprocess.rife_time_steps_debug,
                         rife_cache_root=cfg.repos.work_dir / "rife_cache",

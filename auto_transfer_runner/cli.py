@@ -209,6 +209,10 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         rife_time_steps_mode=args.rife_time_steps_mode,
         rife_time_steps_cache=args.rife_time_steps_cache,
         rife_sam_mask_dir=args.rife_sam_mask_dir,
+        rife_time_steps_force_sam=args.rife_time_steps_force_sam,
+        rife_sam_generate=args.rife_sam_generate,
+        rife_sam_bbox_json=args.rife_sam_bbox_json,
+        rife_sam_cleanup_workdir=(not args.rife_sam_keep_workdir),
         rife_pose_subset=args.rife_pose_subset,
         rife_time_steps_debug=args.rife_time_steps_debug,
     )
@@ -597,6 +601,27 @@ def main(argv: List[str] | None = None) -> None:
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_sam_mask_dir,
         help="SAM mask directory for guided time_steps (default: <work_dir>/rife_sam_cache)",
+    )
+    ap.add_argument(
+        "--rife_time_steps_force_sam",
+        action="store_true",
+        help="Force SAM-based time_steps (no fallback to zarm/uniform)",
+    )
+    ap.add_argument(
+        "--rife_sam_generate",
+        action="store_true",
+        help="Generate SAM masks via robot_arm_swap when missing (requires --rife_sam_bbox_json)",
+    )
+    ap.add_argument(
+        "--rife_sam_bbox_json",
+        type=str,
+        default=POSTPROCESS_DEFAULTS.rife_sam_bbox_json,
+        help="BBox json path for SAM mask generation (from Qwen)",
+    )
+    ap.add_argument(
+        "--rife_sam_keep_workdir",
+        action="store_true",
+        help="Keep SAM generation workdir (default: cleanup after run)",
     )
     ap.add_argument(
         "--rife_pose_subset",
