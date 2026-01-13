@@ -61,8 +61,8 @@ python scripts/run_batch.py \
 - `--pre_chunk_force_chunks N`：强制固定 chunk 数（仅使用 speed 模式，均匀抽帧并降低 fps；忽略 clip/policy/clip_where）。
 - `--keyframe_sampling {uniform,parquet_motion}`：使用 parquet 的 observation.state 变化进行非均匀抽帧。
 - `--keyframe_target_frames N`：目标关键帧数（默认使用 `--num_video_frames_per_chunk`；若开启 `--pre_chunk_mode speed` 或 `--pre_chunk_force_chunks`，则按 chunk 数自动计算）。
-- `--keyframe_smooth_win N`：运动分数平滑窗口（默认 5）。
-- `--keyframe_max_gap N`：最大帧间隔约束（默认 8）。
+- `--keyframe_smooth_win N`：运动分数平滑窗口（默认 0）。
+- `--keyframe_max_gap N`：最大帧间隔约束（默认 2026）。
 - `--parquet_pose_subset {zarm_pos,zarm_pos_vel,zarm_pos_vel_hand,full}`：parquet_motion 的姿态维度子集（默认 `zarm_pos_vel`，可过滤非机械臂维度）。
 
 当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes__<sampling_tag>/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）。`sampling_tag` 会编码关键帧抽样配置（如 target_frames/max_gap/smooth_win/pose_subset 等），避免不同抽样配置互相覆盖：
@@ -532,27 +532,32 @@ python scripts/run_batch.py \
 ```
 
 ## 更新记录
+- 2026-01-13：parquet_motion 关键帧采样改为累计运动量目标的唯一化映射，确保严格递增且数量等于目标帧数，并补充 plateau 场景回归测试。
+- 2026-01-13：parquet_motion 关键帧采样在运动不足时退化为均匀采样并打印原因，且保证包含首尾帧与严格递增。
+- 2026-01-13：新增 parquet-motion 关键帧采样，输出 16fps 的 `keyframes.mp4` 并作为 Transfer2.5 输入；支持按 chunk 数自动计算目标帧数。
+- 2026-01-13：新增 `requirements.txt`，列出本仓库自身依赖（`numpy`、`pyarrow`），便于 base 环境安装。
 - 2026-01-12：parquet_motion 关键帧输出目录新增 sampling_tag（包含关键帧抽样配置与哈希），避免不同抽样参数互相覆盖。
 - 2026-01-12：parquet_motion 关键帧输出新增 frame_map（与 keyframes.mp4 同名），用于 RIFE guided 补帧按原始帧索引恢复非均匀间隔。
 - 2026-01-11：parquet_motion 新增 `--parquet_pose_subset`（可选 zarm pos/vel/hand 子集或 full），并在 keyframe 运动量计算中按 meta/info.json 名称选择维度，支持 stats.json 标准化与更稳健的 parquet 路径解析。
+- 2026-01-10：移除 `--pre_fps` 选项，`pre_chunk_mode=speed` 改为均匀抽帧并降低 fps，保持原视频时长不变。
 - 2026-01-09：Step6 arm swap 默认拆成 Qwen+SAM 两步运行，新增 `--arm_swap_split/--arm_swap_single` 控制；split 产物 bbox JSON 默认清理，可用 `--arm_swap_keep_bbox_json` 保留。
 - 2026-01-09：Step6 arm swap 新增 `--no-workdir-write`（默认开启内存模式避免 PNG 落盘），CLI 暴露 `--arm_swap_no_workdir_write/--arm_swap_workdir_write` 控制开关。
 - 2026-01-08：RIFE pytorch 后端新增 `--rife_pytorch_env`（默认 rife），支持在 base 环境下通过 `conda run` 调用 Practical-RIFE。
-- 2026-01-10：移除 `--pre_fps` 选项，`pre_chunk_mode=speed` 改为均匀抽帧并降低 fps，保持原视频时长不变。
 - 2026-01-08：Step6 arm swap 根据原视频进行 swap，并新增 `--disable_guardrails` 透传到 Transfer2.5。
 - 2026-01-07：`--post_restore_duration` 优先对齐原视频帧数与 FPS，保证输出帧数与帧率完全一致（即使时长不再强制百分百对齐）。
-- 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
 - 2026-01-07：新增 `--post_restore_mode rife`，支持使用 RIFE 进行补帧（含 `--rife_bin`/`--rife_model`）。
+- 2026-01-06：RIFE 后处理新增 32 对齐 pad/crop 修复条纹伪影，RIFE 子进程移除 DISPLAY/WAYLAND_DISPLAY，默认 RIFE 路径更新，并将中间缓存放入 `/mnt/data/ganrunhe/auto_transfer/rife_cache`（按 job 目录隔离，完成后自动清理）。
 - 2026-01-06：新增 Step1.5 预处理对齐 Transfer chunk 帧数（`--pre_chunk_mode/--pre_chunk_policy/--pre_chunk_clip_where/--pre_chunk_max_adjust`），对齐后的视频统一用于 Step3 control 与 Step5 Transfer 推理，确保帧数一致。
 - 2026-01-05：新增 Transfer2.5 推理加速参数 `--resolution`（写入 STEP4 JSON），并补充 resolution->16:9 bucket 尺寸对照表；明确 `--pre_width/--pre_height` 仅影响预处理/控制生成，不决定推理 bucket。
 - 2026-01-04：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
-- 2026-1-4：Step6 机械臂替换切换为单次 `robot_arm_swap` 调用，固定使用 conda 环境 `arm_swap`。
-- 2026-1-4：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
-- 2026-1-4：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
+- 2026-01-04：Step6 机械臂替换切换为单次 `robot_arm_swap` 调用，固定使用 conda 环境 `arm_swap`。
+- 2026-01-04：Step3 替换候选移除内部 step3_llm_cache 缓存，候选不足时使用词库组合（含双色组合）补齐到 `--replacements_per_term`，三部曲逻辑说明同步更新。
+- 2026-01-04：新增断点续跑原子标记文件（Step2~Step6 + job 完成），支持批处理完成后自动清空标记目录。
 - 2025-12-31：Step2 在遇到 PyAV 缺失时自动用 ffmpeg 转码视频并重试，避免任务直接失败。
 - 2025-12-31：支持递归扫描输入 mp4 并按原始目录结构输出，最外层新增 `_var_x` 变体目录；arm swap 输出保持同样的目录镜像规则。
 - 2025-12-31：新增 sim2real 任务开关 `--sim2real_only`，Quickstart 增补 Step1-only 调用示例。
 - 2025-12-31：更新 video_to_prompt 三部曲说明，补充 Step2 子串清理、Step3 同体对齐与 step3_apply 无候选时的行为说明。
+- 2025-12-31：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
 - 2025-12-30：整理 video_to_prompt 三部曲逻辑说明，补充 Step1.5 兜底、Step2 括号反思/扩展、Step3 替换一致性与补齐策略。
 - 2025-12-30：Step2 名词同一体扩展提升优先级，允许在含机器人描述的句子中补圈共享名词短语。
 - 2025-12-30：Step2 括号清理新增机器人关键词与“background consists of …”过滤，并移除不含名词的纯形容词括注。
@@ -593,8 +598,3 @@ python scripts/run_batch.py \
 - 2025-12-22：Prompt 生成流程适配拆分版 `robot_video_to_prompt.py`（step1~step3），新增基于视频指纹的 base prompt 缓存（`prompt_cache/`），默认使用本仓库内的脚本路径；控制台打印增加 GPU 标签。
 - 2025-12-22：为终端输出统一添加东八区时间戳，并在 Step2~Step5（含清理）及整条流水线上记录耗时，便于观测性能。
 - 2025-12-21：适配新版 `robot_video_to_prompt.py`（支持 Qwen3/Qwen2.5 的 `--model_type` 参数），新增命令行参数 `--prompt_model_type`，默认 conda 环境保持 `qwen25vl`，可选切换为 `qwen3vl`。
-- 2025-12-31：新增视频预处理（CFR + 尺寸缩放）参数 `--pre_width/--pre_height/--pre_no_keep_aspect`，预处理结果复用原视频目录并用于后续控制/推理。
-- 2025-xx-xx：新增 parquet-motion 关键帧采样，输出 16fps 的 `keyframes.mp4` 并作为 Transfer2.5 输入；支持按 chunk 数自动计算目标帧数。
-- 2025-xx-xx：新增 `requirements.txt`，列出本仓库自身依赖（`numpy`、`pyarrow`），便于 base 环境安装。
-- 2026-01-13：parquet_motion 关键帧采样改为累计运动量目标的唯一化映射，确保严格递增且数量等于目标帧数，并补充 plateau 场景回归测试。
-- 2026-01-13：parquet_motion 关键帧采样在运动不足时退化为均匀采样并打印原因，且保证包含首尾帧与严格递增。
