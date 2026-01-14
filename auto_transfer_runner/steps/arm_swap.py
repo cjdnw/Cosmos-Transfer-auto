@@ -5,8 +5,11 @@ import json
 import shutil
 import subprocess
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterator, List
+
+import fcntl
 
 import numpy as np
 
@@ -216,6 +219,18 @@ def _cache_meta_matches(existing: Dict[str, object], expected: Dict[str, object]
     return True
 
 
+@contextmanager
+def sam_cache_lock(lock_dir: Path) -> Iterator[None]:
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / ".sam_cache.lock"
+    with lock_path.open("w", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
 def ensure_qwen_sam_cache(
     *,
     project_root: Path,
@@ -234,91 +249,92 @@ def ensure_qwen_sam_cache(
     masks_dir = cache_root / "masks_arm"
     cache_meta_path = cache_root / "cache_meta.json"
 
-    fps, width, height, frame_count = _probe_video_meta(orig_video, log_path, log_label)
-    expected_meta = {
-        "orig_signature": _build_video_signature(orig_video),
-        "fps": fps,
-        "width": width,
-        "height": height,
-        "frames": frame_count,
-        "prompt": qwen_prompt,
-        "bbox_json": str(qwen_boxes_json),
-    }
+    with sam_cache_lock(cache_root):
+        fps, width, height, frame_count = _probe_video_meta(orig_video, log_path, log_label)
+        expected_meta = {
+            "orig_signature": _build_video_signature(orig_video),
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "frames": frame_count,
+            "prompt": qwen_prompt,
+            "bbox_json": str(qwen_boxes_json),
+        }
 
-    cache_meta = _load_cache_meta(cache_meta_path)
-    cache_meta_matches = cache_meta is not None and _cache_meta_matches(cache_meta, expected_meta)
-    if cache_meta and not cache_meta_matches:
-        append_log(
-            log_path,
-            f"[{log_label}] qwen_sam cache_meta mismatch; keeping cache for debugging.",
-        )
-
-    if qwen_boxes_json.exists() and has_mask_files(masks_dir) and cache_meta_matches:
-        append_log(log_path, f"[{log_label}] qwen_sam cache hit: {cache_root}")
-        return masks_dir
-
-    if not qwen_boxes_json.exists() or not cache_meta_matches:
-        cmd = conda_run(
-            conda_env,
-            [
-                "python",
-                "-m",
-                "robot_arm_swap",
-                "--orig",
-                str(orig_video),
-                "--workdir",
-                str(cache_root),
-                "--fps",
-                str(fps),
-                "--width",
-                str(width),
-                "--qwen-prompt",
-                qwen_prompt,
-                "--qwen-only",
-                "--bbox-json",
-                str(qwen_boxes_json),
-            ],
-        )
-        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=f"{log_label}: Qwen bbox")
-        if not qwen_boxes_json.exists() or qwen_boxes_json.stat().st_size == 0:
-            raise FileNotFoundError(f"Qwen bbox json not found after run: {qwen_boxes_json}")
-
-    if not has_mask_files(masks_dir) or not cache_meta_matches:
-        cmd = conda_run(
-            conda_env,
-            [
-                "python",
-                "-m",
-                "robot_arm_swap",
-                "--orig",
-                str(orig_video),
-                "--workdir",
-                str(cache_root),
-                "--fps",
-                str(fps),
-                "--width",
-                str(width),
-                "--sam-only",
-                "--bbox-json",
-                str(qwen_boxes_json),
-            ],
-        )
-        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=f"{log_label}: SAM masks")
-        mask_source = _find_mask_output_dir(masks_dir, cache_root)
-        if not mask_source:
-            raise FileNotFoundError(
-                "SAM mask output not found after run. "
-                f"Checked: {masks_dir}, {cache_root / 'masks_arm'}, {cache_root / 'sam3_track'}, {cache_root}"
+        cache_meta = _load_cache_meta(cache_meta_path)
+        cache_meta_matches = cache_meta is not None and _cache_meta_matches(cache_meta, expected_meta)
+        if cache_meta and not cache_meta_matches:
+            append_log(
+                log_path,
+                f"[{log_label}] qwen_sam cache_meta mismatch; keeping cache for debugging.",
             )
-        sync_mask_dir(mask_source, masks_dir)
 
-    cache_meta_payload = dict(expected_meta)
-    cache_meta_payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    cache_meta_payload["sam_track_dir"] = str(sam_track_dir)
-    cache_meta_payload["masks_dir"] = str(masks_dir)
-    cache_meta_path.write_text(json.dumps(cache_meta_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    append_log(log_path, f"[{log_label}] qwen_sam cache ready: {cache_root}")
-    return masks_dir
+        if qwen_boxes_json.exists() and has_mask_files(masks_dir) and cache_meta_matches:
+            append_log(log_path, f"[{log_label}] qwen_sam cache hit: {cache_root}")
+            return masks_dir
+
+        if not qwen_boxes_json.exists() or not cache_meta_matches:
+            cmd = conda_run(
+                conda_env,
+                [
+                    "python",
+                    "-m",
+                    "robot_arm_swap",
+                    "--orig",
+                    str(orig_video),
+                    "--workdir",
+                    str(cache_root),
+                    "--fps",
+                    str(fps),
+                    "--width",
+                    str(width),
+                    "--qwen-prompt",
+                    qwen_prompt,
+                    "--qwen-only",
+                    "--bbox-json",
+                    str(qwen_boxes_json),
+                ],
+            )
+            run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=f"{log_label}: Qwen bbox")
+            if not qwen_boxes_json.exists() or qwen_boxes_json.stat().st_size == 0:
+                raise FileNotFoundError(f"Qwen bbox json not found after run: {qwen_boxes_json}")
+
+        if not has_mask_files(masks_dir) or not cache_meta_matches:
+            cmd = conda_run(
+                conda_env,
+                [
+                    "python",
+                    "-m",
+                    "robot_arm_swap",
+                    "--orig",
+                    str(orig_video),
+                    "--workdir",
+                    str(cache_root),
+                    "--fps",
+                    str(fps),
+                    "--width",
+                    str(width),
+                    "--sam-only",
+                    "--bbox-json",
+                    str(qwen_boxes_json),
+                ],
+            )
+            run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=f"{log_label}: SAM masks")
+            mask_source = _find_mask_output_dir(masks_dir, cache_root)
+            if not mask_source:
+                raise FileNotFoundError(
+                    "SAM mask output not found after run. "
+                    f"Checked: {masks_dir}, {cache_root / 'masks_arm'}, {cache_root / 'sam3_track'}, {cache_root}"
+                )
+            sync_mask_dir(mask_source, masks_dir)
+
+        cache_meta_payload = dict(expected_meta)
+        cache_meta_payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        cache_meta_payload["sam_track_dir"] = str(sam_track_dir)
+        cache_meta_payload["masks_dir"] = str(masks_dir)
+        cache_meta_path.write_text(json.dumps(cache_meta_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        append_log(log_path, f"[{log_label}] qwen_sam cache ready: {cache_root}")
+        return masks_dir
 
 
 def run_arm_swap(
