@@ -24,7 +24,7 @@ def _find_transfer_output_mp4(output_dir: Path) -> Path:
     return mp4s[0]
 
 
-def _has_mask_files(mask_dir: Path) -> bool:
+def has_mask_files(mask_dir: Path) -> bool:
     if not mask_dir.exists():
         return False
     patterns = ["*.png", "*.jpg", "*.jpeg", "*.npy"]
@@ -35,11 +35,11 @@ def _has_mask_files(mask_dir: Path) -> bool:
 
 
 def _find_mask_dir_with_files(base_dir: Path) -> Path | None:
-    if _has_mask_files(base_dir):
+    if has_mask_files(base_dir):
         return base_dir
     for subdir_name in ("masks", "mask", "masks_arm"):
         subdir = base_dir / subdir_name
-        if _has_mask_files(subdir):
+        if has_mask_files(subdir):
             return subdir
     return None
 
@@ -53,7 +53,7 @@ def _find_mask_output_dir(primary: Path, workdir: Path) -> Path | None:
     return None
 
 
-def _sync_mask_dir(source: Path, target: Path) -> None:
+def sync_mask_dir(source: Path, target: Path) -> None:
     if source.resolve() == target.resolve():
         return
     target.mkdir(parents=True, exist_ok=True)
@@ -248,7 +248,7 @@ def ensure_qwen_sam_cache(
             f"[{log_label}] qwen_sam cache_meta mismatch; keeping cache for debugging.",
         )
 
-    if qwen_boxes_json.exists() and _has_mask_files(masks_dir) and cache_meta_matches:
+    if qwen_boxes_json.exists() and has_mask_files(masks_dir) and cache_meta_matches:
         append_log(log_path, f"[{log_label}] qwen_sam cache hit: {cache_root}")
         return masks_dir
 
@@ -278,7 +278,7 @@ def ensure_qwen_sam_cache(
         if not qwen_boxes_json.exists() or qwen_boxes_json.stat().st_size == 0:
             raise FileNotFoundError(f"Qwen bbox json not found after run: {qwen_boxes_json}")
 
-    if not _has_mask_files(masks_dir) or not cache_meta_matches:
+    if not has_mask_files(masks_dir) or not cache_meta_matches:
         cmd = conda_run(
             conda_env,
             [
@@ -305,7 +305,7 @@ def ensure_qwen_sam_cache(
                 "SAM mask output not found after run. "
                 f"Checked: {masks_dir}, {cache_root / 'masks_arm'}, {cache_root / 'sam3_track'}, {cache_root}"
             )
-        _sync_mask_dir(mask_source, masks_dir)
+        sync_mask_dir(mask_source, masks_dir)
 
     cache_meta_payload = dict(expected_meta)
     cache_meta_payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -509,5 +509,5 @@ def run_arm_swap_sam_masks(
             "SAM mask output not found after run. "
             f"Checked: {mask_dir}, {workdir / 'masks_arm'}, {workdir / 'sam3_track'}, {workdir}"
         )
-    _sync_mask_dir(mask_source, mask_dir)
+    sync_mask_dir(mask_source, mask_dir)
     return mask_dir
