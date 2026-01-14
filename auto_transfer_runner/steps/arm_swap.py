@@ -34,11 +34,22 @@ def _has_mask_files(mask_dir: Path) -> bool:
     return False
 
 
+def _find_mask_dir_with_files(base_dir: Path) -> Path | None:
+    if _has_mask_files(base_dir):
+        return base_dir
+    for subdir_name in ("masks", "mask", "masks_arm"):
+        subdir = base_dir / subdir_name
+        if _has_mask_files(subdir):
+            return subdir
+    return None
+
+
 def _find_mask_output_dir(primary: Path, workdir: Path) -> Path | None:
     candidates = [primary, workdir / "masks_arm", workdir / "sam3_track", workdir]
     for candidate in candidates:
-        if _has_mask_files(candidate):
-            return candidate
+        mask_dir = _find_mask_dir_with_files(candidate)
+        if mask_dir:
+            return mask_dir
     return None
 
 
