@@ -100,11 +100,25 @@ def has_transfer_output_mp4(output_dir: Path) -> bool:
 
 
 def _mask_dir_has_files(mask_dir: Path) -> bool:
+    if not mask_dir.exists():
+        return False
     patterns = ["*.png", "*.jpg", "*.jpeg", "*.npy"]
     for pattern in patterns:
         if any(mask_dir.glob(pattern)):
             return True
     return False
+
+
+def _find_mask_dir_with_files(base_dir: Path | None) -> Path | None:
+    if base_dir is None:
+        return None
+    if _mask_dir_has_files(base_dir):
+        return base_dir
+    for subdir_name in ("masks", "mask", "masks_arm"):
+        subdir = base_dir / subdir_name
+        if _mask_dir_has_files(subdir):
+            return subdir
+    return None
 
 
 def probe_video_stats(video_path: Path, *, env: Dict[str, str], log_path: Path) -> VideoStats:
@@ -929,9 +943,9 @@ def restore_duration(
                     image_w, image_h = probe_video_dimensions(input_video_path, env=env, log_path=log_path)
                     sam_cache_key = video_cache_key(input_video_path, mode=fingerprint_mode)
                     global_sam_dir = (rife_sam_mask_dir / sam_cache_key) if rife_sam_mask_dir else None
-                    sam_mask_dir = global_sam_dir
+                    sam_mask_dir = _find_mask_dir_with_files(global_sam_dir)
                     if rife_time_steps_mode in {"sam_cache", "sam_iou"}:
-                        if sam_mask_dir is None or not _mask_dir_has_files(sam_mask_dir):
+                        if sam_mask_dir is None:
                             if rife_sam_cache_workdir is None:
                                 raise RuntimeError("rife_sam_cache_workdir is required for sam_cache/sam_iou.")
                             sam_mask_dir = ensure_qwen_sam_cache(
@@ -946,10 +960,12 @@ def restore_duration(
                             )
                             if global_sam_dir is not None:
                                 sync_mask_dir(sam_mask_dir, global_sam_dir)
-                                sam_mask_dir = global_sam_dir
+                                sam_mask_dir = _find_mask_dir_with_files(global_sam_dir) or sam_mask_dir
                     elif rife_time_steps_mode in {"sam", "sam_zarm_hybrid"}:
                         sam_workdir = rife_cache_root / sam_cache_key
-                        if sam_mask_dir is None or not _mask_dir_has_files(sam_mask_dir):
+                        if sam_mask_dir is None:
+                            sam_mask_dir = _find_mask_dir_with_files(sam_workdir)
+                        if sam_mask_dir is None:
                             sam_mask_dir = sam_workdir
                             if not _mask_dir_has_files(sam_mask_dir):
                                 if rife_sam_bbox_json is None:
@@ -1001,7 +1017,7 @@ def restore_duration(
                                 )
                             if global_sam_dir is not None:
                                 sync_mask_dir(sam_workdir, global_sam_dir)
-                                sam_mask_dir = global_sam_dir
+                                sam_mask_dir = _find_mask_dir_with_files(global_sam_dir) or sam_mask_dir
                     time_steps_result = compute_time_steps(
                         frame_map=frame_map["sampled_indices"],
                         segment_frames=segment_frames,

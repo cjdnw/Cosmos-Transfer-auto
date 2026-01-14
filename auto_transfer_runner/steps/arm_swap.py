@@ -53,6 +53,11 @@ def _find_mask_output_dir(primary: Path, workdir: Path) -> Path | None:
     return None
 
 
+def find_mask_dir_with_files(base_dir: Path) -> Path | None:
+    """Find a mask directory in base_dir or common subfolders."""
+    return _find_mask_dir_with_files(base_dir)
+
+
 def sync_mask_dir(source: Path, target: Path) -> None:
     if source.resolve() == target.resolve():
         return
