@@ -73,8 +73,10 @@ def compute_time_steps(
         raise ValueError("frame_map must have at least 2 entries")
     if len(segment_frames) != len(frame_map) - 1:
         raise ValueError("segment_frames must be len(frame_map)-1")
-    if mode not in {"uniform", "zarm_pos", "sam", "sam_zarm_hybrid"}:
+    if mode not in {"uniform", "zarm_pos", "sam", "sam_zarm_hybrid", "sam_cache", "sam_iou"}:
         raise ValueError(f"Unsupported time_steps mode: {mode}")
+
+    mode_for_logic = "sam" if mode in {"sam_cache", "sam_iou"} else mode
 
     cache_key = None
     cache_path = Path(cache_path) if cache_path else None
@@ -95,13 +97,13 @@ def compute_time_steps(
                 return cached
 
     fallback_reason = None
-    mode_used = mode
+    mode_used = mode_for_logic
     sam_quality_ratio = None
     alpha_stats = None
     sam_q: list[float] | None = None
     alpha_values: list[float] | None = None
 
-    if mode == "uniform":
+    if mode_for_logic == "uniform":
         time_steps = _uniform_time_steps(frame_map, segment_frames)
     else:
         d_state = None
@@ -109,7 +111,7 @@ def compute_time_steps(
         q = None
         alpha = None
 
-        if mode in {"zarm_pos", "sam_zarm_hybrid"} or mode == "sam":
+        if mode_for_logic in {"zarm_pos", "sam_zarm_hybrid"} or mode_for_logic == "sam":
             if parquet_path:
                 d_state = _compute_state_deltas(
                     parquet_path=Path(parquet_path),
@@ -118,7 +120,7 @@ def compute_time_steps(
                     pose_name_prefix=pose_name_prefix,
                 )
 
-        if mode in {"sam", "sam_zarm_hybrid"}:
+        if mode_for_logic in {"sam", "sam_zarm_hybrid"}:
             d_vis, q = _compute_sam_deltas(
                 sam_masks=sam_masks,
                 frame_count=frame_map[-1] + 1,
@@ -131,7 +133,7 @@ def compute_time_steps(
                     q = None
                     fallback_reason = "sam_quality_too_low"
 
-        if mode == "sam" and d_vis is None:
+        if mode_for_logic == "sam" and d_vis is None:
             if force_mode:
                 raise RuntimeError("SAM masks unavailable for time_steps mode=sam (force_mode enabled)")
             if d_state is None:
@@ -141,7 +143,7 @@ def compute_time_steps(
                 mode_used = "zarm_pos"
                 fallback_reason = fallback_reason or "sam_unavailable"
 
-        if mode == "sam_zarm_hybrid":
+        if mode_for_logic == "sam_zarm_hybrid":
             if d_vis is None:
                 if force_mode:
                     raise RuntimeError("SAM masks unavailable for time_steps mode=sam_zarm_hybrid (force_mode enabled)")

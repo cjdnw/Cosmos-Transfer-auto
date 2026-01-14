@@ -18,7 +18,7 @@ from .steps.json_spec import (
     write_json_spec_multicontrol,
 )
 from .steps.inference import run_transfer_inference
-from .steps.arm_swap import run_arm_swap
+from .steps.arm_swap import ensure_qwen_sam_cache, run_arm_swap_swap_only
 from .steps.postprocess import (
     probe_video_stats,
     restore_duration,
@@ -459,6 +459,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         rife_sam_feather=cfg.arm_swap.feather,
                         rife_sam_dilate=cfg.arm_swap.dilate,
                         rife_sam_no_workdir_write=cfg.arm_swap.no_workdir_write,
+                        rife_sam_cache_workdir=cfg.arm_swap.workdir_root / job.job_id / paths.output_dir.name,
                         rife_pose_subset=cfg.postprocess.rife_pose_subset,
                         rife_time_steps_debug=cfg.postprocess.rife_time_steps_debug,
                         rife_cache_root=cfg.repos.work_dir / "rife_cache",
@@ -486,79 +487,36 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 append_log(paths.log_path, f"[SKIP] step6 checkpoint exists: {step6_marker}")
                 console_print(f"[SKIP] step6 arm swap (checkpoint): {paths.output_dir.name}")
             else:
-                bbox_json = cfg.arm_swap.bbox_json
-                if cfg.arm_swap.split_run and bbox_json is None:
-                    bbox_json = arm_swap_workdir / "qwen_boxes.json"
-                if cfg.arm_swap.split_run:
-                    _run_with_timing(
-                        "STEP6 Arm Swap (Qwen)",
-                        lambda: run_arm_swap(
-                            project_root=cfg.arm_swap.project_root,
-                            conda_env=cfg.arm_swap.conda_env,
-                            output_dir=paths.output_dir,
-                            output_base_dir=arm_swap_output_base_dir,
-                            workdir=arm_swap_workdir,
-                            no_workdir_write=cfg.arm_swap.no_workdir_write,
-                            cleanup_workdir=False,
-                            orig_video=job.video_path,
-                            qwen_prompt=cfg.arm_swap.qwen_prompt,
-                            erode=cfg.arm_swap.erode,
-                            feather=cfg.arm_swap.feather,
-                            dilate=cfg.arm_swap.dilate,
-                            qwen_only=True,
-                            sam_only=False,
-                            bbox_json=bbox_json,
-                            env=env,
-                            log_path=paths.log_path,
-                        ),
-                    )
-                    arm_swap_output = _run_with_timing(
-                        "STEP6 Arm Swap (SAM)",
-                        lambda: run_arm_swap(
-                            project_root=cfg.arm_swap.project_root,
-                            conda_env=cfg.arm_swap.conda_env,
-                            output_dir=paths.output_dir,
-                            output_base_dir=arm_swap_output_base_dir,
-                            workdir=arm_swap_workdir,
-                            no_workdir_write=cfg.arm_swap.no_workdir_write,
-                            cleanup_workdir=True,
-                            orig_video=job.video_path,
-                            qwen_prompt=cfg.arm_swap.qwen_prompt,
-                            erode=cfg.arm_swap.erode,
-                            feather=cfg.arm_swap.feather,
-                            dilate=cfg.arm_swap.dilate,
-                            qwen_only=False,
-                            sam_only=True,
-                            bbox_json=bbox_json,
-                            env=env,
-                            log_path=paths.log_path,
-                        ),
-                    )
-                    if cfg.arm_swap.cleanup_bbox_json and bbox_json is not None and bbox_json.exists():
-                        bbox_json.unlink()
-                else:
-                    arm_swap_output = _run_with_timing(
-                        "STEP6 Arm Swap",
-                        lambda: run_arm_swap(
-                            project_root=cfg.arm_swap.project_root,
-                            conda_env=cfg.arm_swap.conda_env,
-                            output_dir=paths.output_dir,
-                            output_base_dir=arm_swap_output_base_dir,
-                            workdir=arm_swap_workdir,
-                            no_workdir_write=cfg.arm_swap.no_workdir_write,
-                            cleanup_workdir=True,
-                            orig_video=job.video_path,
-                            qwen_prompt=cfg.arm_swap.qwen_prompt,
-                            erode=cfg.arm_swap.erode,
-                            feather=cfg.arm_swap.feather,
-                            dilate=cfg.arm_swap.dilate,
-                            qwen_only=cfg.arm_swap.qwen_only,
-                            sam_only=cfg.arm_swap.sam_only,
-                            bbox_json=bbox_json,
-                            env=env,
-                            log_path=paths.log_path,
-                        ),
-                    )
+                transfer_mp4 = find_transfer_output_mp4(paths.output_dir)
+                masks_dir = ensure_qwen_sam_cache(
+                    project_root=cfg.arm_swap.project_root,
+                    conda_env=cfg.arm_swap.conda_env,
+                    orig_video=job.video_path,
+                    workdir=arm_swap_workdir,
+                    qwen_prompt=cfg.arm_swap.qwen_prompt,
+                    env=env,
+                    log_path=paths.log_path,
+                    log_label="STEP6",
+                )
+                arm_swap_output = _run_with_timing(
+                    "STEP6 Arm Swap",
+                    lambda: run_arm_swap_swap_only(
+                        project_root=cfg.arm_swap.project_root,
+                        conda_env=cfg.arm_swap.conda_env,
+                        orig_video=job.video_path,
+                        skin_video=transfer_mp4,
+                        workdir=arm_swap_workdir,
+                        arm_mask_dir=masks_dir,
+                        output_path=arm_swap_output_base_dir / transfer_mp4.name,
+                        erode=cfg.arm_swap.erode,
+                        feather=cfg.arm_swap.feather,
+                        dilate=cfg.arm_swap.dilate,
+                        no_workdir_write=cfg.arm_swap.no_workdir_write,
+                        arm_swap_workdir_write=cfg.arm_swap.workdir_write,
+                        env=env,
+                        log_path=paths.log_path,
+                    ),
+                )
                 append_log(paths.log_path, f"[DONE] arm_swap_output={arm_swap_output}")
                 console_print(f"[ARM SWAP DONE] out={arm_swap_output}")
                 mark_done(step6_marker)
