@@ -18,7 +18,12 @@ from .steps.json_spec import (
     write_json_spec_multicontrol,
 )
 from .steps.inference import run_transfer_inference
-from .steps.arm_swap import ensure_qwen_sam_cache, has_mask_files, run_arm_swap_swap_only, sync_mask_dir
+from .steps.arm_swap import (
+    ensure_qwen_sam_cache,
+    find_mask_dir_with_files,
+    run_arm_swap_swap_only,
+    sync_mask_dir,
+)
 from .steps.postprocess import (
     probe_video_stats,
     restore_duration,
@@ -30,7 +35,7 @@ from .utils.logging_utils import append_log, console_print
 from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
-from .utils.cleanup import cleanup_job_intermediates
+from .utils.cleanup import cleanup_job_intermediates, safe_rmtree
 from .utils.hashing import short_hash, video_cache_key
 from .utils.checkpoints import (
     checkpoint_dir_for_job,
@@ -494,8 +499,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 sam_cache_root = cfg.repos.work_dir / "rife_sam_cache"
                 sam_cache_dir = sam_cache_root / sam_cache_key
                 sam_cache_root.mkdir(parents=True, exist_ok=True)
-                if has_mask_files(sam_cache_dir):
-                    masks_dir = sam_cache_dir
+                cached_mask_dir = find_mask_dir_with_files(sam_cache_dir)
+                if cached_mask_dir is not None:
+                    masks_dir = cached_mask_dir
                 else:
                     masks_dir = ensure_qwen_sam_cache(
                         project_root=cfg.arm_swap.project_root,
@@ -508,7 +514,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         log_label="STEP6",
                     )
                     sync_mask_dir(masks_dir, sam_cache_dir)
-                    masks_dir = sam_cache_dir
+                    masks_dir = find_mask_dir_with_files(sam_cache_dir) or masks_dir
                 arm_swap_output = _run_with_timing(
                     "STEP6 Arm Swap",
                     lambda: run_arm_swap_swap_only(
@@ -604,6 +610,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         job_duration = perf_counter() - job_start
         status = "success" if job_success else "failed"
         _log_duration(f"JOB TOTAL ({status})", job_duration)
+        _cleanup_job_cache_dirs(cfg=cfg, job=job, output_dir=paths.output_dir, log_path=paths.log_path)
 
 
 def _bootstrap_checkpoints(
@@ -673,3 +680,23 @@ def _arm_swap_output_exists(
     output_base_dir.mkdir(parents=True, exist_ok=True)
     expected = output_base_dir / mp4s[0].name
     return expected.exists() and expected.stat().st_size > 0
+
+
+def _cleanup_job_cache_dirs(
+    *,
+    cfg: GlobalConfig,
+    job: Job,
+    output_dir: Path,
+    log_path: Path,
+) -> None:
+    if cfg.postprocess.restore_duration:
+        rife_cache_root = cfg.repos.work_dir / "rife_cache"
+        output_hash = short_hash(str(output_dir.resolve()), 8)
+        for suffix in ("", "__pytorch"):
+            safe_rmtree(
+                rife_cache_root / f"{output_dir.name}_{output_hash}{suffix}",
+                log_path=log_path,
+            )
+    if cfg.arm_swap.enable:
+        arm_swap_job_dir = cfg.arm_swap.workdir_root / job.job_id
+        safe_rmtree(arm_swap_job_dir, log_path=log_path)
