@@ -15,7 +15,7 @@ from ..utils.hashing import short_hash
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
 from ..utils.warp_time import compute_time_steps, count_guided_output_frames, validate_time_steps
-from .arm_swap import run_arm_swap, run_arm_swap_sam_masks
+from .arm_swap import ensure_qwen_sam_cache, run_arm_swap, run_arm_swap_sam_masks
 from ..utils.dataset_paths import parquet_path_for_video
 
 
@@ -599,6 +599,7 @@ def restore_duration(
     rife_sam_feather: int,
     rife_sam_dilate: int,
     rife_sam_no_workdir_write: bool,
+    rife_sam_cache_workdir: Path | None,
     rife_pose_subset: str,
     rife_time_steps_debug: bool,
     rife_cache_root: Path,
@@ -938,7 +939,20 @@ def restore_duration(
                             append_log(log_path, f"[POST_RESTORE] parquet lookup failed: {exc}")
                     image_w, image_h = probe_video_dimensions(input_video_path, env=env, log_path=log_path)
                     sam_mask_dir = rife_sam_mask_dir
-                    if rife_time_steps_mode in {"sam", "sam_zarm_hybrid"}:
+                    if rife_time_steps_mode in {"sam_cache", "sam_iou"}:
+                        if rife_sam_cache_workdir is None:
+                            raise RuntimeError("rife_sam_cache_workdir is required for sam_cache/sam_iou.")
+                        sam_mask_dir = ensure_qwen_sam_cache(
+                            project_root=rife_sam_project_root,
+                            conda_env=rife_sam_conda_env,
+                            orig_video=input_video_path,
+                            workdir=rife_sam_cache_workdir,
+                            qwen_prompt=rife_sam_qwen_prompt,
+                            env=env,
+                            log_path=log_path,
+                            log_label="STEP5.5",
+                        )
+                    elif rife_time_steps_mode in {"sam", "sam_zarm_hybrid"}:
                         if sam_mask_dir is None:
                             sam_mask_dir = rife_cache_root / f"{output_dir.name}_sam_masks"
                         if not _mask_dir_has_files(sam_mask_dir):
