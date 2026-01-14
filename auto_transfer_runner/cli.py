@@ -246,9 +246,13 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         skip_if_output_exists=(not args.force_infer),
     )
 
+    if args.arm_swap_workdir_write:
+        args.arm_swap_no_workdir_write = False
+
     arm_swap = ArmSwapConfig(
         enable=args.enable_arm_swap,
         no_workdir_write=args.arm_swap_no_workdir_write,
+        workdir_write=args.arm_swap_workdir_write,
         qwen_prompt=args.arm_swap_prompt,
         erode=args.arm_swap_erode,
         feather=args.arm_swap_feather,
@@ -587,7 +591,7 @@ def main(argv: List[str] | None = None) -> None:
         "--rife_time_steps_mode",
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_time_steps_mode,
-        choices=["uniform", "zarm_pos", "sam", "sam_zarm_hybrid"],
+        choices=["uniform", "zarm_pos", "sam", "sam_zarm_hybrid", "sam_cache", "sam_iou"],
         help="Guided interpolation time steps mode for RIFE pytorch (default: sam_zarm_hybrid)",
     )
     ap.add_argument(
@@ -705,9 +709,9 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--arm_swap_workdir_write",
-        action="store_false",
-        dest="arm_swap_no_workdir_write",
-        help="Allow arm swap to write PNGs into workdir (default: disabled)",
+        action="store_true",
+        default=ARM_SWAP_DEFAULTS.workdir_write,
+        help="Enable swap-only workdir writes (skin masks + IoU outputs)",
     )
     ap.add_argument("--arm_swap_prompt", type=str, default=ARM_SWAP_DEFAULTS.qwen_prompt,
                     help="Qwen prompt for robot arm swap (default: 'robotic arm')")
