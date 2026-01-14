@@ -967,6 +967,8 @@ def restore_duration(
                                     bbox_json=qwen_bbox_json,
                                     env=env,
                                     log_path=log_path,
+                                    log_title="STEP5.5: SAM bbox generation",
+                                    log_label="STEP5.5",
                                 )
                                 rife_sam_bbox_json = qwen_bbox_json
                             if not rife_sam_bbox_json.exists():

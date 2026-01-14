@@ -47,7 +47,7 @@ def _parse_fraction(value: str) -> float:
     return float(value)
 
 
-def _probe_video_info(video_path: Path, log_path: Path) -> tuple[int, int]:
+def _probe_video_info(video_path: Path, log_path: Path, step_label: str) -> tuple[int, int]:
     cmd = [
         "ffprobe",
         "-v",
@@ -60,7 +60,7 @@ def _probe_video_info(video_path: Path, log_path: Path) -> tuple[int, int]:
         "json",
         str(video_path),
     ]
-    append_log(log_path, f"[STEP6] ffprobe: {' '.join(cmd)}")
+    append_log(log_path, f"[{step_label}] ffprobe: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         append_log(log_path, result.stdout)
@@ -77,11 +77,11 @@ def _probe_video_info(video_path: Path, log_path: Path) -> tuple[int, int]:
     fps = int(round(fps_float))
     if fps <= 0 or width <= 0:
         raise RuntimeError(f"Invalid video info from ffprobe: fps={fps}, width={width}")
-    append_log(log_path, f"[STEP6] ffprobe parsed fps={fps} width={width}")
+    append_log(log_path, f"[{step_label}] ffprobe parsed fps={fps} width={width}")
     return fps, width
 
 
-def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
+def _probe_video_dims(video_path: Path, log_path: Path, step_label: str) -> tuple[int, int]:
     cmd = [
         "ffprobe",
         "-v",
@@ -94,7 +94,7 @@ def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
         "json",
         str(video_path),
     ]
-    append_log(log_path, f"[STEP6] ffprobe dims: {' '.join(cmd)}")
+    append_log(log_path, f"[{step_label}] ffprobe dims: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         append_log(log_path, result.stdout)
@@ -109,7 +109,7 @@ def _probe_video_dims(video_path: Path, log_path: Path) -> tuple[int, int]:
     height = int(stream["height"])
     if width <= 0 or height <= 0:
         raise RuntimeError(f"Invalid video dims from ffprobe: width={width}, height={height}")
-    append_log(log_path, f"[STEP6] ffprobe parsed width={width} height={height}")
+    append_log(log_path, f"[{step_label}] ffprobe parsed width={width} height={height}")
     return width, height
 
 
@@ -132,6 +132,8 @@ def run_arm_swap(
     bbox_json: Path | None,
     env: Dict[str, str],
     log_path: Path,
+    log_title: str = "STEP6: Robot arm swap",
+    log_label: str = "STEP6",
 ) -> Path:
     """
     Step6: run robot arm swap (qwen3vl + sam3).
@@ -148,7 +150,7 @@ def run_arm_swap(
     output_path = output_base_dir / transfer_mp4.name
 
     workdir.mkdir(parents=True, exist_ok=True)
-    fps, width = _probe_video_info(orig_video, log_path)
+    fps, width = _probe_video_info(orig_video, log_path, log_label)
     cmd = conda_run(
         conda_env,
         [
@@ -186,7 +188,7 @@ def run_arm_swap(
     if no_workdir_write:
         cmd.append("--no-workdir-write")
     try:
-        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP6: Robot arm swap")
+        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=log_title)
         if qwen_only:
             if bbox_json is not None:
                 if not bbox_json.exists() or bbox_json.stat().st_size == 0:
@@ -223,7 +225,7 @@ def run_arm_swap_sam_masks(
     """
     workdir.parent.mkdir(parents=True, exist_ok=True)
     mask_dir.mkdir(parents=True, exist_ok=True)
-    fps, width = _probe_video_info(orig_video, log_path)
+    fps, width = _probe_video_info(orig_video, log_path, "STEP5.5")
     cmd = conda_run(
         conda_env,
         [
