@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import Dict, List
 
 from ..utils.cleanup import safe_unlink
-from ..utils.hashing import short_hash
+from ..utils.hashing import short_hash, video_cache_key
 from ..utils.logging_utils import append_log, console_print
 from ..utils.subprocess_utils import conda_run, run_cmd
 from ..utils.warp_time import compute_time_steps, count_guided_output_frames, validate_time_steps
-from .arm_swap import ensure_qwen_sam_cache, run_arm_swap, run_arm_swap_sam_masks
+from .arm_swap import ensure_qwen_sam_cache, run_arm_swap, run_arm_swap_sam_masks, sync_mask_dir
 from ..utils.dataset_paths import parquet_path_for_video
 
 
@@ -588,6 +588,7 @@ def restore_duration(
     rife_time_steps_mode: str,
     rife_time_steps_cache: Path | None,
     rife_sam_mask_dir: Path | None,
+    fingerprint_mode: str,
     rife_time_steps_force_sam: bool,
     rife_sam_generate: bool,
     rife_sam_bbox_json: Path | None,
@@ -926,72 +927,81 @@ def restore_duration(
                         except ValueError as exc:
                             append_log(log_path, f"[POST_RESTORE] parquet lookup failed: {exc}")
                     image_w, image_h = probe_video_dimensions(input_video_path, env=env, log_path=log_path)
-                    sam_mask_dir = rife_sam_mask_dir
+                    sam_cache_key = video_cache_key(input_video_path, mode=fingerprint_mode)
+                    global_sam_dir = (rife_sam_mask_dir / sam_cache_key) if rife_sam_mask_dir else None
+                    sam_mask_dir = global_sam_dir
                     if rife_time_steps_mode in {"sam_cache", "sam_iou"}:
-                        if rife_sam_cache_workdir is None:
-                            raise RuntimeError("rife_sam_cache_workdir is required for sam_cache/sam_iou.")
-                        sam_mask_dir = ensure_qwen_sam_cache(
-                            project_root=rife_sam_project_root,
-                            conda_env=rife_sam_conda_env,
-                            orig_video=input_video_path,
-                            workdir=rife_sam_cache_workdir,
-                            qwen_prompt=rife_sam_qwen_prompt,
-                            env=env,
-                            log_path=log_path,
-                            log_label="STEP5.5",
-                        )
-                    elif rife_time_steps_mode in {"sam", "sam_zarm_hybrid"}:
-                        if sam_mask_dir is None:
-                            sam_mask_dir = rife_cache_root / f"{output_dir.name}_sam_masks"
-                        if not _mask_dir_has_files(sam_mask_dir):
-                            sam_workdir = rife_cache_root / f"{output_dir.name}_sam_workdir"
-                            if rife_sam_bbox_json is None:
-                                qwen_bbox_json = sam_workdir / "qwen_boxes.json"
-                                append_log(
-                                    log_path,
-                                    "[POST_RESTORE] SAM masks missing; running Qwen3 to generate bbox json.",
-                                )
-                                run_arm_swap(
-                                    project_root=rife_sam_project_root,
-                                    conda_env=rife_sam_conda_env,
-                                    output_dir=output_dir,
-                                    output_base_dir=rife_cache_root / f"{output_dir.name}_sam_qwen",
-                                    workdir=sam_workdir,
-                                    no_workdir_write=rife_sam_no_workdir_write,
-                                    cleanup_workdir=False,
-                                    orig_video=input_video_path,
-                                    qwen_prompt=rife_sam_qwen_prompt,
-                                    erode=rife_sam_erode,
-                                    feather=rife_sam_feather,
-                                    dilate=rife_sam_dilate,
-                                    qwen_only=True,
-                                    sam_only=False,
-                                    bbox_json=qwen_bbox_json,
-                                    env=env,
-                                    log_path=log_path,
-                                    log_title="STEP5.5: SAM bbox generation",
-                                    log_label="STEP5.5",
-                                )
-                                rife_sam_bbox_json = qwen_bbox_json
-                            if not rife_sam_bbox_json.exists():
-                                raise FileNotFoundError(
-                                    f"rife_sam_bbox_json not found: {rife_sam_bbox_json}"
-                                )
-                            append_log(
-                                log_path,
-                                "[POST_RESTORE] Generating SAM masks from bbox json.",
-                            )
-                            run_arm_swap_sam_masks(
+                        if sam_mask_dir is None or not _mask_dir_has_files(sam_mask_dir):
+                            if rife_sam_cache_workdir is None:
+                                raise RuntimeError("rife_sam_cache_workdir is required for sam_cache/sam_iou.")
+                            sam_mask_dir = ensure_qwen_sam_cache(
                                 project_root=rife_sam_project_root,
                                 conda_env=rife_sam_conda_env,
                                 orig_video=input_video_path,
-                                workdir=sam_workdir,
-                                bbox_json=rife_sam_bbox_json,
-                                mask_dir=sam_mask_dir,
-                                cleanup_workdir=rife_sam_cleanup_workdir,
+                                workdir=rife_sam_cache_workdir,
+                                qwen_prompt=rife_sam_qwen_prompt,
                                 env=env,
                                 log_path=log_path,
+                                log_label="STEP5.5",
                             )
+                            if global_sam_dir is not None:
+                                sync_mask_dir(sam_mask_dir, global_sam_dir)
+                                sam_mask_dir = global_sam_dir
+                    elif rife_time_steps_mode in {"sam", "sam_zarm_hybrid"}:
+                        sam_workdir = rife_cache_root / sam_cache_key
+                        if sam_mask_dir is None or not _mask_dir_has_files(sam_mask_dir):
+                            sam_mask_dir = sam_workdir
+                            if not _mask_dir_has_files(sam_mask_dir):
+                                if rife_sam_bbox_json is None:
+                                    qwen_bbox_json = sam_workdir / "qwen_boxes.json"
+                                    append_log(
+                                        log_path,
+                                        "[POST_RESTORE] SAM masks missing; running Qwen3 to generate bbox json.",
+                                    )
+                                    run_arm_swap(
+                                        project_root=rife_sam_project_root,
+                                        conda_env=rife_sam_conda_env,
+                                        output_dir=output_dir,
+                                        output_base_dir=rife_cache_root / f"{output_dir.name}_sam_qwen",
+                                        workdir=sam_workdir,
+                                        no_workdir_write=rife_sam_no_workdir_write,
+                                        cleanup_workdir=False,
+                                        orig_video=input_video_path,
+                                        qwen_prompt=rife_sam_qwen_prompt,
+                                        erode=rife_sam_erode,
+                                        feather=rife_sam_feather,
+                                        dilate=rife_sam_dilate,
+                                        qwen_only=True,
+                                        sam_only=False,
+                                        bbox_json=qwen_bbox_json,
+                                        env=env,
+                                        log_path=log_path,
+                                        log_title="STEP5.5: SAM bbox generation",
+                                        log_label="STEP5.5",
+                                    )
+                                    rife_sam_bbox_json = qwen_bbox_json
+                                if not rife_sam_bbox_json.exists():
+                                    raise FileNotFoundError(
+                                        f"rife_sam_bbox_json not found: {rife_sam_bbox_json}"
+                                    )
+                                append_log(
+                                    log_path,
+                                    "[POST_RESTORE] Generating SAM masks from bbox json.",
+                                )
+                                run_arm_swap_sam_masks(
+                                    project_root=rife_sam_project_root,
+                                    conda_env=rife_sam_conda_env,
+                                    orig_video=input_video_path,
+                                    workdir=sam_workdir,
+                                    bbox_json=rife_sam_bbox_json,
+                                    mask_dir=sam_mask_dir,
+                                    cleanup_workdir=rife_sam_cleanup_workdir,
+                                    env=env,
+                                    log_path=log_path,
+                                )
+                            if global_sam_dir is not None:
+                                sync_mask_dir(sam_workdir, global_sam_dir)
+                                sam_mask_dir = global_sam_dir
                     time_steps_result = compute_time_steps(
                         frame_map=frame_map["sampled_indices"],
                         segment_frames=segment_frames,

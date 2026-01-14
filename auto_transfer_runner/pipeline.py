@@ -18,7 +18,7 @@ from .steps.json_spec import (
     write_json_spec_multicontrol,
 )
 from .steps.inference import run_transfer_inference
-from .steps.arm_swap import ensure_qwen_sam_cache, run_arm_swap_swap_only
+from .steps.arm_swap import ensure_qwen_sam_cache, has_mask_files, run_arm_swap_swap_only, sync_mask_dir
 from .steps.postprocess import (
     probe_video_stats,
     restore_duration,
@@ -31,7 +31,7 @@ from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates
-from .utils.hashing import short_hash
+from .utils.hashing import short_hash, video_cache_key
 from .utils.checkpoints import (
     checkpoint_dir_for_job,
     job_done_marker_path,
@@ -444,6 +444,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                             if cfg.postprocess.rife_sam_mask_dir
                             else (cfg.repos.work_dir / "rife_sam_cache")
                         ),
+                        fingerprint_mode=cfg.cache.fingerprint_mode,
                         rife_time_steps_force_sam=cfg.postprocess.rife_time_steps_force_sam,
                         rife_sam_generate=cfg.postprocess.rife_sam_generate,
                         rife_sam_bbox_json=(
@@ -459,7 +460,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                         rife_sam_feather=cfg.arm_swap.feather,
                         rife_sam_dilate=cfg.arm_swap.dilate,
                         rife_sam_no_workdir_write=cfg.arm_swap.no_workdir_write,
-                        rife_sam_cache_workdir=cfg.arm_swap.workdir_root / job.job_id / paths.output_dir.name,
+                        rife_sam_cache_workdir=cfg.arm_swap.workdir_root
+                        / video_cache_key(job.video_path, mode=cfg.cache.fingerprint_mode),
                         rife_pose_subset=cfg.postprocess.rife_pose_subset,
                         rife_time_steps_debug=cfg.postprocess.rife_time_steps_debug,
                         rife_cache_root=cfg.repos.work_dir / "rife_cache",
@@ -488,16 +490,25 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 console_print(f"[SKIP] step6 arm swap (checkpoint): {paths.output_dir.name}")
             else:
                 transfer_mp4 = find_transfer_output_mp4(paths.output_dir)
-                masks_dir = ensure_qwen_sam_cache(
-                    project_root=cfg.arm_swap.project_root,
-                    conda_env=cfg.arm_swap.conda_env,
-                    orig_video=job.video_path,
-                    workdir=arm_swap_workdir,
-                    qwen_prompt=cfg.arm_swap.qwen_prompt,
-                    env=env,
-                    log_path=paths.log_path,
-                    log_label="STEP6",
-                )
+                sam_cache_key = video_cache_key(job.video_path, mode=cfg.cache.fingerprint_mode)
+                sam_cache_root = cfg.repos.work_dir / "rife_sam_cache"
+                sam_cache_dir = sam_cache_root / sam_cache_key
+                sam_cache_root.mkdir(parents=True, exist_ok=True)
+                if has_mask_files(sam_cache_dir):
+                    masks_dir = sam_cache_dir
+                else:
+                    masks_dir = ensure_qwen_sam_cache(
+                        project_root=cfg.arm_swap.project_root,
+                        conda_env=cfg.arm_swap.conda_env,
+                        orig_video=job.video_path,
+                        workdir=arm_swap_workdir,
+                        qwen_prompt=cfg.arm_swap.qwen_prompt,
+                        env=env,
+                        log_path=paths.log_path,
+                        log_label="STEP6",
+                    )
+                    sync_mask_dir(masks_dir, sam_cache_dir)
+                    masks_dir = sam_cache_dir
                 arm_swap_output = _run_with_timing(
                     "STEP6 Arm Swap",
                     lambda: run_arm_swap_swap_only(
