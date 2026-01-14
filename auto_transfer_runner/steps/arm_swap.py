@@ -449,7 +449,7 @@ def run_arm_swap_sam_masks(
 
     Command:
       python -m robot_arm_swap --orig <input> --workdir <dir> --fps <fps> --width <width>
-        --sam-only --sam-only-mode mask --bbox-json <path>
+        --sam-only --bbox-json <path>
         --mask-lossless-frames-dir <mask_dir>
     """
     workdir.parent.mkdir(parents=True, exist_ok=True)
@@ -470,8 +470,6 @@ def run_arm_swap_sam_masks(
             "--width",
             str(width),
             "--sam-only",
-            "--sam-only-mode",
-            "mask",
             "--bbox-json",
             str(bbox_json),
             "--mask-lossless-frames-dir",
