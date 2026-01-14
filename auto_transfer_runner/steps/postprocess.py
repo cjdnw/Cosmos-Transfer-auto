@@ -1050,7 +1050,7 @@ def restore_duration(
                             (
                                 "[POST_RESTORE] time_steps mode="
                                 f"{debug_info.mode_requested} used={debug_info.mode_used} "
-                                f"fallback={debug_info.fallback_reason} sam_quality={debug_info.sam_quality_ratio}"
+                                f"fallback={debug_info.fallback_reason}"
                             ),
                         )
                         if debug_info.alpha_stats:
@@ -1070,18 +1070,10 @@ def restore_duration(
                                 }
                             else:
                                 stats = {"min": 0.0, "mean": 0.0, "max": 0.0}
-                            sam_ratio = None
-                            if debug_info.sam_q is not None:
-                                start = frame_map["sampled_indices"][idx]
-                                end = frame_map["sampled_indices"][idx + 1]
-                                sam_slice = debug_info.sam_q[start + 1 : end + 1]
-                                if sam_slice:
-                                    sam_ratio = sum(1 for val in sam_slice if val >= 0.7) / len(sam_slice)
                             append_log(
                                 log_path,
                                 (
-                                    f"[POST_RESTORE] segment={idx} t_stats={stats} "
-                                    f"sam_ratio={sam_ratio}"
+                                    f"[POST_RESTORE] segment={idx} t_stats={stats}"
                                 ),
                             )
                     run_rife_pytorch_guided(

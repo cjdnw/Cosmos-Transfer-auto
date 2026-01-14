@@ -14,9 +14,7 @@ class TimeStepDebug:
     mode_requested: str
     mode_used: str
     fallback_reason: str | None
-    sam_quality_ratio: float | None
     alpha_stats: dict[str, float] | None
-    sam_q: list[float] | None
     alpha: list[float] | None
 
 
@@ -98,9 +96,7 @@ def compute_time_steps(
 
     fallback_reason = None
     mode_used = mode_for_logic
-    sam_quality_ratio = None
     alpha_stats = None
-    sam_q: list[float] | None = None
     alpha_values: list[float] | None = None
 
     if mode_for_logic == "uniform":
@@ -108,7 +104,6 @@ def compute_time_steps(
     else:
         d_state = None
         d_vis = None
-        q = None
         alpha = None
 
         if mode_for_logic in {"zarm_pos", "sam_zarm_hybrid"} or mode_for_logic == "sam":
@@ -121,17 +116,10 @@ def compute_time_steps(
                 )
 
         if mode_for_logic in {"sam", "sam_zarm_hybrid"}:
-            d_vis, q = _compute_sam_deltas(
+            d_vis = _compute_sam_deltas(
                 sam_masks=sam_masks,
                 frame_count=frame_map[-1] + 1,
-                image_wh=image_wh,
             )
-            if q is not None:
-                sam_quality_ratio = float(np.mean(np.asarray(q) >= 0.7))
-                if not force_mode and np.mean(np.asarray(q) <= 0.0) > 0.5:
-                    d_vis = None
-                    q = None
-                    fallback_reason = "sam_quality_too_low"
 
         if mode_for_logic == "sam" and d_vis is None:
             if force_mode:
@@ -158,7 +146,7 @@ def compute_time_steps(
         elif mode_used == "zarm_pos":
             d = d_state
         elif mode_used == "sam_zarm_hybrid":
-            d, alpha = _blend_deltas(d_vis, d_state, q)
+            d, alpha = _blend_deltas(d_vis, d_state)
         else:
             d = None
 
@@ -178,8 +166,6 @@ def compute_time_steps(
             if alpha is not None:
                 alpha_values = alpha.tolist()
                 alpha_stats = _summary_stats(alpha)
-            if q is not None:
-                sam_q = q.tolist()
 
     if cache_path and cache_key:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -187,7 +173,6 @@ def compute_time_steps(
             "mode_requested": mode,
             "mode_used": mode_used,
             "fallback_reason": fallback_reason,
-            "sam_quality_ratio": sam_quality_ratio,
             "alpha_stats": alpha_stats,
         }
         _write_time_steps_cache(cache_path, cache_key, time_steps, meta)
@@ -197,9 +182,7 @@ def compute_time_steps(
             mode_requested=mode,
             mode_used=mode_used,
             fallback_reason=fallback_reason,
-            sam_quality_ratio=sam_quality_ratio,
             alpha_stats=alpha_stats,
-            sam_q=sam_q,
             alpha=alpha_values,
         )
         return time_steps, debug_payload
@@ -347,13 +330,14 @@ def _summary_stats(values: np.ndarray) -> dict[str, float]:
 def _blend_deltas(
     d_vis: np.ndarray | None,
     d_state: np.ndarray | None,
-    q: np.ndarray | None,
+    *,
+    alpha_value: float = 0.5,
 ) -> tuple[np.ndarray | None, np.ndarray | None]:
-    if d_vis is None or d_state is None or q is None:
+    if d_vis is None or d_state is None:
         return None, None
     vis_norm = _robust_normalize(d_vis)
     state_norm = _robust_normalize(d_state)
-    alpha = _alpha_from_quality(q)
+    alpha = np.full_like(vis_norm, alpha_value, dtype=float)
     blended = alpha * vis_norm + (1.0 - alpha) * state_norm
     return blended, alpha
 
@@ -365,14 +349,6 @@ def _robust_normalize(values: np.ndarray) -> np.ndarray:
     if not np.isfinite(median) or median <= 0:
         median = 1.0
     return values / (median + 1e-6)
-
-
-def _alpha_from_quality(q: np.ndarray) -> np.ndarray:
-    alpha = np.zeros_like(q, dtype=float)
-    alpha[q >= 0.7] = 1.0
-    mid = (q > 0.3) & (q < 0.7)
-    alpha[mid] = (q[mid] - 0.3) / (0.7 - 0.3)
-    return alpha
 
 
 def _compute_state_deltas(
@@ -508,87 +484,33 @@ def _compute_sam_deltas(
     *,
     sam_masks: Optional[List[np.ndarray] | str | Path],
     frame_count: int,
-    image_wh: Tuple[int, int],
-) -> tuple[np.ndarray | None, np.ndarray | None]:
+) -> np.ndarray | None:
     masks = _load_sam_masks(sam_masks, frame_count=frame_count)
     if masks is None:
-        return None, None
+        return None
     if len(masks) < frame_count:
-        return None, None
-    width, height = image_wh
+        return None
     centroids = []
-    areas = []
     for mask in masks[:frame_count]:
         if mask is None or mask.size == 0:
             centroids.append(None)
-            areas.append(0.0)
             continue
         ys, xs = np.nonzero(mask)
         if ys.size == 0:
             centroids.append(None)
-            areas.append(0.0)
             continue
         centroids.append((float(np.mean(xs)), float(np.mean(ys))))
-        areas.append(float(mask.sum()))
     centroids = _median_smooth_centroid(centroids, window=3)
-    log_area = _median_smooth_array(np.log(np.asarray(areas) + 1e-6), window=3)
 
     d_vis = np.zeros(frame_count, dtype=float)
-    q = np.zeros(frame_count, dtype=float)
     for idx in range(1, frame_count):
-        prev = masks[idx - 1]
-        curr = masks[idx]
-        if prev is None or curr is None or prev.size == 0 or curr.size == 0:
-            q[idx] = 0.0
-            continue
-        iou = _mask_iou(prev, curr)
         centroid_prev = centroids[idx - 1]
         centroid_curr = centroids[idx]
         if centroid_prev is None or centroid_curr is None:
-            q[idx] = 0.0
             continue
         delta_c = np.linalg.norm(np.subtract(centroid_curr, centroid_prev))
-        delta_log_area = abs(log_area[idx] - log_area[idx - 1])
-        d_vis[idx] = delta_c + 30.0 * delta_log_area + 40.0 * (1.0 - iou)
-        q[idx] = _sam_quality(
-            iou=iou,
-            delta_c=delta_c,
-            area_ratio=(areas[idx] / max(areas[idx - 1], 1e-6)),
-            max_dim=max(width, height),
-        )
-    return d_vis, q
-
-
-def _sam_quality(*, iou: float, delta_c: float, area_ratio: float, max_dim: float) -> float:
-    if iou < 0.2:
-        return 0.0
-    if delta_c > 0.1 * max_dim:
-        return 0.0
-    if area_ratio < 0.3 or area_ratio > 3.0:
-        return 0.0
-    if iou < 0.4:
-        return 0.5
-    return 1.0
-
-
-def _mask_iou(a: np.ndarray, b: np.ndarray) -> float:
-    inter = np.logical_and(a, b).sum()
-    union = np.logical_or(a, b).sum()
-    if union == 0:
-        return 0.0
-    return float(inter) / float(union)
-
-
-def _median_smooth_array(values: np.ndarray, window: int) -> np.ndarray:
-    if window <= 1 or values.size == 0:
-        return values
-    half = window // 2
-    out = values.copy()
-    for idx in range(values.size):
-        start = max(0, idx - half)
-        end = min(values.size, idx + half + 1)
-        out[idx] = np.median(values[start:end])
-    return out
+        d_vis[idx] = delta_c
+    return d_vis
 
 
 def _median_smooth_centroid(values: list[tuple[float, float] | None], window: int) -> list[tuple[float, float] | None]:
