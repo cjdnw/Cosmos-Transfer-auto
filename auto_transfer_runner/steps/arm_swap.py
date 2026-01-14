@@ -230,16 +230,18 @@ def ensure_qwen_sam_cache(
     }
 
     cache_meta = _load_cache_meta(cache_meta_path)
-    if cache_meta and not _cache_meta_matches(cache_meta, expected_meta):
-        append_log(log_path, f"[{log_label}] qwen_sam cache_meta mismatch; invalidating cache.")
-        shutil.rmtree(cache_root, ignore_errors=True)
-        cache_root.mkdir(parents=True, exist_ok=True)
+    cache_meta_matches = cache_meta is not None and _cache_meta_matches(cache_meta, expected_meta)
+    if cache_meta and not cache_meta_matches:
+        append_log(
+            log_path,
+            f"[{log_label}] qwen_sam cache_meta mismatch; keeping cache for debugging.",
+        )
 
-    if qwen_boxes_json.exists() and _has_mask_files(masks_dir) and cache_meta:
+    if qwen_boxes_json.exists() and _has_mask_files(masks_dir) and cache_meta_matches:
         append_log(log_path, f"[{log_label}] qwen_sam cache hit: {cache_root}")
         return masks_dir
 
-    if not qwen_boxes_json.exists():
+    if not qwen_boxes_json.exists() or not cache_meta_matches:
         cmd = conda_run(
             conda_env,
             [
@@ -265,7 +267,7 @@ def ensure_qwen_sam_cache(
         if not qwen_boxes_json.exists() or qwen_boxes_json.stat().st_size == 0:
             raise FileNotFoundError(f"Qwen bbox json not found after run: {qwen_boxes_json}")
 
-    if not _has_mask_files(masks_dir):
+    if not _has_mask_files(masks_dir) or not cache_meta_matches:
         cmd = conda_run(
             conda_env,
             [
