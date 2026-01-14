@@ -43,3 +43,9 @@ def video_fingerprint(video_path: Path, mode: str = "stat") -> str:
         return h.hexdigest()[:12]
 
     raise ValueError(f"Unknown fingerprint mode: {mode}")
+
+
+def video_cache_key(video_path: Path, mode: str = "stat") -> str:
+    """缓存 key：mp4 文件名 + 指纹。"""
+    fingerprint = video_fingerprint(video_path, mode=mode)
+    return f"{video_path.name}__{fingerprint}"
