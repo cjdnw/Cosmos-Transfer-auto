@@ -24,11 +24,6 @@ def _find_transfer_output_mp4(output_dir: Path) -> Path:
     return mp4s[0]
 
 
-def _cleanup_workdir(workdir: Path) -> None:
-    if workdir.exists():
-        shutil.rmtree(workdir, ignore_errors=True)
-
-
 def _has_mask_files(mask_dir: Path) -> bool:
     if not mask_dir.exists():
         return False
@@ -37,6 +32,26 @@ def _has_mask_files(mask_dir: Path) -> bool:
         if any(mask_dir.glob(pattern)):
             return True
     return False
+
+
+def _find_mask_output_dir(primary: Path, workdir: Path) -> Path | None:
+    candidates = [primary, workdir / "masks_arm", workdir / "sam3_track", workdir]
+    for candidate in candidates:
+        if _has_mask_files(candidate):
+            return candidate
+    return None
+
+
+def _sync_mask_dir(source: Path, target: Path) -> None:
+    if source.resolve() == target.resolve():
+        return
+    target.mkdir(parents=True, exist_ok=True)
+    for item in source.iterdir():
+        dest = target / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest, dirs_exist_ok=True)
+        else:
+            shutil.copy2(item, dest)
 
 
 def _parse_fraction(value: str) -> float:
@@ -215,16 +230,18 @@ def ensure_qwen_sam_cache(
     }
 
     cache_meta = _load_cache_meta(cache_meta_path)
-    if cache_meta and not _cache_meta_matches(cache_meta, expected_meta):
-        append_log(log_path, f"[{log_label}] qwen_sam cache_meta mismatch; invalidating cache.")
-        shutil.rmtree(cache_root, ignore_errors=True)
-        cache_root.mkdir(parents=True, exist_ok=True)
+    cache_meta_matches = cache_meta is not None and _cache_meta_matches(cache_meta, expected_meta)
+    if cache_meta and not cache_meta_matches:
+        append_log(
+            log_path,
+            f"[{log_label}] qwen_sam cache_meta mismatch; keeping cache for debugging.",
+        )
 
-    if qwen_boxes_json.exists() and _has_mask_files(masks_dir) and cache_meta:
+    if qwen_boxes_json.exists() and _has_mask_files(masks_dir) and cache_meta_matches:
         append_log(log_path, f"[{log_label}] qwen_sam cache hit: {cache_root}")
         return masks_dir
 
-    if not qwen_boxes_json.exists():
+    if not qwen_boxes_json.exists() or not cache_meta_matches:
         cmd = conda_run(
             conda_env,
             [
@@ -250,7 +267,7 @@ def ensure_qwen_sam_cache(
         if not qwen_boxes_json.exists() or qwen_boxes_json.stat().st_size == 0:
             raise FileNotFoundError(f"Qwen bbox json not found after run: {qwen_boxes_json}")
 
-    if not _has_mask_files(masks_dir):
+    if not _has_mask_files(masks_dir) or not cache_meta_matches:
         cmd = conda_run(
             conda_env,
             [
@@ -271,8 +288,13 @@ def ensure_qwen_sam_cache(
             ],
         )
         run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=f"{log_label}: SAM masks")
-        if not _has_mask_files(masks_dir):
-            raise FileNotFoundError(f"SAM mask output not found after run: {masks_dir}")
+        mask_source = _find_mask_output_dir(masks_dir, cache_root)
+        if not mask_source:
+            raise FileNotFoundError(
+                "SAM mask output not found after run. "
+                f"Checked: {masks_dir}, {cache_root / 'masks_arm'}, {cache_root / 'sam3_track'}, {cache_root}"
+            )
+        _sync_mask_dir(mask_source, masks_dir)
 
     cache_meta_payload = dict(expected_meta)
     cache_meta_payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -353,20 +375,16 @@ def run_arm_swap(
     if no_workdir_write:
         cmd.append("--no-workdir-write")
     cmd = conda_run(conda_env, cmd)
-    try:
-        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=log_title)
-        if qwen_only:
-            if bbox_json is not None:
-                if not bbox_json.exists() or bbox_json.stat().st_size == 0:
-                    raise FileNotFoundError(f"Arm swap bbox json not found after run: {bbox_json}")
-                return bbox_json
-            return output_path
-        if not output_path.exists() or output_path.stat().st_size == 0:
-            raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
+    run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=log_title)
+    if qwen_only:
+        if bbox_json is not None:
+            if not bbox_json.exists() or bbox_json.stat().st_size == 0:
+                raise FileNotFoundError(f"Arm swap bbox json not found after run: {bbox_json}")
+            return bbox_json
         return output_path
-    finally:
-        if cleanup_workdir and no_workdir_write:
-            _cleanup_workdir(workdir)
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        raise FileNotFoundError(f"Arm swap output not found after run: {output_path}")
+    return output_path
 
 
 def run_arm_swap_swap_only(
@@ -450,7 +468,6 @@ def run_arm_swap_sam_masks(
     Command:
       python -m robot_arm_swap --orig <input> --workdir <dir> --fps <fps> --width <width>
         --sam-only --bbox-json <path>
-        --mask-lossless-frames-dir <mask_dir>
     """
     workdir.parent.mkdir(parents=True, exist_ok=True)
     mask_dir.mkdir(parents=True, exist_ok=True)
@@ -472,15 +489,14 @@ def run_arm_swap_sam_masks(
             "--sam-only",
             "--bbox-json",
             str(bbox_json),
-            "--mask-lossless-frames-dir",
-            str(mask_dir),
         ],
     )
-    try:
-        run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP5.5: SAM mask generation")
-        if not _has_mask_files(mask_dir):
-            raise FileNotFoundError(f"SAM mask output not found after run: {mask_dir}")
-        return mask_dir
-    finally:
-        if cleanup_workdir:
-            _cleanup_workdir(workdir)
+    run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP5.5: SAM mask generation")
+    mask_source = _find_mask_output_dir(mask_dir, workdir)
+    if not mask_source:
+        raise FileNotFoundError(
+            "SAM mask output not found after run. "
+            f"Checked: {mask_dir}, {workdir / 'masks_arm'}, {workdir / 'sam3_track'}, {workdir}"
+        )
+    _sync_mask_dir(mask_source, mask_dir)
+    return mask_dir

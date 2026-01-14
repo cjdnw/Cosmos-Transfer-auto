@@ -667,8 +667,6 @@ def restore_duration(
             append_log(log_path, f"[POST_RESTORE] rife_gpu_id={rife_gpu_id}")
             console_print(f"[POST_RESTORE] rife_gpu_id={rife_gpu_id}")
             rife_workdir = rife_cache_root / f"{output_dir.name}_{short_hash(str(output_dir.resolve()), 8)}"
-            if rife_workdir.exists():
-                shutil.rmtree(rife_workdir, ignore_errors=True)
             rife_workdir.mkdir(parents=True, exist_ok=True)
             speed_path = rife_workdir / f"{transfer_mp4.stem}__post_restore_speed{transfer_mp4.suffix}"
             input_frames_dir = rife_workdir / "input_frames"
@@ -703,10 +701,6 @@ def restore_duration(
                 orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
                 pad_w, pad_h = get_pad_dims(orig_w, orig_h, align=32)
                 target_frames = round(original_stats.duration_sec * target_fps)
-                if input_frames_dir.exists():
-                    shutil.rmtree(input_frames_dir, ignore_errors=True)
-                if output_frames_dir.exists():
-                    shutil.rmtree(output_frames_dir, ignore_errors=True)
                 input_frames_dir.mkdir(parents=True, exist_ok=True)
                 output_frames_dir.mkdir(parents=True, exist_ok=True)
                 pad_filter = None
@@ -806,7 +800,7 @@ def restore_duration(
                 )
                 shutil.move(str(final_output), str(transfer_mp4))
             finally:
-                shutil.rmtree(rife_workdir, ignore_errors=True)
+                pass
             append_log(
                 log_path,
                 (
@@ -833,8 +827,6 @@ def restore_duration(
             append_log(log_path, f"[POST_RESTORE] pytorch speed_fps={speed_fps:.6f}")
             rife_workdir = rife_cache_root / f"{output_dir.name}_{short_hash(str(output_dir.resolve()), 8)}__pytorch"
             try:
-                if rife_workdir.exists():
-                    shutil.rmtree(rife_workdir, ignore_errors=True)
                 rife_workdir.mkdir(parents=True, exist_ok=True)
                 safe_unlink(speed_path, log_path=log_path)
                 if rife_keep_audio and has_audio_stream(transfer_mp4, env=env, log_path=log_path):
@@ -899,10 +891,6 @@ def restore_duration(
                 if frame_map:
                     input_frames_dir = rife_workdir / "input_frames"
                     output_frames_dir = rife_workdir / "output_frames"
-                    if input_frames_dir.exists():
-                        shutil.rmtree(input_frames_dir, ignore_errors=True)
-                    if output_frames_dir.exists():
-                        shutil.rmtree(output_frames_dir, ignore_errors=True)
                     input_frames_dir.mkdir(parents=True, exist_ok=True)
                     output_frames_dir.mkdir(parents=True, exist_ok=True)
                     orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
@@ -1133,8 +1121,6 @@ def restore_duration(
                     )
             finally:
                 safe_unlink(speed_path, log_path=log_path)
-                if rife_workdir.exists():
-                    shutil.rmtree(rife_workdir, ignore_errors=True)
             append_log(
                 log_path,
                 (
