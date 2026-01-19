@@ -53,6 +53,28 @@ def _mask_files(mask_dir: Path) -> List[Path]:
     return sorted({p for p in files if p.is_file()})
 
 
+def _uniform_frame_map(total_frames: int, target_frames: int) -> list[int]:
+    if total_frames <= 0 or target_frames <= 0:
+        raise ValueError("frame map requires positive frame counts")
+    if target_frames >= total_frames:
+        return list(range(total_frames))
+    if target_frames == 1:
+        return [0]
+    step = (total_frames - 1) / (target_frames - 1)
+    indices: list[int] = []
+    prev = -1
+    for i in range(target_frames):
+        idx = int(round(i * step))
+        if idx <= prev:
+            idx = prev + 1
+        if idx >= total_frames:
+            idx = total_frames - 1
+        indices.append(idx)
+        prev = idx
+    indices[-1] = total_frames - 1
+    return indices
+
+
 def _load_mask(path: Path) -> np.ndarray:
     if path.suffix.lower() == ".npy":
         data = np.load(path)
@@ -258,7 +280,7 @@ def run_proxy_iou_preflight(
     *,
     original_video: Path,
     keyframes_video: Path,
-    keyframes_frame_map: Path,
+    keyframes_frame_map: Path | None,
     preprocess_cfg: PreprocessConfig,
     num_video_frames_per_chunk: int,
     num_conditional_frames: int,
@@ -273,10 +295,14 @@ def run_proxy_iou_preflight(
     job_index: int,
 ) -> tuple[Path, Path]:
     if not proxy_cfg.enable:
+        if keyframes_frame_map is None:
+            raise ValueError("keyframes_frame_map is required when proxy preflight is disabled.")
         return keyframes_video, keyframes_frame_map
 
     if proxy_cfg.max_iters <= 0:
         append_log(log_path, "[STEP1.5.5] max_iters <= 0; skipping proxy preflight.")
+        if keyframes_frame_map is None:
+            raise ValueError("keyframes_frame_map is required when proxy preflight is disabled.")
         return keyframes_video, keyframes_frame_map
 
     dataset_root = find_dataset_root(original_video)
@@ -309,10 +335,20 @@ def run_proxy_iou_preflight(
 
     current_video = keyframes_video
     current_frame_map = keyframes_frame_map
-    target_frames = len(_load_frame_map(current_frame_map))
-    if target_frames <= 1:
-        append_log(log_path, "[STEP1.5.5] Invalid keyframe count; skipping proxy preflight.")
-        return keyframes_video, keyframes_frame_map
+    target_frames = None
+    if current_frame_map is not None:
+        target_frames = len(_load_frame_map(current_frame_map))
+    if target_frames is None or target_frames <= 1:
+        target_frames = (
+            preprocess_cfg.keyframe_target_frames
+            if preprocess_cfg.keyframe_target_frames is not None
+            else num_video_frames_per_chunk
+        )
+        if target_frames <= 1:
+            append_log(log_path, "[STEP1.5.5] Invalid keyframe count; skipping proxy preflight.")
+            if keyframes_frame_map is None:
+                raise ValueError("keyframes_frame_map is required when skipping proxy preflight.")
+            return keyframes_video, keyframes_frame_map
 
     keyframes_dir = keyframes_video.parent
     opt_video_path = keyframes_dir / "keyframes_opt.mp4"
@@ -348,6 +384,26 @@ def run_proxy_iou_preflight(
         keyframe_max_gap=preprocess_cfg.keyframe_max_gap,
         parquet_pose_subset=preprocess_cfg.parquet_pose_subset,
     )
+
+    if current_frame_map is None:
+        uniform_video_path = keyframes_dir / "keyframes_uniform.mp4"
+        uniform_frame_map_path = frame_map_path_for(uniform_video_path)
+        if not uniform_video_path.exists() or not uniform_frame_map_path.exists():
+            uniform_indices = _uniform_frame_map(original_stats.frame_count, target_frames)
+            write_keyframes_from_indices(
+                video_path=original_video,
+                output_video_path=uniform_video_path,
+                frame_map_path=uniform_frame_map_path,
+                keyframe_indices_path=None,
+                original_total_frames=original_stats.frame_count,
+                indices=sorted(set(uniform_indices)),
+                settings=preprocess_settings,
+                env=env,
+                log_path=log_path,
+                title="STEP1.5.5 Keyframe extract (uniform)",
+            )
+        current_video = uniform_video_path
+        current_frame_map = uniform_frame_map_path
 
     sam_cache_key = video_cache_key(original_video, mode=cache_cfg.fingerprint_mode)
     sam_workdir = arm_swap_cfg.workdir_root / sam_cache_key

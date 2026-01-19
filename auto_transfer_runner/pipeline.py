@@ -192,9 +192,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 
         if (
             preprocessed_video is not None
-            and frame_map_path is not None
-            and cfg.preprocess.keyframe_sampling == "parquet_motion"
             and cfg.preprocess.proxy_preflight_enable
+            and cfg.preprocess.keyframe_sampling in {"parquet_motion", "uniform"}
+            and (cfg.preprocess.keyframe_sampling != "parquet_motion" or frame_map_path is not None)
         ):
             proxy_settings = ProxyPreflightSettings(
                 enable=cfg.preprocess.proxy_preflight_enable,
@@ -205,8 +205,13 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 restore_mode=cfg.preprocess.proxy_restore_mode,
                 rife_backend=cfg.preprocess.proxy_rife_backend,
             )
+            step_label = (
+                "STEP1.5.5 Proxy IoU Preflight (uniform)"
+                if cfg.preprocess.keyframe_sampling == "uniform"
+                else "STEP1.5.5 Proxy IoU Preflight"
+            )
             preprocessed_video, frame_map_path = _run_with_timing(
-                "STEP1.5.5 Proxy IoU Preflight",
+                step_label,
                 lambda: run_proxy_iou_preflight(
                     original_video=job.video_path,
                     keyframes_video=preprocessed_video,
