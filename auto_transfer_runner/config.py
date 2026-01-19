@@ -104,6 +104,7 @@ class PreprocessConfig:
     proxy_max_iters: int = 3
     proxy_restore_mode: str = "rife"
     proxy_rife_backend: str | None = None
+    proxy_preflight_cache_csv: bool = False
 
 
 @dataclass(frozen=True)

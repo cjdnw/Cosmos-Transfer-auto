@@ -576,6 +576,12 @@ def main(argv: List[str] | None = None) -> None:
         choices=["ncnn_vulkan", "pytorch"],
         help="Override RIFE backend for proxy preflight (default: use --rife_backend)",
     )
+    ap.add_argument(
+        "--proxy_preflight_cache_csv",
+        action="store_true",
+        default=PREPROCESS_DEFAULTS.proxy_preflight_cache_csv,
+        help="Cache proxy preflight IoU results per iteration to CSV in prepro mp4 root (default: off)",
+    )
 
     # Step5.5 post-restore (duration)
     ap.add_argument(
