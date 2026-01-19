@@ -31,6 +31,7 @@ from .steps.postprocess import (
     find_transfer_output_mp4,
     has_transfer_output_mp4,
 )
+from .steps.keyframe_preflight import ProxyPreflightSettings, run_proxy_iou_preflight
 from .utils.logging_utils import append_log, console_print
 from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
@@ -188,6 +189,42 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
             candidate_map_path = frame_map_path_for(preprocessed_video)
             if candidate_map_path.exists():
                 frame_map_path = candidate_map_path
+
+        if (
+            preprocessed_video is not None
+            and frame_map_path is not None
+            and cfg.preprocess.keyframe_sampling == "parquet_motion"
+            and cfg.preprocess.proxy_preflight_enable
+        ):
+            proxy_settings = ProxyPreflightSettings(
+                enable=cfg.preprocess.proxy_preflight_enable,
+                iou_threshold=cfg.preprocess.proxy_iou_threshold,
+                iou_high_threshold=cfg.preprocess.proxy_iou_high_threshold,
+                motion_low_quantile=cfg.preprocess.proxy_motion_low_quantile,
+                max_iters=cfg.preprocess.proxy_max_iters,
+                restore_mode=cfg.preprocess.proxy_restore_mode,
+                rife_backend=cfg.preprocess.proxy_rife_backend,
+            )
+            preprocessed_video, frame_map_path = _run_with_timing(
+                "STEP1.5.5 Proxy IoU Preflight",
+                lambda: run_proxy_iou_preflight(
+                    original_video=job.video_path,
+                    keyframes_video=preprocessed_video,
+                    keyframes_frame_map=frame_map_path,
+                    preprocess_cfg=cfg.preprocess,
+                    num_video_frames_per_chunk=cfg.transfer.num_video_frames_per_chunk,
+                    num_conditional_frames=cfg.transfer.num_conditional_frames,
+                    postprocess_cfg=cfg.postprocess,
+                    arm_swap_cfg=cfg.arm_swap,
+                    cache_cfg=cfg.cache,
+                    proxy_cfg=proxy_settings,
+                    work_dir=cfg.repos.work_dir,
+                    env=env,
+                    log_path=paths.log_path,
+                    run_gpus=cfg.run.gpus,
+                    job_index=job.job_index,
+                ),
+            )
 
         # Step2: prompt
         if marker_exists(step2_marker) and paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
