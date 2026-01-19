@@ -545,7 +545,7 @@ def run_proxy_iou_preflight(
         iou_path = proxy_dir / "proxy_iou.json"
         iou_path.write_text(json.dumps(iou_series, ensure_ascii=False, indent=2), encoding="utf-8")
         if proxy_cfg.cache_iou_csv:
-            csv_path = keyframes_dir / "proxy_preflight_iou.csv"
+            csv_path = proxy_dir / "proxy_preflight_iou.csv"
             _append_preflight_iou_csv(csv_path, iteration, iou_series)
 
         bad_frames = [idx for idx, iou in enumerate(iou_series) if iou < proxy_cfg.iou_threshold]
