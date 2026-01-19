@@ -22,7 +22,7 @@ from ..steps.preprocess import (
     _select_pose_indices,
 )
 from ..utils.dataset_paths import find_dataset_root, parquet_path_for_video
-from ..utils.hashing import video_cache_key
+from ..utils.hashing import short_hash, video_cache_key
 from ..utils.logging_utils import append_log, console_print
 
 
@@ -485,11 +485,12 @@ def run_proxy_iou_preflight(
             log_label="STEP1.5.5",
         )
 
+        mask_suffix = short_hash(",".join(str(idx) for idx in current_indices), 8)
         proxy_mask_dir = _ensure_proxy_masks(
             proxy_video=proxy_restore_path,
             bbox_json=qwen_bbox_json,
-            workdir=proxy_dir / "proxy_sam_workdir",
-            mask_dir=proxy_dir / "proxy_masks_arm",
+            workdir=proxy_dir / f"proxy_sam_workdir_{mask_suffix}",
+            mask_dir=proxy_dir / f"proxy_masks_arm_{mask_suffix}",
             arm_swap_cfg=arm_swap_cfg,
             env=env,
             log_path=log_path,
