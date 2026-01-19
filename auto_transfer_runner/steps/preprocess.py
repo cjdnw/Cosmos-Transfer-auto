@@ -987,6 +987,77 @@ def _build_select_filter(indices: Iterable[int]) -> str:
     return "+".join(parts)
 
 
+def write_keyframes_from_indices(
+    *,
+    video_path: Path,
+    output_video_path: Path,
+    frame_map_path: Path,
+    keyframe_indices_path: Path | None,
+    original_total_frames: int,
+    indices: list[int],
+    settings: PreprocessSettings,
+    env: Dict[str, str],
+    log_path: Path,
+    title: str,
+) -> None:
+    if not indices:
+        raise ValueError("indices must not be empty")
+    if indices[0] != 0:
+        raise ValueError("indices must start at 0")
+    if any(indices[i] >= indices[i + 1] for i in range(len(indices) - 1)):
+        raise ValueError("indices must be strictly increasing")
+    if original_total_frames <= 0:
+        raise ValueError("original_total_frames must be positive")
+    if indices[-1] >= original_total_frames:
+        raise ValueError("indices must be within original_total_frames")
+
+    output_video_path.parent.mkdir(parents=True, exist_ok=True)
+    if keyframe_indices_path is not None:
+        keyframe_indices_path.parent.mkdir(parents=True, exist_ok=True)
+        keyframe_indices_path.write_text(
+            "\n".join(str(idx) for idx in indices) + "\n",
+            encoding="utf-8",
+        )
+    frame_map_payload = {
+        "original_total_frames": original_total_frames,
+        "sampled_indices": indices,
+    }
+    frame_map_path.write_text(json.dumps(frame_map_payload, ensure_ascii=False), encoding="utf-8")
+
+    select_filter = _build_select_filter(indices)
+    scale_filter = _build_scale_filter(
+        width=settings.width,
+        height=settings.height,
+        keep_aspect=settings.keep_aspect,
+    )
+    extract_cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"{scale_filter},select='{select_filter}',setpts=N/(16*TB)",
+        "-vsync",
+        "cfr",
+        "-r",
+        "16",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(output_video_path),
+    ]
+    run_cmd(
+        extract_cmd,
+        cwd=None,
+        env=env or dict(os.environ),
+        log_path=log_path,
+        title=title,
+    )
+
+
 def _maybe_generate_keyframes(
     *,
     video_path: Path,
