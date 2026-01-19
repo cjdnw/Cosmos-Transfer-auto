@@ -303,7 +303,7 @@ Step6 的 `--orig` 选择规则：
 - seg 缓存目录同样按 fingerprint 划分：`control_cache/seg/<fingerprint>/`。流水线会自动调用 `/mnt/data/ganrunhe/AutoSeg-SAM2`（conda 环境 `autoseg`）生成 seg 控制 mp4 并落盘缓存，命中后复用；前置会用 `ffmpeg` 抽帧到临时目录再调用 AutoSeg-SAM2（其输入需要帧目录而非 mp4），无需手动干预。可通过 CLI 覆盖参数（如 `--seg_root`、`--seg_env`、`--seg_level`、`--seg_detect_stride`、`--seg_enable_highlight`、`--seg_disable_overlay`、`--seg_overlay_style` 等）。
 - edge 缓存目录按 fingerprint 划分：`control_cache/edge/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 canny 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--edge_low` / `--edge_high`。
 - blur 缓存目录按 fingerprint 划分：`control_cache/blur/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 blur 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--blur_sigma`。
-- fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
+- fingerprint 默认使用 `md5`（读完整文件算 hash，最稳健）；如需更快但可能受改名/时间影响，可用：`--fingerprint_mode stat` 或 `--fingerprint_mode path`
 
 ## 多控制信号（combo）
 depth/seg/edge/blur 已实现；`combo` 将 depth + edge + seg 合并为多控制信号，vis 使用 `preset_blur_strength=high`。如需调整各控制信号权重，使用 `--depth_control_weight`、`--edge_control_weight`、`--seg_control_weight`、`--vis_control_weight`（默认回退到 `--control_weight`）。
@@ -554,6 +554,7 @@ python scripts/run_batch.py \
 当使用 `--rife_backend pytorch` 且存在 `frame_map`（如 parquet_motion 关键帧采样），会自动调用 Practical-RIFE 的 guided 非均匀补帧接口，并支持显式/自动 `time_steps`（含 SAM+zarm_pos 融合与回退策略）。如果 `--rife_time_steps_mode` 选择 `sam_cache`/`sam_iou`，将复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam/masks_arm` 缓存（必要时自动生成）。
 
 ## 更新记录
+- 2026-01-19：缓存指纹默认切换为 `md5`，确保跨目录/改名场景下仍稳定命中。
 - 2026-01-19：Step1.5.5/Step5.5/Step6 统一使用 `<work_dir>/qwen_sam_cache/<fingerprint>` 缓存目录，Qwen+SAM 结果跨步骤复用并按视频区分文件夹。
 - 2026-01-19：新增 Step1.5.5 Proxy IoU 预飞行与关键帧预算重分配，输出 `keyframes_opt.mp4` + `keyframes_opt__frame_map.json` 并自动用于后续 Step3/Step4/Step5。
 - 2026-01-14：Step5.5/Step6 机械臂相关流程统一复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam` 缓存，Step6 只做 swap-only 合成；新增 `sam_cache/sam_iou` time_steps 模式与 `--arm_swap_workdir_write` IoU 输出能力说明。
