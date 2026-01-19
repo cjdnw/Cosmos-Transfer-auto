@@ -137,7 +137,7 @@ def _pick_insert_index(
     bad_frame: int,
     current_indices: list[int],
     used_indices: set[int],
-) -> int | None:
+) -> tuple[int | None, str]:
     insert_pos = None
     for idx, value in enumerate(current_indices):
         if value > bad_frame:
@@ -145,16 +145,16 @@ def _pick_insert_index(
             break
     prev_idx = insert_pos - 1 if insert_pos is not None else len(current_indices) - 1
     if prev_idx <= 0:
-        return None
+        return None, f"prev_idx<=0 (insert_pos={insert_pos}, prev_idx={prev_idx})"
     prev_frame = current_indices[prev_idx]
     candidate = (prev_frame + bad_frame) // 2
     for frame in range(candidate, prev_frame, -1):
         if frame not in used_indices:
-            return frame
+            return frame, f"picked descending from candidate={candidate} prev_frame={prev_frame}"
     for frame in range(candidate + 1, bad_frame):
         if frame not in used_indices:
-            return frame
-    return None
+            return frame, f"picked ascending from candidate={candidate} bad_frame={bad_frame}"
+    return None, f"no free frame between prev_frame={prev_frame} and bad_frame={bad_frame} (candidate={candidate})"
 
 
 def _reallocate_keyframes(
@@ -170,8 +170,10 @@ def _reallocate_keyframes(
 ) -> list[int]:
     used_indices = set(current_indices)
     insertions: list[int] = []
+    insertion_details: list[str] = []
+    insertion_failures: list[str] = []
     for bad_frame in bad_frames:
-        candidate = _pick_insert_index(
+        candidate, detail = _pick_insert_index(
             bad_frame=bad_frame,
             current_indices=current_indices,
             used_indices=used_indices,
@@ -179,10 +181,24 @@ def _reallocate_keyframes(
         if candidate is not None:
             insertions.append(candidate)
             used_indices.add(candidate)
+            insertion_details.append(f"bad_frame={bad_frame} -> insert={candidate} ({detail})")
+        else:
+            insertion_failures.append(f"bad_frame={bad_frame} ({detail})")
 
     if not insertions:
+        if insertion_failures:
+            append_log(
+                log_path,
+                "[STEP1.5.5] No valid insertion points. Details: "
+                + "; ".join(insertion_failures),
+            )
         append_log(log_path, "[STEP1.5.5] No valid insertion points found; skipping reallocation.")
         return current_indices
+    if insertion_details:
+        append_log(
+            log_path,
+            "[STEP1.5.5] Insertion candidates: " + "; ".join(insertion_details),
+        )
 
     removal_candidates = [
         idx
@@ -505,6 +521,11 @@ def run_proxy_iou_preflight(
             log_path,
             f"[STEP1.5.5] iter={iteration} bad_frames={len(bad_frames)}",
         )
+        if bad_frames:
+            append_log(
+                log_path,
+                f"[STEP1.5.5] iter={iteration} bad_frame_indices={bad_frames}",
+            )
         if not bad_frames:
             append_log(log_path, f"[STEP1.5.5] iter={iteration} IoU OK; stop.")
             break
