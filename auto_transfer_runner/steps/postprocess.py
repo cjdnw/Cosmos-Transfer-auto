@@ -345,6 +345,7 @@ def _run_rife_guided(
     rife_gpu_id: str | None,
     env: Dict[str, str],
     log_path: Path,
+    log_label: str = "STEP5.5",
 ) -> None:
     input_frames = sorted(input_frames_dir.glob("*.png"))
     if len(input_frames) != len(sample_indices):
@@ -399,7 +400,7 @@ def _run_rife_guided(
             cwd=None,
             env=rife_env,
             log_path=log_path,
-            title=f"STEP5.5 Post-restore RIFE guided segment {idx}",
+            title=f"{log_label} Post-restore RIFE guided segment {idx}",
         )
 
         segment_frames_paths = sorted(segment_out.glob("*.png"))
@@ -427,6 +428,7 @@ def run_rife_pytorch(
     conda_env: str,
     env: Dict[str, str],
     log_path: Path,
+    log_label: str = "STEP5.5",
 ) -> None:
     repo_dir = repo_dir.resolve()
     script_path = repo_dir / "inference_video.py"
@@ -470,7 +472,7 @@ def run_rife_pytorch(
         cwd=repo_dir,
         env=env or dict(os.environ),
         log_path=log_path,
-        title="STEP5.5 Post-restore RIFE (pytorch) inference_video",
+        title=f"{log_label} Post-restore RIFE (pytorch) inference_video",
     )
 
     final_output = tmp_output
@@ -501,7 +503,7 @@ def run_rife_pytorch(
                 cwd=None,
                 env=env or dict(os.environ),
                 log_path=log_path,
-                title="STEP5.5 Post-restore RIFE (pytorch) mux audio",
+                title=f"{log_label} Post-restore RIFE (pytorch) mux audio",
             )
             safe_unlink(tmp_output, log_path=log_path)
             final_output = mux_output
@@ -535,6 +537,7 @@ def run_rife_pytorch_guided(
     conda_env: str,
     env: Dict[str, str],
     log_path: Path,
+    log_label: str = "STEP5.5",
 ) -> None:
     repo_dir = repo_dir.resolve()
     script_path = repo_dir / "guided_interpolation_cli.py"
@@ -587,7 +590,7 @@ def run_rife_pytorch_guided(
         cwd=repo_dir,
         env=env or dict(os.environ),
         log_path=log_path,
-        title="STEP5.5 Post-restore RIFE (pytorch) guided interpolation",
+        title=f"{log_label} Post-restore RIFE (pytorch) guided interpolation",
     )
 
 
@@ -629,6 +632,7 @@ def restore_duration(
     job_index: int,
     env: Dict[str, str],
     log_path: Path,
+    log_label: str = "STEP5.5",
 ) -> Path:
     if original_stats.duration_sec is None or original_stats.duration_sec <= 0:
         raise ValueError("Original duration is required for post-restore.")
@@ -717,7 +721,7 @@ def restore_duration(
                     cwd=None,
                     env=env or dict(os.environ),
                     log_path=log_path,
-                    title="STEP5.5 Post-restore speed adjust (RIFE prep)",
+                    title=f"{log_label} Post-restore speed adjust (RIFE prep)",
                 )
                 orig_w, orig_h = probe_video_dimensions(speed_path, env=env, log_path=log_path)
                 pad_w, pad_h = get_pad_dims(orig_w, orig_h, align=32)
@@ -743,7 +747,7 @@ def restore_duration(
                     cwd=None,
                     env=env or dict(os.environ),
                     log_path=log_path,
-                    title="STEP5.5 Post-restore RIFE extract frames",
+                    title=f"{log_label} Post-restore RIFE extract frames",
                 )
                 frame_map = _load_frame_map(
                     frame_map_path=frame_map_path,
@@ -763,6 +767,7 @@ def restore_duration(
                         rife_gpu_id=rife_gpu_id,
                         env=env,
                         log_path=log_path,
+                        log_label=log_label,
                     )
                     output_frames_dir = guided_dir
                 else:
@@ -790,7 +795,7 @@ def restore_duration(
                         cwd=None,
                         env=rife_env,
                         log_path=log_path,
-                        title="STEP5.5 Post-restore RIFE interpolation",
+                        title=f"{log_label} Post-restore RIFE interpolation",
                     )
                 encode_cmd = [
                     "ffmpeg",
@@ -817,7 +822,7 @@ def restore_duration(
                     cwd=None,
                     env=env or dict(os.environ),
                     log_path=log_path,
-                    title="STEP5.5 Post-restore RIFE encode",
+                    title=f"{log_label} Post-restore RIFE encode",
                 )
                 shutil.move(str(final_output), str(transfer_mp4))
             finally:
@@ -901,7 +906,7 @@ def restore_duration(
                     cwd=None,
                     env=env or dict(os.environ),
                     log_path=log_path,
-                    title="STEP5.5 Post-restore speed adjust (RIFE pytorch prep)",
+                    title=f"{log_label} Post-restore speed adjust (RIFE pytorch prep)",
                 )
                 frame_map = _load_frame_map(
                     frame_map_path=frame_map_path,
@@ -935,7 +940,7 @@ def restore_duration(
                         cwd=None,
                         env=env or dict(os.environ),
                         log_path=log_path,
-                        title="STEP5.5 Post-restore RIFE pytorch extract frames",
+                        title=f"{log_label} Post-restore RIFE pytorch extract frames",
                     )
                     segment_frames = _segment_frames_from_map(frame_map["sampled_indices"])
                     if rife_time_steps_cache is None:
@@ -962,7 +967,7 @@ def restore_duration(
                                 qwen_prompt=rife_sam_qwen_prompt,
                                 env=env,
                                 log_path=log_path,
-                                log_label="STEP5.5",
+                                log_label=log_label,
                             )
                             if global_sam_dir is not None:
                                 sync_mask_dir(sam_mask_dir, global_sam_dir)
@@ -999,8 +1004,8 @@ def restore_duration(
                                             bbox_json=qwen_bbox_json,
                                             env=env,
                                             log_path=log_path,
-                                            log_title="STEP5.5: SAM bbox generation",
-                                            log_label="STEP5.5",
+                                            log_title=f"{log_label}: SAM bbox generation",
+                                            log_label=log_label,
                                         )
                                         rife_sam_bbox_json = qwen_bbox_json
                                     if not rife_sam_bbox_json.exists():
@@ -1088,6 +1093,7 @@ def restore_duration(
                         conda_env=rife_pytorch_env,
                         env=env,
                         log_path=log_path,
+                        log_label=log_label,
                     )
                     output_frames = sorted(output_frames_dir.glob("*.png"))
                     if not output_frames:
@@ -1129,7 +1135,7 @@ def restore_duration(
                         cwd=None,
                         env=env or dict(os.environ),
                         log_path=log_path,
-                        title="STEP5.5 Post-restore RIFE pytorch encode",
+                        title=f"{log_label} Post-restore RIFE pytorch encode",
                     )
                 else:
                     run_rife_pytorch(
@@ -1143,6 +1149,7 @@ def restore_duration(
                         conda_env=rife_pytorch_env,
                         env=env,
                         log_path=log_path,
+                        log_label=log_label,
                     )
             finally:
                 safe_unlink(speed_path, log_path=log_path)
@@ -1189,7 +1196,7 @@ def restore_duration(
         cwd=None,
         env=env or dict(os.environ),
         log_path=log_path,
-        title="STEP5.5 Post-restore duration",
+        title=f"{log_label} Post-restore duration",
     )
     tmp_path.replace(transfer_mp4)
     append_log(

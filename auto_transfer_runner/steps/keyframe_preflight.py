@@ -481,6 +481,7 @@ def run_proxy_iou_preflight(
             job_index=job_index,
             env=env,
             log_path=log_path,
+            log_label="STEP1.5.5",
         )
 
         proxy_mask_dir = _ensure_proxy_masks(
