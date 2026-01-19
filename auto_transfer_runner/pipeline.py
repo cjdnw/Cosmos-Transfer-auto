@@ -525,7 +525,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         console_print(f"[JOB DONE]  out={paths.output_dir}")
 
         if cfg.arm_swap.enable:
-            arm_swap_workdir = cfg.arm_swap.workdir_root / job.job_id / paths.output_dir.name
+            sam_cache_key = video_cache_key(job.video_path, mode=cfg.cache.fingerprint_mode)
+            arm_swap_workdir = cfg.arm_swap.workdir_root / sam_cache_key
             arm_swap_output_base_dir = make_output_dir(
                 cfg.arm_swap.output_root,
                 input_root=input_root,
@@ -537,7 +538,6 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 console_print(f"[SKIP] step6 arm swap (checkpoint): {paths.output_dir.name}")
             else:
                 transfer_mp4 = find_transfer_output_mp4(paths.output_dir)
-                sam_cache_key = video_cache_key(job.video_path, mode=cfg.cache.fingerprint_mode)
                 sam_cache_root = cfg.repos.work_dir / "rife_sam_cache"
                 sam_cache_dir = sam_cache_root / sam_cache_key
                 sam_cache_root.mkdir(parents=True, exist_ok=True)
@@ -739,6 +739,3 @@ def _cleanup_job_cache_dirs(
                 rife_cache_root / f"{output_dir.name}_{output_hash}{suffix}",
                 log_path=log_path,
             )
-    if cfg.arm_swap.enable:
-        arm_swap_job_dir = cfg.arm_swap.workdir_root / job.job_id
-        safe_rmtree(arm_swap_job_dir, log_path=log_path)

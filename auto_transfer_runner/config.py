@@ -18,7 +18,7 @@ DEFAULT_TRANSFER_ROOT = Path("/mnt/data/ganrunhe/cosmos-transfer2.5")
 DEFAULT_HF_CACHE = Path("/mnt/data/ganrunhe/hf_cache")
 DEFAULT_ARM_SWAP_ROOT = Path("/mnt/data/ganrunhe/robot_arm_swap_project")
 DEFAULT_ARM_SWAP_OUTPUT_ROOT = Path("/mnt/data/ganrunhe/auto_transfer/output_video_mask_arm")
-DEFAULT_ARM_SWAP_WORKDIR_ROOT = Path("/mnt/data/ganrunhe/auto_transfer/arm_swap_cache")
+DEFAULT_ARM_SWAP_WORKDIR_ROOT = DEFAULT_WORK_DIR / "qwen_sam_cache"
 
 
 @dataclass(frozen=True)
@@ -187,7 +187,7 @@ class CacheConfig:
     """Cache strategy (control signals + base prompt)."""
     enable: bool = True
     force_regen: bool = False
-    fingerprint_mode: str = "stat"  # path | stat | md5
+    fingerprint_mode: str = "md5"  # path | stat | md5
     lock_timeout_sec: int = 6 * 3600
     stale_lock_sec: int = 3 * 3600
 
