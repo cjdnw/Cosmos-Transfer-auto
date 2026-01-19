@@ -493,6 +493,7 @@ def run_arm_swap_sam_masks(
     cleanup_workdir: bool,
     env: Dict[str, str],
     log_path: Path,
+    log_label: str = "STEP5.5",
 ) -> Path:
     """
     Generate SAM masks only (no skin swap).
@@ -503,7 +504,7 @@ def run_arm_swap_sam_masks(
     """
     workdir.parent.mkdir(parents=True, exist_ok=True)
     mask_dir.mkdir(parents=True, exist_ok=True)
-    fps, width = _probe_video_info(orig_video, log_path, "STEP5.5")
+    fps, width = _probe_video_info(orig_video, log_path, log_label)
     cmd = conda_run(
         conda_env,
         [
@@ -523,7 +524,7 @@ def run_arm_swap_sam_masks(
             str(bbox_json),
         ],
     )
-    run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title="STEP5.5: SAM mask generation")
+    run_cmd(cmd, cwd=project_root, env=env, log_path=log_path, title=f"{log_label}: SAM mask generation")
     mask_source = _find_mask_output_dir(mask_dir, workdir)
     if not mask_source:
         raise FileNotFoundError(

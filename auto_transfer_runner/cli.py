@@ -189,6 +189,13 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         keyframe_smooth_win=args.keyframe_smooth_win,
         keyframe_max_gap=args.keyframe_max_gap,
         parquet_pose_subset=args.parquet_pose_subset,
+        proxy_preflight_enable=args.proxy_preflight,
+        proxy_iou_threshold=args.proxy_iou_threshold,
+        proxy_iou_high_threshold=args.proxy_iou_high_threshold,
+        proxy_motion_low_quantile=args.proxy_motion_low_quantile,
+        proxy_max_iters=args.proxy_max_iters,
+        proxy_restore_mode=args.proxy_restore_mode,
+        proxy_rife_backend=args.proxy_rife_backend,
     )
 
     postprocess = PostprocessConfig(
@@ -524,6 +531,50 @@ def main(argv: List[str] | None = None) -> None:
         default=PREPROCESS_DEFAULTS.parquet_pose_subset,
         choices=["zarm_pos", "zarm_pos_vel", "zarm_pos_vel_hand", "full"],
         help="Pose subset for parquet_motion diffs (default: zarm_pos_vel)",
+    )
+    ap.add_argument(
+        "--proxy_preflight",
+        action="store_true",
+        default=PREPROCESS_DEFAULTS.proxy_preflight_enable,
+        help="Enable STEP1.5.5 proxy IoU preflight for keyframe reallocation (default: off)",
+    )
+    ap.add_argument(
+        "--proxy_iou_threshold",
+        type=float,
+        default=PREPROCESS_DEFAULTS.proxy_iou_threshold,
+        help="IoU threshold for proxy preflight bad frames (default: 0.90)",
+    )
+    ap.add_argument(
+        "--proxy_iou_high_threshold",
+        type=float,
+        default=PREPROCESS_DEFAULTS.proxy_iou_high_threshold,
+        help="High IoU threshold for removal candidates (default: 0.98)",
+    )
+    ap.add_argument(
+        "--proxy_motion_low_quantile",
+        type=float,
+        default=PREPROCESS_DEFAULTS.proxy_motion_low_quantile,
+        help="Motion quantile for low-motion removal candidates (default: 0.25)",
+    )
+    ap.add_argument(
+        "--proxy_max_iters",
+        type=int,
+        default=PREPROCESS_DEFAULTS.proxy_max_iters,
+        help="Max iterations for proxy preflight (default: 3)",
+    )
+    ap.add_argument(
+        "--proxy_restore_mode",
+        type=str,
+        default=PREPROCESS_DEFAULTS.proxy_restore_mode,
+        choices=["speed", "minterpolate", "rife"],
+        help="Restore mode for proxy preflight (default: rife)",
+    )
+    ap.add_argument(
+        "--proxy_rife_backend",
+        type=str,
+        default=PREPROCESS_DEFAULTS.proxy_rife_backend,
+        choices=["ncnn_vulkan", "pytorch"],
+        help="Override RIFE backend for proxy preflight (default: use --rife_backend)",
     )
 
     # Step5.5 post-restore (duration)

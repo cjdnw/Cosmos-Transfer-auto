@@ -97,6 +97,13 @@ class PreprocessConfig:
     keyframe_smooth_win: int = 5
     keyframe_max_gap: int = 8
     parquet_pose_subset: str = "zarm_pos_vel"
+    proxy_preflight_enable: bool = False
+    proxy_iou_threshold: float = 0.9
+    proxy_iou_high_threshold: float = 0.98
+    proxy_motion_low_quantile: float = 0.25
+    proxy_max_iters: int = 3
+    proxy_restore_mode: str = "rife"
+    proxy_rife_backend: str | None = None
 
 
 @dataclass(frozen=True)
