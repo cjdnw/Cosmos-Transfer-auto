@@ -18,7 +18,7 @@ DEFAULT_TRANSFER_ROOT = Path("/mnt/data/ganrunhe/cosmos-transfer2.5")
 DEFAULT_HF_CACHE = Path("/mnt/data/ganrunhe/hf_cache")
 DEFAULT_ARM_SWAP_ROOT = Path("/mnt/data/ganrunhe/robot_arm_swap_project")
 DEFAULT_ARM_SWAP_OUTPUT_ROOT = Path("/mnt/data/ganrunhe/auto_transfer/output_video_mask_arm")
-DEFAULT_ARM_SWAP_WORKDIR_ROOT = Path("/mnt/data/ganrunhe/auto_transfer/arm_swap_cache")
+DEFAULT_ARM_SWAP_WORKDIR_ROOT = DEFAULT_WORK_DIR / "qwen_sam_cache"
 
 
 @dataclass(frozen=True)
