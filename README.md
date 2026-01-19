@@ -248,7 +248,7 @@ python scripts/run_batch.py \
 ```
 
 ### 例 13：开启机械臂替换（qwen3vl + sam3）
-在 Step5 Transfer 输出完成后，自动调用 `robot_arm_swap` 生成机械臂替换版本（两个输出都会保留）。Step6 默认会复用 `<workdir>/qwen_sam` 缓存（`qwen_boxes.json`、`sam3_track/`、`masks_arm/`、`cache_meta.json`），若缓存缺失或与原视频不一致会自动重算。
+在 Step5 Transfer 输出完成后，自动调用 `robot_arm_swap` 生成机械臂替换版本（两个输出都会保留）。Step6 默认会复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam` 缓存（`qwen_boxes.json`、`sam3_track/`、`masks_arm/`、`cache_meta.json`），若缓存缺失或与原视频不一致会自动重算；Step1.5.5/Step5.5/Step6 统一使用同一目录，后续步骤直接复用前一步生成的结果。
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
@@ -262,7 +262,7 @@ Step6 会在 `conda` 环境 `arm_swap` 下调用：
 python -m robot_arm_swap \
   --orig 预处理后的视频（或原视频，见说明） \
   --skin Transfer 输出视频 \
-  --workdir /mnt/data/ganrunhe/auto_transfer/arm_swap_cache \
+  --workdir /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/<fingerprint> \
   --swap-only \
   --arm-mask-dir <workdir>/qwen_sam/masks_arm \
   --no-workdir-write \
@@ -274,7 +274,7 @@ python -m robot_arm_swap \
   --out /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/<output_video_name>.mp4
 ```
 默认启用 `--arm_swap_no_workdir_write`（透传为 `--no-workdir-write`），使用内存模式避免中间 PNG 落盘并直接管道编码输出视频；如需生成 skin 侧 mask 并计算 IoU，可使用 `--arm_swap_workdir_write`（透传为 `--arm-swap-workdir-write`）。
-Qwen/SAM 缓存统一写入 `<workdir>/qwen_sam` 并复用，不会在 Step6 清空。
+Qwen/SAM 缓存统一写入 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam` 并复用，不会在 Step6 清空；`<fingerprint>` 与输入视频一一对应。
 `--out` 的目录结构与 Step5 的 output_video 命名规则一致（仅根目录替换为 `output_video_mask_arm`）。
 Step6 的 `--orig` 选择规则：
 - 默认使用原始输入视频进行 swap。
@@ -289,6 +289,7 @@ Step6 的 `--orig` 选择规则：
 - `json/`：每个视频独立的 json spec
 - `output_video/`：Transfer2.5 输出目录
 - `logs/`：每个视频一个日志文件（追加写入）
+- `qwen_sam_cache/<fingerprint>/`：Qwen+SAM 共享缓存（Step1.5.5/Step5.5/Step6 复用）
 
 
 ## “视频指纹”与缓存
@@ -302,7 +303,7 @@ Step6 的 `--orig` 选择规则：
 - seg 缓存目录同样按 fingerprint 划分：`control_cache/seg/<fingerprint>/`。流水线会自动调用 `/mnt/data/ganrunhe/AutoSeg-SAM2`（conda 环境 `autoseg`）生成 seg 控制 mp4 并落盘缓存，命中后复用；前置会用 `ffmpeg` 抽帧到临时目录再调用 AutoSeg-SAM2（其输入需要帧目录而非 mp4），无需手动干预。可通过 CLI 覆盖参数（如 `--seg_root`、`--seg_env`、`--seg_level`、`--seg_detect_stride`、`--seg_enable_highlight`、`--seg_disable_overlay`、`--seg_overlay_style` 等）。
 - edge 缓存目录按 fingerprint 划分：`control_cache/edge/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 canny 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--edge_low` / `--edge_high`。
 - blur 缓存目录按 fingerprint 划分：`control_cache/blur/<fingerprint>/`。流水线会自动调用仓库内的 `gen_controls_cv_mp4.py`（conda 环境 `sam`）生成 blur 控制 mp4 并落盘缓存，命中后复用；可通过 CLI 覆盖 `--blur_sigma`。
-- fingerprint 默认使用 `stat`（路径 + 文件大小 + 修改时间），速度快；如需更稳健（读完整文件算 hash），使用：`--fingerprint_mode md5`
+- fingerprint 默认使用 `md5`（读完整文件算 hash，最稳健）；如需更快但可能受改名/时间影响，可用：`--fingerprint_mode stat` 或 `--fingerprint_mode path`
 
 ## 多控制信号（combo）
 depth/seg/edge/blur 已实现；`combo` 将 depth + edge + seg 合并为多控制信号，vis 使用 `preset_blur_strength=high`。如需调整各控制信号权重，使用 `--depth_control_weight`、`--edge_control_weight`、`--seg_control_weight`、`--vis_control_weight`（默认回退到 `--control_weight`）。
@@ -550,7 +551,7 @@ python scripts/run_batch.py \
   --rife_time_steps_debug
 ```
 
-当使用 `--rife_backend pytorch` 且存在 `frame_map`（如 parquet_motion 关键帧采样），会自动调用 Practical-RIFE 的 guided 非均匀补帧接口，并支持显式/自动 `time_steps`（含 SAM+zarm_pos 融合与回退策略）。如果 `--rife_time_steps_mode` 选择 `sam_cache`/`sam_iou`，将复用 `<workdir>/qwen_sam/masks_arm` 缓存（必要时自动生成）。
+当使用 `--rife_backend pytorch` 且存在 `frame_map`（如 parquet_motion 关键帧采样），会自动调用 Practical-RIFE 的 guided 非均匀补帧接口，并支持显式/自动 `time_steps`（含 SAM+zarm_pos 融合与回退策略）。如果 `--rife_time_steps_mode` 选择 `sam_cache`/`sam_iou`，将复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam/masks_arm` 缓存（必要时自动生成）。
 
 ## 更新记录
 - 2026-01-19：新增 Step1.5.5 Proxy IoU 预飞行与关键帧预算重分配，输出 `keyframes_opt.mp4` + `keyframes_opt__frame_map.json` 并自动用于后续 Step3/Step4/Step5。
