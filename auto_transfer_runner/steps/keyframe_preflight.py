@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import shutil
 from dataclasses import dataclass
@@ -35,6 +36,21 @@ class ProxyPreflightSettings:
     max_iters: int = 3
     restore_mode: str = "rife"
     rife_backend: str | None = None
+    cache_iou_csv: bool = False
+
+
+def _append_preflight_iou_csv(
+    csv_path: Path,
+    iteration: int,
+    iou_series: list[float],
+) -> None:
+    write_header = not csv_path.exists()
+    with csv_path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        if write_header:
+            writer.writerow(["iteration", "proxy_frame", "original_frame", "iou"])
+        for frame_idx, iou in enumerate(iou_series):
+            writer.writerow([iteration, frame_idx, frame_idx, f"{iou:.6f}"])
 
 
 def _load_frame_map(frame_map_path: Path) -> list[int]:
@@ -134,19 +150,20 @@ def _motion_per_frame(
 
 def _pick_insert_index(
     *,
-    bad_frame: int,
+    bad_frame_pos: int,
     current_indices: list[int],
     used_indices: set[int],
 ) -> tuple[int | None, str]:
-    insert_pos = None
-    for idx, value in enumerate(current_indices):
-        if value > bad_frame:
-            insert_pos = idx
-            break
-    prev_idx = insert_pos - 1 if insert_pos is not None else len(current_indices) - 1
-    if prev_idx <= 0:
-        return None, f"prev_idx<=0 (insert_pos={insert_pos}, prev_idx={prev_idx})"
+    if bad_frame_pos <= 0 or bad_frame_pos >= len(current_indices):
+        return None, f"bad_frame_pos out of range (pos={bad_frame_pos})"
+    prev_idx = bad_frame_pos - 1
     prev_frame = current_indices[prev_idx]
+    bad_frame = current_indices[bad_frame_pos]
+    if bad_frame - prev_frame <= 1:
+        return None, (
+            "no free frame between prev_frame="
+            f"{prev_frame} and bad_frame={bad_frame} (gap={bad_frame - prev_frame})"
+        )
     candidate = (prev_frame + bad_frame) // 2
     for frame in range(candidate, prev_frame, -1):
         if frame not in used_indices:
@@ -172,18 +189,30 @@ def _reallocate_keyframes(
     insertions: list[int] = []
     insertion_details: list[str] = []
     insertion_failures: list[str] = []
-    for bad_frame in bad_frames:
+    for bad_frame_pos in bad_frames:
         candidate, detail = _pick_insert_index(
-            bad_frame=bad_frame,
+            bad_frame_pos=bad_frame_pos,
             current_indices=current_indices,
             used_indices=used_indices,
+        )
+        frame_label = (
+            str(current_indices[bad_frame_pos])
+            if 0 <= bad_frame_pos < len(current_indices)
+            else "n/a"
         )
         if candidate is not None:
             insertions.append(candidate)
             used_indices.add(candidate)
-            insertion_details.append(f"bad_frame={bad_frame} -> insert={candidate} ({detail})")
+            insertion_details.append(
+                "bad_frame_pos="
+                f"{bad_frame_pos} (frame={frame_label}) -> "
+                f"insert={candidate} ({detail})"
+            )
         else:
-            insertion_failures.append(f"bad_frame={bad_frame} ({detail})")
+            insertion_failures.append(
+                "bad_frame_pos="
+                f"{bad_frame_pos} (frame={frame_label}) ({detail})"
+            )
 
     if not insertions:
         if insertion_failures:
@@ -515,6 +544,9 @@ def run_proxy_iou_preflight(
         iou_series = _compute_iou_series(masks_dir, proxy_mask_dir)
         iou_path = proxy_dir / "proxy_iou.json"
         iou_path.write_text(json.dumps(iou_series, ensure_ascii=False, indent=2), encoding="utf-8")
+        if proxy_cfg.cache_iou_csv:
+            csv_path = proxy_dir / "proxy_preflight_iou.csv"
+            _append_preflight_iou_csv(csv_path, iteration, iou_series)
 
         bad_frames = [idx for idx, iou in enumerate(iou_series) if iou < proxy_cfg.iou_threshold]
         append_log(
