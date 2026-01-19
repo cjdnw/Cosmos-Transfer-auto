@@ -203,6 +203,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 motion_low_quantile=cfg.preprocess.proxy_motion_low_quantile,
                 max_iters=cfg.preprocess.proxy_max_iters,
                 restore_mode=cfg.preprocess.proxy_restore_mode,
+                rife_backend=cfg.preprocess.proxy_rife_backend,
             )
             preprocessed_video, frame_map_path = _run_with_timing(
                 "STEP1.5.5 Proxy IoU Preflight",

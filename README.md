@@ -70,12 +70,13 @@ python scripts/run_batch.py \
 - `--proxy_motion_low_quantile`：低运动分位阈值（默认 0.25）。
 - `--proxy_max_iters`：预飞行最大迭代次数（默认 3）。
 - `--proxy_restore_mode {speed,minterpolate,rife}`：Proxy 恢复模式（默认 `rife`）。
+- `--proxy_rife_backend {ncnn_vulkan,pytorch}`：Proxy 恢复使用的 RIFE 后端（默认沿用 `--rife_backend`）。
 
 当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes__<sampling_tag>/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）。`sampling_tag` 会编码关键帧抽样配置（如 target_frames/max_gap/smooth_win/pose_subset 等），避免不同抽样配置互相覆盖：
 - `keyframes.mp4`：抽取的关键帧视频（固定 16fps）
 - `keyframe_indices.txt`：每行一个原视频帧号
 - `keyframe_meta.json`：包含输入视频、parquet 路径、关键帧索引等信息
-- Step1.5.5（Proxy IoU 预飞行 + 关键帧预算重分配）可选启用：从 keyframes 调用 Step5.5 的 RIFE guided 时长恢复得到 `proxy_restore.mp4`（缓存到同一预处理目录的 `proxy_preflight/` 中），对原始视频与 proxy 恢复视频生成机械臂 mask（复用 Qwen bbox + SAM 缓存）并逐帧计算 IoU；若存在 IoU < 0.90 的帧，则在坏帧附近插入新锚点并从 IoU 很高且运动很小的区域删除等量锚点，保持总数为 93。迭代直到满足停止条件或达到最大迭代次数，最终输出 `keyframes_opt.mp4` 与 `keyframes_opt__frame_map.json`，后续 Step3/Step4/Step5 将自动使用优化后的 keyframes。可通过 `--proxy_preflight` 启用，并用 `--proxy_iou_threshold`/`--proxy_iou_high_threshold`/`--proxy_motion_low_quantile`/`--proxy_max_iters`/`--proxy_restore_mode` 调整策略。
+- Step1.5.5（Proxy IoU 预飞行 + 关键帧预算重分配）可选启用：从 keyframes 调用 Step5.5 的 RIFE guided 时长恢复得到 `proxy_restore.mp4`（缓存到同一预处理目录的 `proxy_preflight/` 中），对原始视频与 proxy 恢复视频生成机械臂 mask（复用 Qwen bbox + SAM 缓存；缓存缺失时会自动重新生成）并逐帧计算 IoU；若存在 IoU < 0.90 的帧，则在坏帧附近插入新锚点并从 IoU 很高且运动很小的区域删除等量锚点，保持总数为 93。迭代直到满足停止条件或达到最大迭代次数，最终输出 `keyframes_opt.mp4` 与 `keyframes_opt__frame_map.json`，后续 Step3/Step4/Step5 将自动使用优化后的 keyframes。可通过 `--proxy_preflight` 启用，并用 `--proxy_iou_threshold`/`--proxy_iou_high_threshold`/`--proxy_motion_low_quantile`/`--proxy_max_iters`/`--proxy_restore_mode`/`--proxy_rife_backend` 调整策略。
 
 ## 推理加速：resolution
 `resolution` 是写入 STEP4 JSON spec 的字段，用于控制 Transfer2.5 推理时的 bucket 分辨率，会显著影响速度与显存占用。支持的 key：

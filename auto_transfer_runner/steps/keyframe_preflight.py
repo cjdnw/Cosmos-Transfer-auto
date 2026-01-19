@@ -34,6 +34,7 @@ class ProxyPreflightSettings:
     motion_low_quantile: float = 0.25
     max_iters: int = 3
     restore_mode: str = "rife"
+    rife_backend: str | None = None
 
 
 def _load_frame_map(frame_map_path: Path) -> list[int]:
@@ -221,6 +222,18 @@ def _ensure_proxy_masks(
     env: Dict[str, str],
     log_path: Path,
 ) -> Path:
+    if not bbox_json.exists() or bbox_json.stat().st_size == 0:
+        proxy_masks = ensure_qwen_sam_cache(
+            project_root=arm_swap_cfg.project_root,
+            conda_env=arm_swap_cfg.conda_env,
+            orig_video=proxy_video,
+            workdir=workdir,
+            qwen_prompt=arm_swap_cfg.qwen_prompt,
+            env=env,
+            log_path=log_path,
+            log_label="STEP1.5.5",
+        )
+        return proxy_masks
     mask_source = find_mask_dir_with_files(mask_dir)
     if mask_source:
         return mask_source
@@ -349,6 +362,22 @@ def run_proxy_iou_preflight(
         log_label="STEP1.5.5",
     )
     qwen_bbox_json = masks_dir.parent / "qwen_boxes.json"
+    if not qwen_bbox_json.exists() or qwen_bbox_json.stat().st_size == 0:
+        masks_dir = ensure_qwen_sam_cache(
+            project_root=arm_swap_cfg.project_root,
+            conda_env=arm_swap_cfg.conda_env,
+            orig_video=original_video,
+            workdir=sam_workdir,
+            qwen_prompt=arm_swap_cfg.qwen_prompt,
+            env=env,
+            log_path=log_path,
+            log_label="STEP1.5.5",
+        )
+        qwen_bbox_json = masks_dir.parent / "qwen_boxes.json"
+        if not qwen_bbox_json.exists() or qwen_bbox_json.stat().st_size == 0:
+            raise FileNotFoundError(f"Qwen bbox json not found for proxy preflight: {qwen_bbox_json}")
+
+    rife_backend = proxy_cfg.rife_backend or postprocess_cfg.rife_backend
 
     for iteration in range(proxy_cfg.max_iters):
         append_log(log_path, f"[STEP1.5.5] iter={iteration} proxy preflight start")
@@ -366,7 +395,7 @@ def run_proxy_iou_preflight(
             mode=proxy_cfg.restore_mode,
             rife_bin=postprocess_cfg.rife_bin,
             rife_model=postprocess_cfg.rife_model,
-            rife_backend=postprocess_cfg.rife_backend,
+            rife_backend=rife_backend,
             rife_pytorch_repo=postprocess_cfg.rife_pytorch_repo,
             rife_pytorch_model_dir=postprocess_cfg.rife_pytorch_model_dir,
             rife_pytorch_env=postprocess_cfg.rife_pytorch_env,

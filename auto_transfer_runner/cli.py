@@ -195,6 +195,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         proxy_motion_low_quantile=args.proxy_motion_low_quantile,
         proxy_max_iters=args.proxy_max_iters,
         proxy_restore_mode=args.proxy_restore_mode,
+        proxy_rife_backend=args.proxy_rife_backend,
     )
 
     postprocess = PostprocessConfig(
@@ -567,6 +568,13 @@ def main(argv: List[str] | None = None) -> None:
         default=PREPROCESS_DEFAULTS.proxy_restore_mode,
         choices=["speed", "minterpolate", "rife"],
         help="Restore mode for proxy preflight (default: rife)",
+    )
+    ap.add_argument(
+        "--proxy_rife_backend",
+        type=str,
+        default=PREPROCESS_DEFAULTS.proxy_rife_backend,
+        choices=["ncnn_vulkan", "pytorch"],
+        help="Override RIFE backend for proxy preflight (default: use --rife_backend)",
     )
 
     # Step5.5 post-restore (duration)

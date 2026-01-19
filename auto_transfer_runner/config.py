@@ -103,6 +103,7 @@ class PreprocessConfig:
     proxy_motion_low_quantile: float = 0.25
     proxy_max_iters: int = 3
     proxy_restore_mode: str = "rife"
+    proxy_rife_backend: str | None = None
 
 
 @dataclass(frozen=True)
