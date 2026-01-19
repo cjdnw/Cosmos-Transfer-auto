@@ -554,10 +554,8 @@ python scripts/run_batch.py \
 当使用 `--rife_backend pytorch` 且存在 `frame_map`（如 parquet_motion 关键帧采样），会自动调用 Practical-RIFE 的 guided 非均匀补帧接口，并支持显式/自动 `time_steps`（含 SAM+zarm_pos 融合与回退策略）。如果 `--rife_time_steps_mode` 选择 `sam_cache`/`sam_iou`，将复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam/masks_arm` 缓存（必要时自动生成）。
 
 ## 更新记录
-- 2026-01-19：缓存指纹默认切换为 `md5`，确保跨目录/改名场景下仍稳定命中。
-- 2026-01-19：Step1.5.5/Step5.5/Step6 统一使用 `<work_dir>/qwen_sam_cache/<fingerprint>` 缓存目录，Qwen+SAM 结果跨步骤复用并按视频区分文件夹。
 - 2026-01-19：新增 Step1.5.5 Proxy IoU 预飞行与关键帧预算重分配，输出 `keyframes_opt.mp4` + `keyframes_opt__frame_map.json` 并自动用于后续 Step3/Step4/Step5。
-- 2026-01-14：Step5.5/Step6 机械臂相关流程统一复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam` 缓存，Step6 只做 swap-only 合成；新增 `sam_cache/sam_iou` time_steps 模式与 `--arm_swap_workdir_write` IoU 输出能力说明。
+- 2026-01-14：Step5.5/Step6 机械臂相关流程统一复用 `<workdir>/qwen_sam` 缓存，Step6 只做 swap-only 合成；新增 `sam_cache/sam_iou` time_steps 模式与 `--arm_swap_workdir_write` IoU 输出能力说明。
 - 2026-01-13：RIFE pytorch 后端新增 guided 非均匀补帧（frame_map/segment_frames + time_steps），支持 SAM+zarm_pos 融合自动生成并带缓存与调试日志。
 - 2026-01-13：parquet_motion 关键帧采样改为累计运动量目标的唯一化映射，确保严格递增且数量等于目标帧数，并补充 plateau 场景回归测试。
 - 2026-01-13：parquet_motion 关键帧采样在运动不足时退化为均匀采样并打印原因，且保证包含首尾帧与严格递增。

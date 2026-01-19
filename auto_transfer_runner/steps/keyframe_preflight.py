@@ -269,6 +269,7 @@ def _ensure_proxy_masks(
         cleanup_workdir=False,
         env=env,
         log_path=log_path,
+        log_label="STEP1.5.5",
     )
     mask_source = find_mask_dir_with_files(mask_dir)
     if not mask_source:

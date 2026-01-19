@@ -1026,6 +1026,7 @@ def restore_duration(
                                         cleanup_workdir=rife_sam_cleanup_workdir,
                                         env=env,
                                         log_path=log_path,
+                                        log_label=log_label,
                                     )
                                 if global_sam_dir is not None:
                                     sync_mask_dir(sam_workdir, global_sam_dir)
