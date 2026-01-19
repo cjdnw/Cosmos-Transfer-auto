@@ -43,14 +43,22 @@ def _append_preflight_iou_csv(
     csv_path: Path,
     iteration: int,
     iou_series: list[float],
+    original_frames: list[int] | None = None,
 ) -> None:
     write_header = not csv_path.exists()
+    if original_frames is None:
+        original_frames = list(range(len(iou_series)))
+    if len(original_frames) != len(iou_series):
+        raise ValueError(
+            "preflight iou csv requires original_frames to match iou_series length "
+            f"({len(original_frames)} vs {len(iou_series)})",
+        )
     with csv_path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         if write_header:
             writer.writerow(["iteration", "proxy_frame", "original_frame", "iou"])
-        for frame_idx, iou in enumerate(iou_series):
-            writer.writerow([iteration, frame_idx, frame_idx, f"{iou:.6f}"])
+        for frame_idx, (orig_frame, iou) in enumerate(zip(original_frames, iou_series)):
+            writer.writerow([iteration, frame_idx, orig_frame, f"{iou:.6f}"])
 
 
 def _load_frame_map(frame_map_path: Path) -> list[int]:
@@ -545,7 +553,7 @@ def run_proxy_iou_preflight(
         iou_path = proxy_dir / "proxy_iou.json"
         iou_path.write_text(json.dumps(iou_series, ensure_ascii=False, indent=2), encoding="utf-8")
         if proxy_cfg.cache_iou_csv:
-            csv_path = proxy_dir / "proxy_preflight_iou.csv"
+            csv_path = keyframes_dir / "proxy_preflight_iou.csv"
             _append_preflight_iou_csv(csv_path, iteration, iou_series)
 
         bad_frames = [idx for idx, iou in enumerate(iou_series) if iou < proxy_cfg.iou_threshold]
