@@ -105,6 +105,8 @@ class PreprocessConfig:
     proxy_restore_mode: str = "rife"
     proxy_rife_backend: str | None = None
     proxy_preflight_cache_csv: bool = False
+    proxy_removal_strategy: str = "ranked"
+    proxy_removal_buckets: int = 6
 
 
 @dataclass(frozen=True)

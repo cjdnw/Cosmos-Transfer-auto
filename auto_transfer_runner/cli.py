@@ -197,6 +197,8 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         proxy_restore_mode=args.proxy_restore_mode,
         proxy_rife_backend=args.proxy_rife_backend,
         proxy_preflight_cache_csv=args.proxy_preflight_cache_csv,
+        proxy_removal_strategy=args.proxy_removal_strategy,
+        proxy_removal_buckets=args.proxy_removal_buckets,
     )
 
     postprocess = PostprocessConfig(
@@ -582,6 +584,19 @@ def main(argv: List[str] | None = None) -> None:
         action="store_true",
         default=PREPROCESS_DEFAULTS.proxy_preflight_cache_csv,
         help="Cache proxy preflight IoU results per iteration to CSV in prepro mp4 root (default: off)",
+    )
+    ap.add_argument(
+        "--proxy_removal_strategy",
+        type=str,
+        default=PREPROCESS_DEFAULTS.proxy_removal_strategy,
+        choices=["ranked", "bucketed"],
+        help="Removal strategy for proxy preflight (default: ranked)",
+    )
+    ap.add_argument(
+        "--proxy_removal_buckets",
+        type=int,
+        default=PREPROCESS_DEFAULTS.proxy_removal_buckets,
+        help="Bucket count for bucketed proxy removals (default: 6)",
     )
 
     # Step5.5 post-restore (duration)

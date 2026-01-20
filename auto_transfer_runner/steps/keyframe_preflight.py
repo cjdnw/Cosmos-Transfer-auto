@@ -37,6 +37,8 @@ class ProxyPreflightSettings:
     restore_mode: str = "rife"
     rife_backend: str | None = None
     cache_iou_csv: bool = False
+    removal_strategy: str = "ranked"
+    removal_buckets: int = 6
 
 
 def _append_preflight_iou_csv(
@@ -260,6 +262,8 @@ def _reallocate_keyframes(
     target_frames: int,
     iou_high_threshold: float,
     motion_low_quantile: float,
+    removal_strategy: str,
+    removal_buckets: int,
     log_path: Path,
 ) -> list[int]:
     used_indices = set(current_indices)
@@ -333,15 +337,67 @@ def _reallocate_keyframes(
 
     removals_needed = len(insertions)
     removals: list[int] = []
-    for pool in (preferred, scored):
-        for iou, motion, idx in pool:
-            if idx in removals:
+    if removal_strategy == "bucketed":
+        ordered_candidates = sorted(removal_candidates)
+        bucket_count = max(1, min(removal_buckets, len(ordered_candidates)))
+        bucket_size = int(np.ceil(len(ordered_candidates) / bucket_count))
+        buckets: list[list[int]] = []
+        for bucket_idx in range(bucket_count):
+            start = bucket_idx * bucket_size
+            end = min(len(ordered_candidates), start + bucket_size)
+            if start >= end:
                 continue
-            removals.append(idx)
+            buckets.append(ordered_candidates[start:end])
+
+        if buckets:
+            bucket_allocations = [removals_needed // len(buckets)] * len(buckets)
+            for extra_idx in range(removals_needed % len(buckets)):
+                bucket_allocations[extra_idx] += 1
+        else:
+            bucket_allocations = []
+
+        scored_by_idx = {idx: (iou, motion) for iou, motion, idx in scored}
+        for bucket, budget in zip(buckets, bucket_allocations):
+            if budget <= 0:
+                continue
+            bucket_scored = [(scored_by_idx[idx][0], scored_by_idx[idx][1], idx) for idx in bucket]
+            bucket_preferred = [
+                entry for entry in bucket_scored if entry[0] >= iou_high_threshold and entry[1] <= motion_threshold
+            ]
+            bucket_preferred.sort(key=lambda item: (-item[0], item[1]))
+            bucket_scored.sort(key=lambda item: (-item[0], item[1]))
+            selected_in_bucket = 0
+            for pool in (bucket_preferred, bucket_scored):
+                for _, _, idx in pool:
+                    if idx in removals:
+                        continue
+                    removals.append(idx)
+                    selected_in_bucket += 1
+                    if selected_in_bucket >= budget:
+                        break
+                if selected_in_bucket >= budget:
+                    break
+
+        if len(removals) < removals_needed:
+            for pool in (preferred, scored):
+                for _, _, idx in pool:
+                    if idx in removals:
+                        continue
+                    removals.append(idx)
+                    if len(removals) >= removals_needed:
+                        break
+                if len(removals) >= removals_needed:
+                    break
+    else:
+        for pool in (preferred, scored):
+            for _, _, idx in pool:
+                if idx in removals:
+                    continue
+                removals.append(idx)
+                if len(removals) >= removals_needed:
+                    break
             if len(removals) >= removals_needed:
                 break
-        if len(removals) >= removals_needed:
-            break
 
     if len(removals) < removals_needed:
         append_log(
@@ -665,7 +721,7 @@ def run_proxy_iou_preflight(
             append_log(log_path, f"[STEP1.5.5] iter={iteration} IoU OK; stop.")
             break
 
-        updated_indices = _reallocate_keyframes(
+    updated_indices = _reallocate_keyframes(
             current_indices=current_indices,
             bad_frames=bad_frames,
             iou_series=iou_series,
@@ -673,6 +729,8 @@ def run_proxy_iou_preflight(
             target_frames=target_frames,
             iou_high_threshold=proxy_cfg.iou_high_threshold,
             motion_low_quantile=proxy_cfg.motion_low_quantile,
+            removal_strategy=proxy_cfg.removal_strategy,
+            removal_buckets=proxy_cfg.removal_buckets,
             log_path=log_path,
         )
         if proxy_cfg.cache_iou_csv:
