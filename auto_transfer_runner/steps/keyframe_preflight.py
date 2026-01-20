@@ -600,6 +600,7 @@ def run_proxy_iou_preflight(
                     log_path,
                     f"[STEP1.5.5] iter={iteration} write proxy_preflight_iou.csv -> {csv_path}",
                 )
+                console_print(f"[STEP1.5.5] CSV -> {csv_path}")
                 _append_preflight_iou_csv(
                     csv_path,
                     iteration,
@@ -627,6 +628,7 @@ def run_proxy_iou_preflight(
                 log_path,
                 f"[STEP1.5.5] iter={iteration} write proxy_preflight_iou.csv -> {csv_path}",
             )
+            console_print(f"[STEP1.5.5] CSV -> {csv_path}")
             _append_preflight_iou_csv(
                 csv_path,
                 iteration,
