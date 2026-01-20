@@ -157,12 +157,11 @@ def _compute_iou_series(mask_dir_a: Path, mask_dir_b: Path) -> list[float]:
 def _write_iou_plot_png(
     *,
     png_path: Path,
-    iou_series: list[float],
-    iteration: int,
+    iou_series_by_iter: list[tuple[int, list[float]]],
     size: tuple[int, int] = (1280, 720),
     margin: int = 60,
 ) -> None:
-    if not iou_series:
+    if not iou_series_by_iter:
         return
     width, height = size
     img = Image.new("RGB", size, color="white")
@@ -173,24 +172,43 @@ def _write_iou_plot_png(
     bottom = height - margin
     draw.rectangle([left, top, right, bottom], outline="black", width=2)
 
-    series_len = len(iou_series)
-    max_idx = max(series_len - 1, 1)
-    points = []
-    for idx, iou in enumerate(iou_series):
-        x = left + (right - left) * idx / max_idx
-        clamped = max(0.0, min(1.0, float(iou)))
-        y = bottom - (bottom - top) * clamped
-        points.append((x, y))
-    if len(points) > 1:
-        draw.line(points, fill="blue", width=2)
-    else:
-        draw.ellipse(
-            [points[0][0] - 2, points[0][1] - 2, points[0][0] + 2, points[0][1] + 2],
-            fill="blue",
-        )
+    max_len = max(len(series) for _, series in iou_series_by_iter)
+    max_idx = max(max_len - 1, 1)
+    palette = [
+        "blue",
+        "red",
+        "green",
+        "orange",
+        "purple",
+        "teal",
+        "magenta",
+        "brown",
+        "gray",
+        "black",
+    ]
+    for series_idx, (iteration, iou_series) in enumerate(iou_series_by_iter):
+        if not iou_series:
+            continue
+        points = []
+        for idx, iou in enumerate(iou_series):
+            x = left + (right - left) * idx / max_idx
+            clamped = max(0.0, min(1.0, float(iou)))
+            y = bottom - (bottom - top) * clamped
+            points.append((x, y))
+        color = palette[series_idx % len(palette)]
+        if len(points) > 1:
+            draw.line(points, fill=color, width=2)
+        else:
+            draw.ellipse(
+                [points[0][0] - 2, points[0][1] - 2, points[0][0] + 2, points[0][1] + 2],
+                fill=color,
+            )
 
-    label = f"proxy preflight IoU (iter={iteration})"
-    draw.text((left, max(0, top - 30)), label, fill="black")
+        legend_y = top + 5 + series_idx * 16
+        draw.rectangle([left + 5, legend_y + 4, left + 15, legend_y + 14], fill=color)
+        draw.text((left + 20, legend_y), f"iter={iteration}", fill="black")
+
+    draw.text((left, max(0, top - 30)), "proxy preflight IoU (all iters)", fill="black")
     draw.text((left, bottom + 8), "frame index", fill="black")
     draw.text((5, top), "IoU", fill="black")
     png_path.parent.mkdir(parents=True, exist_ok=True)
@@ -565,6 +583,7 @@ def run_proxy_iou_preflight(
             raise FileNotFoundError(f"Qwen bbox json not found for proxy preflight: {qwen_bbox_json}")
 
     rife_backend = proxy_cfg.rife_backend or postprocess_cfg.rife_backend
+    iou_history: list[tuple[int, list[float]]] = []
 
     for iteration in range(proxy_cfg.max_iters):
         append_log(log_path, f"[STEP1.5.5] iter={iteration} proxy preflight start")
@@ -630,6 +649,8 @@ def run_proxy_iou_preflight(
         iou_series = _compute_iou_series(masks_dir, proxy_mask_dir)
         iou_path = proxy_dir / "proxy_iou.json"
         iou_path.write_text(json.dumps(iou_series, ensure_ascii=False, indent=2), encoding="utf-8")
+        if proxy_cfg.cache_iou_csv:
+            iou_history.append((iteration, list(iou_series)))
         bad_frames = [idx for idx, iou in enumerate(iou_series) if iou < proxy_cfg.iou_threshold]
         append_log(
             log_path,
@@ -656,11 +677,10 @@ def run_proxy_iou_preflight(
                     keyframes_after=keyframes_before,
                     bad_frames=set(),
                 )
-                png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+                png_path = keyframes_dir / "proxy_preflight_iou.png"
                 _write_iou_plot_png(
                     png_path=png_path,
-                    iou_series=iou_series,
-                    iteration=iteration,
+                    iou_series_by_iter=iou_history,
                 )
             append_log(log_path, f"[STEP1.5.5] iter={iteration} IoU OK; stop.")
             break
@@ -690,11 +710,10 @@ def run_proxy_iou_preflight(
                 keyframes_after=set(updated_indices),
                 bad_frames=set(bad_frames),
             )
-            png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+            png_path = keyframes_dir / "proxy_preflight_iou.png"
             _write_iou_plot_png(
                 png_path=png_path,
-                iou_series=iou_series,
-                iteration=iteration,
+                iou_series_by_iter=iou_history,
             )
         if updated_indices == current_indices:
             append_log(log_path, f"[STEP1.5.5] iter={iteration} no changes; stop.")
