@@ -205,6 +205,8 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 restore_mode=cfg.preprocess.proxy_restore_mode,
                 rife_backend=cfg.preprocess.proxy_rife_backend,
                 cache_iou_csv=cfg.preprocess.proxy_preflight_cache_csv,
+                removal_strategy=cfg.preprocess.proxy_removal_strategy,
+                removal_buckets=cfg.preprocess.proxy_removal_buckets,
             )
             step_label = (
                 "STEP1.5.5 Proxy IoU Preflight (uniform)"
