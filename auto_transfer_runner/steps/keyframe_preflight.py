@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from ..config import ArmSwapConfig, CacheConfig, PostprocessConfig, PreprocessConfig
 from ..steps.arm_swap import ensure_qwen_sam_cache, find_mask_dir_with_files, run_arm_swap_sam_masks
@@ -43,14 +43,48 @@ def _append_preflight_iou_csv(
     csv_path: Path,
     iteration: int,
     iou_series: list[float],
+    original_frames: list[int] | None = None,
+    keyframes_before: set[int] | None = None,
+    keyframes_after: set[int] | None = None,
+    bad_frames: set[int] | None = None,
 ) -> None:
     write_header = not csv_path.exists()
+    if original_frames is None:
+        original_frames = list(range(len(iou_series)))
+    if len(original_frames) != len(iou_series):
+        raise ValueError(
+            "preflight iou csv requires original_frames to match iou_series length "
+            f"({len(original_frames)} vs {len(iou_series)})",
+        )
+    keyframes_before = keyframes_before or set()
+    keyframes_after = keyframes_after or set()
+    bad_frames = bad_frames or set()
     with csv_path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         if write_header:
-            writer.writerow(["iteration", "proxy_frame", "original_frame", "iou"])
-        for frame_idx, iou in enumerate(iou_series):
-            writer.writerow([iteration, frame_idx, frame_idx, f"{iou:.6f}"])
+            writer.writerow(
+                [
+                    "iteration",
+                    "proxy_frame",
+                    "original_frame",
+                    "iou",
+                    "is_keyframe_before",
+                    "is_keyframe_after",
+                    "is_bad_frame",
+                ],
+            )
+        for frame_idx, (orig_frame, iou) in enumerate(zip(original_frames, iou_series)):
+            writer.writerow(
+                [
+                    iteration,
+                    frame_idx,
+                    orig_frame,
+                    f"{iou:.6f}",
+                    int(orig_frame in keyframes_before),
+                    int(orig_frame in keyframes_after),
+                    int(orig_frame in bad_frames),
+                ],
+            )
 
 
 def _load_frame_map(frame_map_path: Path) -> list[int]:
@@ -118,6 +152,49 @@ def _compute_iou_series(mask_dir_a: Path, mask_dir_b: Path) -> list[float]:
             iou = float(np.logical_and(a, b).sum()) / float(union)
         iou_series.append(iou)
     return iou_series
+
+
+def _write_iou_plot_png(
+    *,
+    png_path: Path,
+    iou_series: list[float],
+    iteration: int,
+    size: tuple[int, int] = (1280, 720),
+    margin: int = 60,
+) -> None:
+    if not iou_series:
+        return
+    width, height = size
+    img = Image.new("RGB", size, color="white")
+    draw = ImageDraw.Draw(img)
+    left = margin
+    right = width - margin
+    top = margin
+    bottom = height - margin
+    draw.rectangle([left, top, right, bottom], outline="black", width=2)
+
+    series_len = len(iou_series)
+    max_idx = max(series_len - 1, 1)
+    points = []
+    for idx, iou in enumerate(iou_series):
+        x = left + (right - left) * idx / max_idx
+        clamped = max(0.0, min(1.0, float(iou)))
+        y = bottom - (bottom - top) * clamped
+        points.append((x, y))
+    if len(points) > 1:
+        draw.line(points, fill="blue", width=2)
+    else:
+        draw.ellipse(
+            [points[0][0] - 2, points[0][1] - 2, points[0][0] + 2, points[0][1] + 2],
+            fill="blue",
+        )
+
+    label = f"proxy preflight IoU (iter={iteration})"
+    draw.text((left, max(0, top - 30)), label, fill="black")
+    draw.text((left, bottom + 8), "frame index", fill="black")
+    draw.text((5, top), "IoU", fill="black")
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(png_path)
 
 
 def _motion_per_frame(
@@ -189,30 +266,34 @@ def _reallocate_keyframes(
     insertions: list[int] = []
     insertion_details: list[str] = []
     insertion_failures: list[str] = []
-    for bad_frame_pos in bad_frames:
-        candidate, detail = _pick_insert_index(
-            bad_frame_pos=bad_frame_pos,
-            current_indices=current_indices,
-            used_indices=used_indices,
-        )
-        frame_label = (
-            str(current_indices[bad_frame_pos])
-            if 0 <= bad_frame_pos < len(current_indices)
-            else "n/a"
-        )
-        if candidate is not None:
-            insertions.append(candidate)
-            used_indices.add(candidate)
-            insertion_details.append(
-                "bad_frame_pos="
-                f"{bad_frame_pos} (frame={frame_label}) -> "
-                f"insert={candidate} ({detail})"
+    index_positions = {frame: pos for pos, frame in enumerate(current_indices)}
+    for bad_frame in bad_frames:
+        if bad_frame in used_indices:
+            bad_frame_pos = index_positions.get(bad_frame)
+            if bad_frame_pos is None:
+                insertion_failures.append(f"bad_frame={bad_frame} missing from index_positions")
+                continue
+            candidate, detail = _pick_insert_index(
+                bad_frame_pos=bad_frame_pos,
+                current_indices=current_indices,
+                used_indices=used_indices,
             )
+            if candidate is not None:
+                insertions.append(candidate)
+                used_indices.add(candidate)
+                insertion_details.append(
+                    "bad_frame="
+                    f"{bad_frame} (pos={bad_frame_pos}) -> "
+                    f"insert={candidate} ({detail})"
+                )
+            else:
+                insertion_failures.append(
+                    f"bad_frame={bad_frame} (pos={bad_frame_pos}) ({detail})"
+                )
         else:
-            insertion_failures.append(
-                "bad_frame_pos="
-                f"{bad_frame_pos} (frame={frame_label}) ({detail})"
-            )
+            insertions.append(bad_frame)
+            used_indices.add(bad_frame)
+            insertion_details.append(f"bad_frame={bad_frame} -> insert self")
 
     if not insertions:
         if insertion_failures:
@@ -484,6 +565,7 @@ def run_proxy_iou_preflight(
     for iteration in range(proxy_cfg.max_iters):
         append_log(log_path, f"[STEP1.5.5] iter={iteration} proxy preflight start")
         current_indices = _load_frame_map(current_frame_map)
+        keyframes_before = set(current_indices)
 
         proxy_restore_path = proxy_dir / "proxy_restore.mp4"
         if proxy_restore_path.exists():
@@ -544,10 +626,6 @@ def run_proxy_iou_preflight(
         iou_series = _compute_iou_series(masks_dir, proxy_mask_dir)
         iou_path = proxy_dir / "proxy_iou.json"
         iou_path.write_text(json.dumps(iou_series, ensure_ascii=False, indent=2), encoding="utf-8")
-        if proxy_cfg.cache_iou_csv:
-            csv_path = proxy_dir / "proxy_preflight_iou.csv"
-            _append_preflight_iou_csv(csv_path, iteration, iou_series)
-
         bad_frames = [idx for idx, iou in enumerate(iou_series) if iou < proxy_cfg.iou_threshold]
         append_log(
             log_path,
@@ -559,6 +637,27 @@ def run_proxy_iou_preflight(
                 f"[STEP1.5.5] iter={iteration} bad_frame_indices={bad_frames}",
             )
         if not bad_frames:
+            if proxy_cfg.cache_iou_csv:
+                csv_path = keyframes_dir / "proxy_preflight_iou.csv"
+                append_log(
+                    log_path,
+                    f"[STEP1.5.5] iter={iteration} write proxy_preflight_iou.csv -> {csv_path}",
+                )
+                console_print(f"[STEP1.5.5] CSV -> {csv_path}")
+                _append_preflight_iou_csv(
+                    csv_path,
+                    iteration,
+                    iou_series,
+                    keyframes_before=keyframes_before,
+                    keyframes_after=keyframes_before,
+                    bad_frames=set(),
+                )
+                png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+                _write_iou_plot_png(
+                    png_path=png_path,
+                    iou_series=iou_series,
+                    iteration=iteration,
+                )
             append_log(log_path, f"[STEP1.5.5] iter={iteration} IoU OK; stop.")
             break
 
@@ -572,6 +671,27 @@ def run_proxy_iou_preflight(
             motion_low_quantile=proxy_cfg.motion_low_quantile,
             log_path=log_path,
         )
+        if proxy_cfg.cache_iou_csv:
+            csv_path = keyframes_dir / "proxy_preflight_iou.csv"
+            append_log(
+                log_path,
+                f"[STEP1.5.5] iter={iteration} write proxy_preflight_iou.csv -> {csv_path}",
+            )
+            console_print(f"[STEP1.5.5] CSV -> {csv_path}")
+            _append_preflight_iou_csv(
+                csv_path,
+                iteration,
+                iou_series,
+                keyframes_before=keyframes_before,
+                keyframes_after=set(updated_indices),
+                bad_frames=set(bad_frames),
+            )
+            png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+            _write_iou_plot_png(
+                png_path=png_path,
+                iou_series=iou_series,
+                iteration=iteration,
+            )
         if updated_indices == current_indices:
             append_log(log_path, f"[STEP1.5.5] iter={iteration} no changes; stop.")
             break
