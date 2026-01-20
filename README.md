@@ -71,7 +71,7 @@ python scripts/run_batch.py \
 - `--proxy_max_iters`：预飞行最大迭代次数（默认 3）。
 - `--proxy_restore_mode {speed,minterpolate,rife}`：Proxy 恢复模式（默认 `rife`）。
 - `--proxy_rife_backend {ncnn_vulkan,pytorch}`：Proxy 恢复使用的 RIFE 后端（默认沿用 `--rife_backend`）。
-- `--proxy_preflight_cache_csv`：缓存每轮 IoU 结果到预处理 MP4 根目录下的 CSV（默认关闭）。
+- `--proxy_preflight_cache_csv`：缓存每轮 IoU 结果到预处理 MP4 根目录下的 CSV，并输出对应的 IoU 曲线 PNG（默认关闭）。
 
 当启用 `--keyframe_sampling parquet_motion` 时，预处理阶段会输出：`<work_dir>/prepro_video/<relative_dir>/<video_stem>__keyframes__<sampling_tag>/`，并将该 `keyframes.mp4` 作为 Transfer2.5 的输入视频（替代均匀抽帧/预处理视频）。`sampling_tag` 会编码关键帧抽样配置（如 target_frames/max_gap/smooth_win/pose_subset 等），避免不同抽样配置互相覆盖：
 - `keyframes.mp4`：抽取的关键帧视频（固定 16fps）

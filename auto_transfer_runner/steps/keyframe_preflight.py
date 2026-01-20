@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from ..config import ArmSwapConfig, CacheConfig, PostprocessConfig, PreprocessConfig
 from ..steps.arm_swap import ensure_qwen_sam_cache, find_mask_dir_with_files, run_arm_swap_sam_masks
@@ -152,6 +152,49 @@ def _compute_iou_series(mask_dir_a: Path, mask_dir_b: Path) -> list[float]:
             iou = float(np.logical_and(a, b).sum()) / float(union)
         iou_series.append(iou)
     return iou_series
+
+
+def _write_iou_plot_png(
+    *,
+    png_path: Path,
+    iou_series: list[float],
+    iteration: int,
+    size: tuple[int, int] = (1280, 720),
+    margin: int = 60,
+) -> None:
+    if not iou_series:
+        return
+    width, height = size
+    img = Image.new("RGB", size, color="white")
+    draw = ImageDraw.Draw(img)
+    left = margin
+    right = width - margin
+    top = margin
+    bottom = height - margin
+    draw.rectangle([left, top, right, bottom], outline="black", width=2)
+
+    series_len = len(iou_series)
+    max_idx = max(series_len - 1, 1)
+    points = []
+    for idx, iou in enumerate(iou_series):
+        x = left + (right - left) * idx / max_idx
+        clamped = max(0.0, min(1.0, float(iou)))
+        y = bottom - (bottom - top) * clamped
+        points.append((x, y))
+    if len(points) > 1:
+        draw.line(points, fill="blue", width=2)
+    else:
+        draw.ellipse(
+            [points[0][0] - 2, points[0][1] - 2, points[0][0] + 2, points[0][1] + 2],
+            fill="blue",
+        )
+
+    label = f"proxy preflight IoU (iter={iteration})"
+    draw.text((left, max(0, top - 30)), label, fill="black")
+    draw.text((left, bottom + 8), "frame index", fill="black")
+    draw.text((5, top), "IoU", fill="black")
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(png_path)
 
 
 def _motion_per_frame(
@@ -609,6 +652,12 @@ def run_proxy_iou_preflight(
                     keyframes_after=keyframes_before,
                     bad_frames=set(),
                 )
+                png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+                _write_iou_plot_png(
+                    png_path=png_path,
+                    iou_series=iou_series,
+                    iteration=iteration,
+                )
             append_log(log_path, f"[STEP1.5.5] iter={iteration} IoU OK; stop.")
             break
 
@@ -636,6 +685,12 @@ def run_proxy_iou_preflight(
                 keyframes_before=keyframes_before,
                 keyframes_after=set(updated_indices),
                 bad_frames=set(bad_frames),
+            )
+            png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+            _write_iou_plot_png(
+                png_path=png_path,
+                iou_series=iou_series,
+                iteration=iteration,
             )
         if updated_indices == current_indices:
             append_log(log_path, f"[STEP1.5.5] iter={iteration} no changes; stop.")
