@@ -721,7 +721,7 @@ def run_proxy_iou_preflight(
             append_log(log_path, f"[STEP1.5.5] iter={iteration} IoU OK; stop.")
             break
 
-    updated_indices = _reallocate_keyframes(
+        updated_indices = _reallocate_keyframes(
             current_indices=current_indices,
             bad_frames=bad_frames,
             iou_series=iou_series,
