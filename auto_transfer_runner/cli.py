@@ -196,6 +196,7 @@ def build_config(args: argparse.Namespace) -> GlobalConfig:
         proxy_max_iters=args.proxy_max_iters,
         proxy_restore_mode=args.proxy_restore_mode,
         proxy_rife_backend=args.proxy_rife_backend,
+        proxy_preflight_cache_csv=args.proxy_preflight_cache_csv,
     )
 
     postprocess = PostprocessConfig(
