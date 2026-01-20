@@ -656,7 +656,8 @@ def run_proxy_iou_preflight(
                     keyframes_after=keyframes_before,
                     bad_frames=set(),
                 )
-                png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+                plot_dir = proxy_dir / "iou_plots"
+                png_path = plot_dir / f"proxy_preflight_iou_iter_{iteration}.png"
                 _write_iou_plot_png(
                     png_path=png_path,
                     iou_series=iou_series,
@@ -690,7 +691,8 @@ def run_proxy_iou_preflight(
                 keyframes_after=set(updated_indices),
                 bad_frames=set(bad_frames),
             )
-            png_path = keyframes_dir / f"proxy_preflight_iou_iter_{iteration}.png"
+            plot_dir = proxy_dir / "iou_plots"
+            png_path = plot_dir / f"proxy_preflight_iou_iter_{iteration}.png"
             _write_iou_plot_png(
                 png_path=png_path,
                 iou_series=iou_series,
