@@ -476,6 +476,9 @@ def run_proxy_iou_preflight(
             if keyframes_frame_map is None:
                 raise ValueError("keyframes_frame_map is required when skipping proxy preflight.")
             return keyframes_video, keyframes_frame_map
+    if original_stats.duration_sec is None or original_stats.duration_sec <= 0:
+        raise RuntimeError("Original video duration required for keyframes FPS calculation.")
+    speed_fps = target_frames / original_stats.duration_sec
 
     keyframes_dir = keyframes_video.parent
     opt_video_path = keyframes_dir / "keyframes_opt.mp4"
@@ -528,6 +531,7 @@ def run_proxy_iou_preflight(
                 env=env,
                 log_path=log_path,
                 title="STEP1.5.5 Keyframe extract (uniform)",
+                output_fps=speed_fps,
             )
         current_video = uniform_video_path
         current_frame_map = uniform_frame_map_path
@@ -707,6 +711,7 @@ def run_proxy_iou_preflight(
             env=env,
             log_path=log_path,
             title="STEP1.5.5 Keyframe extract (proxy iou)",
+            output_fps=speed_fps,
         )
         current_video = opt_video_path
         current_frame_map = opt_frame_map_path

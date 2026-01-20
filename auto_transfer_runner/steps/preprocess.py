@@ -999,6 +999,7 @@ def write_keyframes_from_indices(
     env: Dict[str, str],
     log_path: Path,
     title: str,
+    output_fps: float,
 ) -> None:
     if not indices:
         raise ValueError("indices must not be empty")
@@ -1036,11 +1037,11 @@ def write_keyframes_from_indices(
         "-i",
         str(video_path),
         "-vf",
-        f"{scale_filter},select='{select_filter}',setpts=N/(16*TB)",
+        f"{scale_filter},select='{select_filter}',setpts=N/({output_fps}*TB)",
         "-vsync",
         "cfr",
         "-r",
-        "16",
+        f"{output_fps}",
         "-c:v",
         "libx264",
         "-pix_fmt",
