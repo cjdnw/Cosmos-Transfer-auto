@@ -642,10 +642,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     except Exception as e:
         append_log(paths.log_path, f"[FAILED] {repr(e)}")
         console_print(f"[JOB FAIL] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
-        _copy_fail_jsons(
+        _copy_fail_log(
             work_dir=repos.work_dir,
             job_id=job.job_id,
-            json_paths=[paths.prompt_replacements_path, paths.json_path],
             log_path=paths.log_path,
         )
 
@@ -674,24 +673,22 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         _cleanup_job_cache_dirs(cfg=cfg, job=job, output_dir=paths.output_dir, log_path=paths.log_path)
 
 
-def _copy_fail_jsons(
+def _copy_fail_log(
     *,
     work_dir: Path,
     job_id: str,
-    json_paths: list[Path],
     log_path: Path,
 ) -> None:
     log_fail_dir = work_dir / "log_fail"
     log_fail_dir.mkdir(parents=True, exist_ok=True)
-    for path in json_paths:
-        if not path.exists():
-            continue
-        target = log_fail_dir / f"{path.stem}__{job_id}{path.suffix}"
-        try:
-            shutil.copy2(path, target)
-            append_log(log_path, f"[FAILED] saved json to {target}")
-        except Exception as exc:
-            append_log(log_path, f"[FAILED] could not save json {path}: {exc!r}")
+    if not log_path.exists():
+        return
+    target = log_fail_dir / f"{log_path.stem}__{job_id}{log_path.suffix}"
+    try:
+        shutil.copy2(log_path, target)
+        append_log(log_path, f"[FAILED] saved log to {target}")
+    except Exception as exc:
+        append_log(log_path, f"[FAILED] could not save log {log_path}: {exc!r}")
 
 
 def _bootstrap_checkpoints(
