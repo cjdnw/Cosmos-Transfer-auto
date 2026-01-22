@@ -349,11 +349,28 @@ def pick_model_id(size: str, variant: str, model_type: str) -> str:
 
 
 def safe_parse_json(text: str) -> Dict[str, Any]:
+    if not text:
+        return {}
+
+    cleaned = text.strip()
+    if "```" in cleaned:
+        fenced = re.search(r"```(?:json)?\s*(.*?)```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+        if fenced:
+            cleaned = fenced.group(1).strip()
+
     try:
-        return json.loads(text)
+        return json.loads(cleaned)
     except Exception:
-        m = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        return json.loads(m.group(0)) if m else {}
+        decoder = json.JSONDecoder()
+        for idx, ch in enumerate(cleaned):
+            if ch not in "{[":
+                continue
+            try:
+                obj, _ = decoder.raw_decode(cleaned[idx:])
+                return obj
+            except json.JSONDecodeError:
+                continue
+        return {}
 
 
 def extract_bracket_terms(text: str) -> List[str]:
