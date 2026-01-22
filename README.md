@@ -557,6 +557,7 @@ python scripts/run_batch.py \
 当使用 `--rife_backend pytorch` 且存在 `frame_map`（如 parquet_motion 关键帧采样），会自动调用 Practical-RIFE 的 guided 非均匀补帧接口，并支持显式/自动 `time_steps`（含 SAM+zarm_pos 融合与回退策略）。如果 `--rife_time_steps_mode` 选择 `sam_cache`/`sam_iou`，将复用 `<work_dir>/qwen_sam_cache/<fingerprint>/qwen_sam/masks_arm` 缓存（必要时自动生成）。
 
 ## 更新记录
+- 2026-01-21：新增 Step0/Step1/Step1.5.5 `.done` 标记，覆盖原视频探测、预处理与 Proxy IoU 预飞行断点续跑。
 - 2026-01-20：Step1.5.5 Proxy IoU 预飞行新增删除策略参数，支持按时间分桶的更均匀删除。
   - `--proxy_preflight`：启用 Step1.5.5 Proxy IoU 预飞行。
   - `--proxy_iou_threshold`：IoU 判定坏帧阈值，低于该值视为坏帧。
