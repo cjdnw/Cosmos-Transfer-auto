@@ -39,7 +39,9 @@ from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates, safe_rmtree
 from .utils.hashing import short_hash, video_cache_key
 from .utils.checkpoints import (
+    CHECKPOINT_DIRNAME,
     checkpoint_dir_for_job,
+    clear_checkpoint_dir,
     job_done_marker_path,
     mark_done,
     any_marker_exists,
@@ -87,6 +89,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 
     _bootstrap_checkpoints(
         checkpoint_dir=checkpoint_dir,
+        checkpoint_root=repos.work_dir / CHECKPOINT_DIRNAME,
         job_done_marker=job_done_marker,
         step0_marker=step0_marker,
         step1_marker=step1_marker,
@@ -670,6 +673,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
 def _bootstrap_checkpoints(
     *,
     checkpoint_dir: Path,
+    checkpoint_root: Path,
     job_done_marker: Path,
     step0_marker: Path,
     step1_marker: Path,
@@ -685,8 +689,13 @@ def _bootstrap_checkpoints(
     input_root: Path,
     job: Job,
 ) -> None:
-    """Infer step markers from existing artifacts when no checkpoint files exist."""
+    """Infer step markers from existing artifacts when no checkpoint files exist.
+
+    If any checkpoint exists before step5 completes, clear it so the job restarts at step0.
+    """
     if any_marker_exists(checkpoint_dir):
+        if not marker_exists(step5_marker):
+            clear_checkpoint_dir(checkpoint_dir, root=checkpoint_root)
         return
 
     if paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
