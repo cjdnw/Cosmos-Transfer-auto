@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -641,6 +642,11 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     except Exception as e:
         append_log(paths.log_path, f"[FAILED] {repr(e)}")
         console_print(f"[JOB FAIL] {job.video_path.name}  variant={job.variant_idx}  job_id={job.job_id}")
+        _copy_fail_log(
+            work_dir=repos.work_dir,
+            job_id=job.job_id,
+            log_path=paths.log_path,
+        )
 
         append_manifest(
             repos.work_dir,
@@ -665,6 +671,24 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         status = "success" if job_success else "failed"
         _log_duration(f"JOB TOTAL ({status})", job_duration)
         _cleanup_job_cache_dirs(cfg=cfg, job=job, output_dir=paths.output_dir, log_path=paths.log_path)
+
+
+def _copy_fail_log(
+    *,
+    work_dir: Path,
+    job_id: str,
+    log_path: Path,
+) -> None:
+    log_fail_dir = work_dir / "log_fail"
+    log_fail_dir.mkdir(parents=True, exist_ok=True)
+    if not log_path.exists():
+        return
+    target = log_fail_dir / f"{log_path.stem}__{job_id}{log_path.suffix}"
+    try:
+        shutil.copy2(log_path, target)
+        append_log(log_path, f"[FAILED] saved log to {target}")
+    except Exception as exc:
+        append_log(log_path, f"[FAILED] could not save log {log_path}: {exc!r}")
 
 
 def _bootstrap_checkpoints(
