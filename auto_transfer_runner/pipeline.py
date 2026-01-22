@@ -40,12 +40,14 @@ from .utils.manifest import append_manifest
 from .utils.cleanup import cleanup_job_intermediates, safe_rmtree
 from .utils.hashing import short_hash, video_cache_key
 from .utils.checkpoints import (
+    CHECKPOINT_DIRNAME,
     checkpoint_dir_for_job,
-    job_done_marker_path,
-    mark_done,
     any_marker_exists,
+    clear_checkpoint_dir,
+    job_done_marker_path,
     marker_exists,
     marker_path,
+    mark_done,
 )
 
 
@@ -86,23 +88,35 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     step5_restore_marker = marker_path(checkpoint_dir, "step5_restore")
     step6_marker = marker_path(checkpoint_dir, "step6_arm_swap")
 
-    _bootstrap_checkpoints(
-        checkpoint_dir=checkpoint_dir,
-        job_done_marker=job_done_marker,
-        step0_marker=step0_marker,
-        step1_marker=step1_marker,
-        step1_5_5_marker=step1_5_5_marker,
-        step2_marker=step2_marker,
-        step3_marker=step3_marker,
-        step4_marker=step4_marker,
-        step5_marker=step5_marker,
-        step5_restore_marker=step5_restore_marker,
-        step6_marker=step6_marker,
-        paths=paths,
-        cfg=cfg,
-        input_root=input_root,
-        job=job,
-    )
+    checkpoint_reset = False
+    if any_marker_exists(checkpoint_dir) and not marker_exists(step5_marker):
+        checkpoint_root = repos.work_dir / CHECKPOINT_DIRNAME
+        append_log(
+            paths.log_path,
+            f"[CHECKPOINT RESET] cleared partial markers (missing step5): {checkpoint_dir}",
+        )
+        console_print(f"[CHECKPOINT RESET] cleared partial markers: {checkpoint_dir}")
+        clear_checkpoint_dir(checkpoint_dir, root=checkpoint_root)
+        checkpoint_reset = True
+
+    if not checkpoint_reset:
+        _bootstrap_checkpoints(
+            checkpoint_dir=checkpoint_dir,
+            job_done_marker=job_done_marker,
+            step0_marker=step0_marker,
+            step1_marker=step1_marker,
+            step1_5_5_marker=step1_5_5_marker,
+            step2_marker=step2_marker,
+            step3_marker=step3_marker,
+            step4_marker=step4_marker,
+            step5_marker=step5_marker,
+            step5_restore_marker=step5_restore_marker,
+            step6_marker=step6_marker,
+            paths=paths,
+            cfg=cfg,
+            input_root=input_root,
+            job=job,
+        )
 
     if marker_exists(job_done_marker) and has_transfer_output_mp4(paths.output_dir):
         append_log(paths.log_path, f"[SKIP] job checkpoint done: {job_done_marker}")
