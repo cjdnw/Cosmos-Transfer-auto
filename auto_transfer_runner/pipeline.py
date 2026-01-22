@@ -75,6 +75,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     )
     checkpoint_dir = checkpoint_dir_for_job(repos.work_dir, paths.output_dir)
     job_done_marker = job_done_marker_path(checkpoint_dir)
+    step0_marker = marker_path(checkpoint_dir, "step0_probe")
+    step1_marker = marker_path(checkpoint_dir, "step1_preprocess")
+    step1_5_5_marker = marker_path(checkpoint_dir, "step1_5_5_preflight")
     step2_marker = marker_path(checkpoint_dir, "step2_prompt")
     step3_marker = marker_path(checkpoint_dir, "step3_control")
     step4_marker = marker_path(checkpoint_dir, "step4_json")
@@ -85,6 +88,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     _bootstrap_checkpoints(
         checkpoint_dir=checkpoint_dir,
         job_done_marker=job_done_marker,
+        step0_marker=step0_marker,
+        step1_marker=step1_marker,
+        step1_5_5_marker=step1_5_5_marker,
         step2_marker=step2_marker,
         step3_marker=step3_marker,
         step4_marker=step4_marker,
@@ -156,6 +162,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "STEP0 Probe Original",
                 lambda: probe_video_stats(job.video_path, env=env, log_path=paths.log_path),
             )
+            mark_done(step0_marker)
         preprocessed_video = _run_with_timing(
             "STEP1 Preprocess",
             lambda: preprocess_video(
@@ -185,6 +192,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 stale_lock_sec=cfg.cache.stale_lock_sec,
             ),
         )
+        mark_done(step1_marker)
         if preprocessed_video is not None:
             candidate_map_path = frame_map_path_for(preprocessed_video)
             if candidate_map_path.exists():
@@ -233,6 +241,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     job_index=job.job_index,
                 ),
             )
+            mark_done(step1_5_5_marker)
 
         # Step2: prompt
         if marker_exists(step2_marker) and paths.prompt_path.exists() and paths.prompt_path.stat().st_size > 0:
@@ -662,6 +671,9 @@ def _bootstrap_checkpoints(
     *,
     checkpoint_dir: Path,
     job_done_marker: Path,
+    step0_marker: Path,
+    step1_marker: Path,
+    step1_5_5_marker: Path,
     step2_marker: Path,
     step3_marker: Path,
     step4_marker: Path,
