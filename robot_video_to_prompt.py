@@ -121,9 +121,24 @@ PARAGRAPH:
 {base_prompt}
 """
 
-REPLACEMENT_JSON_PROMPT_TEMPLATE = """Generate prompt variations.
-For each phrase below, propose {num_alternatives} short alternatives that keep the same object/category
-and stay grounded in indoor robotics scenes.
+REPLACEMENT_JSON_PROMPT_TEMPLATE = """Output protocol (must follow exactly):
+- Only output a single JSON object.
+- No markdown. No code fences. No extra text.
+- The top-level must be an object with exactly one key: "replacements".
+- "replacements" must be an object mapping string -> array[string].
+- Output must be valid JSON that can be parsed by json.loads() directly.
+
+Valid example:
+{"replacements":{
+  "red":["scarlet","crimson","ruby"],
+  "plastic":["polymer","synthetic","resin"]
+}}
+
+Invalid examples: [...], {{"data": ...}}, Here is the JSON: {{...}}
+
+Task:
+Generate prompt variations. For each phrase below, propose {num_alternatives} short alternatives
+that keep the same object/category and stay grounded in indoor robotics scenes.
 
 Rules:
 - Do NOT repeat the original.
@@ -137,8 +152,6 @@ Rules:
 - Avoid rare or poetic color words.
 - Avoid vague/qualifier words (e.g., "pale", "light", "dark", "soft", "muted", "faint", "slight", "subtle", "smooth"), unless the source phrase already contains them (keeping them is acceptable to preserve fidelity).
 - Do NOT include robot-related terms (robot/robotic/arm/gripper/end-effector/finger/base/mount/joint/cable/wire/sensor).
-- Output STRICT JSON only:
-  {{"replacements": {{"<src>": ["alt1", ...], ...}}}}
 
 DESCRIPTORS:
 {descriptor_block}
@@ -1514,6 +1527,48 @@ def step3_generate_replacements_json(
 ) -> Dict[str, List[str]]:
     """Generate a per-descriptor replacement list (Step3).
     """
+    def _normalize_replacements(parsed_json) -> Dict[str, List[str]]:
+        # Case 1: model returns {"replacements": {...}} or {term: [cand...], ...}
+        if isinstance(parsed_json, dict):
+            if "replacements" in parsed_json:
+                rr = parsed_json["replacements"] or {}
+                return rr if isinstance(rr, dict) else {}
+            if all(isinstance(v, list) for v in parsed_json.values()):
+                return parsed_json
+            raise ValueError(f"Unexpected dict schema keys={list(parsed_json.keys())[:20]}")
+
+        # Case 2: model returns a top-level list
+        if isinstance(parsed_json, list):
+            repl_map: Dict[str, List[str]] = {}
+            for item in parsed_json:
+                if isinstance(item, dict):
+                    term = item.get("term") or item.get("source") or item.get("src") or item.get("key")
+                    cands = (
+                        item.get("replacements")
+                        or item.get("candidates")
+                        or item.get("alts")
+                        or item.get("options")
+                        or item.get("values")
+                    )
+                    if term and isinstance(cands, list):
+                        repl_map[str(term)] = cands
+                        continue
+                    if "replacements" in item and isinstance(item["replacements"], dict):
+                        for k, v in item["replacements"].items():
+                            if isinstance(v, list):
+                                repl_map[str(k)] = v
+                        continue
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    term = str(item[0])
+                    v = item[1]
+                    repl_map[term] = v if isinstance(v, list) else [str(v)]
+                    continue
+            if repl_map:
+                return repl_map
+            raise ValueError("Parsed JSON is a list, but cannot normalize to replacements mapping.")
+
+        raise TypeError(f"Unexpected parsed type: {type(parsed_json)}")
+
     bracketed_prompt = expand_bracketed_prompt(bracketed_prompt)
     terms = extract_bracket_terms(bracketed_prompt)
     terms = [t for t in terms if not any(keyword in t.lower() for keyword in ROBOT_KEYWORDS)]
@@ -1540,9 +1595,7 @@ def step3_generate_replacements_json(
     }]
     raw = run_generation(model, processor, messages, 800, True, 0.9, 0.95)
     parsed = safe_parse_json(raw)
-    raw_replacements = parsed.get("replacements", {}) or {}
-    if not isinstance(raw_replacements, dict):
-        raw_replacements = {}
+    raw_replacements = _normalize_replacements(parsed)
 
     # Normalize keys to reduce "zero replacements" caused by punctuation/hyphen differences.
     raw_key_map: Dict[str, str] = {}
