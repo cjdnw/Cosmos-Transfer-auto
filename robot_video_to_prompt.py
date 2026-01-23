@@ -1462,7 +1462,7 @@ def step2_prepare_clause_context(model, processor, base_prompt: str) -> str:
 
 
 def step2_bracket_base(model, processor, base_prompt: str) -> str:
-    clause_context = step2_prepare_clause_context(model, processor, base_prompt)
+    clause_context = base_prompt
     messages = [{
         "role": "user",
         "content": [{"type": "text", "text": DESCRIPTOR_EXTRACT_PROMPT_TEMPLATE.format(base_prompt=base_prompt)}],
@@ -1485,7 +1485,6 @@ def step2_bracket_base(model, processor, base_prompt: str) -> str:
     spans = _collect_existing_spans(base_prompt, cleaned)
     merged = _merge_spans(spans)
     bracketed = _insert_brackets(base_prompt, merged)
-    bracketed = _reflect_brackets(model, processor, base_prompt, bracketed)
     return _expand_shared_noun_phrases(base_prompt, bracketed)
 
 

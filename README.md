@@ -474,6 +474,12 @@ python scripts/run_batch.py ... --cleanup_logs
 
 **输出**：`bracket.txt`（带 `【】` 的标注描述）
 
+#### Step2 性能优化（可选）
+Step2 默认包含 3 次模型调用：分句预处理、描述抽取、括号反思校验。若对 prompt 质量要求不高、或希望显著加速，可考虑关闭以下两步：
+1. 分句预处理（`step2_prepare_clause_context`）
+2. 括号反思校验（`_reflect_brackets`）
+保留“描述抽取”即可完成可替换短语标注，但括号精度可能略下降、机器人上下文过滤可能略受影响。
+
 ### Step 3：生成替换候选 + 随机替换
 **入口命令**：`step3_replacements` / `step23` / `step3_apply`  
 **候选生成流程**（`step3_generate_replacements_json`）：
