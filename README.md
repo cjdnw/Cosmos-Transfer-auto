@@ -106,14 +106,25 @@ python scripts/run_batch.py \
   --control_type depth
 ```
 
-### 例 2.5：按 task.parquet 分组抽样（每个任务最多选 N 个）
-`task.parquet` 默认位于数据集根目录下的 `meta/` 目录（与 `videos/` 同级）；程序会根据 `videos/` 的父目录定位 `meta/task.parquet` 并按内容分组。
+### 例 2.5：按 tasks.parquet 分组抽样（每个任务最多选 N 个）
+`tasks.parquet`（或兼容 `task.parquet`）默认位于数据集根目录下的 `meta/` 目录（与 `videos/` 同级）；程序会根据 `videos/` 的父目录定位 `meta/tasks.parquet` 并按内容分组。
 ```bash
 python scripts/run_batch.py \
   --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
   --gpus 0 \
   --control_type depth \
   --selective_task 3
+```
+如需断点续传并保持每次抽样一致，可以指定随机种子并保存选择清单（默认写到 `<work_dir>/selection_<hash>.json`，下次会在参数一致时自动复用）：
+```bash
+python scripts/run_batch.py \
+  --input_dir /mnt/data/ganrunhe/auto_transfer/raw_mp4 \
+  --gpus 0 \
+  --control_type depth \
+  --selective_task 3 \
+  --shuffle \
+  --shuffle_seed 123 \
+  --selection_file /mnt/data/ganrunhe/auto_transfer/work/selection_custom.json
 ```
 
 ### 例 3：自动生成 seg 控制信号（缓存复用）

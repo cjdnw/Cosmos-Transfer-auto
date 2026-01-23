@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import multiprocessing as mp
 import os
 import random
@@ -68,13 +69,35 @@ def now_tag() -> str:
     return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
+def selection_file_name(
+    input_dir: Path,
+    num_videos: int,
+    shuffle: bool,
+    shuffle_seed: Optional[int],
+    selective_task: int,
+) -> str:
+    key = f"{input_dir.resolve()}|{num_videos}|{shuffle}|{shuffle_seed}|{selective_task}"
+    digest = short_hash(key, 10)
+    return f"selection_{digest}.json"
+
+
 def _task_parquet_for_video(video_path: Path, input_root: Path) -> Optional[Path]:
-    """Find task.parquet using the dataset root derived from videos/."""
+    """Find tasks.parquet (or task.parquet) using the dataset root derived from videos/."""
     try:
         candidate = task_parquet_for_video(video_path)
     except ValueError:
-        return None
-    return candidate if candidate.is_file() else None
+        candidate = None
+    if candidate is not None and candidate.is_file():
+        return candidate
+    input_root = input_root.resolve()
+    for parent in [video_path.parent, *video_path.parents]:
+        for candidate in ("tasks.parquet", "task.parquet"):
+            fallback = parent / "meta" / candidate
+            if fallback.is_file():
+                return fallback
+        if parent == input_root:
+            break
+    return None
 
 
 def _hash_file(path: Path) -> str:
@@ -92,11 +115,13 @@ def pick_videos(
     num_videos: int,
     shuffle: bool,
     selective_task_max: int,
+    shuffle_seed: Optional[int] = None,
 ) -> List[Path]:
     """Select unique input videos from a folder tree (recursive)."""
     videos = sorted([p for p in input_dir.rglob("*.mp4") if p.is_file()])
     if shuffle:
-        random.shuffle(videos)
+        rng = random.Random(shuffle_seed)
+        rng.shuffle(videos)
     if selective_task_max > 0:
         max_per_task = selective_task_max
         selected: List[Path] = []
@@ -389,6 +414,13 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--input_dir", required=True, help="Directory that contains source .mp4 files (recursive)")
     ap.add_argument("--num_videos", type=int, default=0, help="How many unique input videos to process; 0 = all")
     ap.add_argument("--shuffle", action="store_true", help="Shuffle videos before selecting the first N")
+    ap.add_argument("--shuffle_seed", type=int, default=None, help="Seed for shuffle to keep selection deterministic")
+    ap.add_argument(
+        "--selection_file",
+        type=str,
+        default=None,
+        help="Optional JSON file to persist/reuse selected videos (default: <work_dir>/selection_<hash>.json)",
+    )
     ap.add_argument(
         "--selective_task",
         type=int,
@@ -396,7 +428,7 @@ def main(argv: List[str] | None = None) -> None:
         const=3,
         default=0,
         metavar="N",
-        help="Select videos by task.parquet content; keep at most N videos per task (default: 3)",
+        help="Select videos by tasks.parquet content; keep at most N videos per task (default: 3)",
     )
     ap.add_argument("--gpus", type=str, default="", help="GPU list, e.g. 0,1,2,3; empty = 0")
     ap.add_argument("--console", action="store_true", help="Print high-level progress to console (stdout)")
@@ -912,7 +944,66 @@ def main(argv: List[str] | None = None) -> None:
 
     cfg.repos.work_dir.mkdir(parents=True, exist_ok=True)
 
-    videos = pick_videos(input_dir, args.num_videos, args.shuffle, args.selective_task)
+    default_selection_name = selection_file_name(
+        input_dir,
+        args.num_videos,
+        args.shuffle,
+        args.shuffle_seed,
+        args.selective_task,
+    )
+    selection_path = (
+        Path(args.selection_file)
+        if args.selection_file
+        else cfg.repos.work_dir / default_selection_name
+    )
+    if selection_path.exists():
+        with selection_path.open("r", encoding="utf-8") as f:
+            selection = json.load(f)
+        expected = {
+            "input_dir": str(input_dir.resolve()),
+            "num_videos": args.num_videos,
+            "shuffle": args.shuffle,
+            "shuffle_seed": args.shuffle_seed,
+            "selective_task": args.selective_task,
+        }
+        mismatches = {
+            key: (selection.get(key), value)
+            for key, value in expected.items()
+            if selection.get(key) != value
+        }
+        if mismatches:
+            raise ValueError(
+                "selection_file settings mismatch: "
+                + ", ".join(
+                    f"{key}={found!r} != {expected_value!r}"
+                    for key, (found, expected_value) in mismatches.items()
+                )
+                + ". Delete the selection file or pick a new --selection_file."
+            )
+        videos = [Path(p) for p in selection.get("videos", [])]
+    else:
+        videos = pick_videos(
+            input_dir,
+            args.num_videos,
+            args.shuffle,
+            args.selective_task,
+            args.shuffle_seed,
+        )
+        selection_path.parent.mkdir(parents=True, exist_ok=True)
+        with selection_path.open("w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "input_dir": str(input_dir.resolve()),
+                    "num_videos": args.num_videos,
+                    "shuffle": args.shuffle,
+                    "shuffle_seed": args.shuffle_seed,
+                    "selective_task": args.selective_task,
+                    "videos": [str(vp) for vp in videos],
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
     if not videos:
         raise RuntimeError("No mp4 files found in input_dir.")
 

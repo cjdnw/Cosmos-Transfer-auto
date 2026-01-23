@@ -106,6 +106,9 @@ def parquet_path_for_video(video_path: Path, *, dataset_root: Path | None = None
 
 
 def task_parquet_for_video(video_path: Path) -> Path:
-    """Locate meta/task.parquet from the dataset root derived by videos/ parent."""
+    """Locate meta/tasks.parquet (or task.parquet) from the dataset root."""
     dataset_root = find_dataset_root(video_path)
+    tasks_path = dataset_root / "meta" / "tasks.parquet"
+    if tasks_path.exists():
+        return tasks_path
     return dataset_root / "meta" / "task.parquet"
