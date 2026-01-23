@@ -73,8 +73,17 @@ def _task_parquet_for_video(video_path: Path, input_root: Path) -> Optional[Path
     try:
         candidate = task_parquet_for_video(video_path)
     except ValueError:
-        return None
-    return candidate if candidate.is_file() else None
+        candidate = None
+    if candidate is not None and candidate.is_file():
+        return candidate
+    input_root = input_root.resolve()
+    for parent in [video_path.parent, *video_path.parents]:
+        fallback = parent / "meta" / "task.parquet"
+        if fallback.is_file():
+            return fallback
+        if parent == input_root:
+            break
+    return None
 
 
 def _hash_file(path: Path) -> str:
