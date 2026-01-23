@@ -69,7 +69,7 @@ def now_tag() -> str:
 
 
 def _task_parquet_for_video(video_path: Path, input_root: Path) -> Optional[Path]:
-    """Find task.parquet using the dataset root derived from videos/."""
+    """Find tasks.parquet (or task.parquet) using the dataset root derived from videos/."""
     try:
         candidate = task_parquet_for_video(video_path)
     except ValueError:
@@ -78,9 +78,10 @@ def _task_parquet_for_video(video_path: Path, input_root: Path) -> Optional[Path
         return candidate
     input_root = input_root.resolve()
     for parent in [video_path.parent, *video_path.parents]:
-        fallback = parent / "meta" / "task.parquet"
-        if fallback.is_file():
-            return fallback
+        for candidate in ("tasks.parquet", "task.parquet"):
+            fallback = parent / "meta" / candidate
+            if fallback.is_file():
+                return fallback
         if parent == input_root:
             break
     return None
@@ -405,7 +406,7 @@ def main(argv: List[str] | None = None) -> None:
         const=3,
         default=0,
         metavar="N",
-        help="Select videos by task.parquet content; keep at most N videos per task (default: 3)",
+        help="Select videos by tasks.parquet content; keep at most N videos per task (default: 3)",
     )
     ap.add_argument("--gpus", type=str, default="", help="GPU list, e.g. 0,1,2,3; empty = 0")
     ap.add_argument("--console", action="store_true", help="Print high-level progress to console (stdout)")
