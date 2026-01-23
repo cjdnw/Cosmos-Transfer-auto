@@ -41,7 +41,7 @@ from .config import (
 )
 from .pipeline import Job, run_job
 from .utils.hashing import short_hash
-from .utils.logging_utils import format_console_line
+from .utils.logging_utils import console_print, format_console_line
 from .utils.paths import make_output_dir
 from .utils.dataset_paths import task_parquet_for_video
 from .utils.checkpoints import (
@@ -101,18 +101,44 @@ def pick_videos(
         max_per_task = selective_task_max
         selected: List[Path] = []
         task_counts: Dict[str, int] = {}
+        task_paths: Dict[str, Path] = {}
+        task_total_videos: Dict[str, int] = {}
+        task_selected_videos: Dict[str, int] = {}
+        missing_task_parquet = 0
         for video in videos:
             task_parquet = _task_parquet_for_video(video, input_dir)
             if task_parquet is None:
                 selected.append(video)
+                missing_task_parquet += 1
                 continue
             task_key = _hash_file(task_parquet)
+            task_paths.setdefault(task_key, task_parquet)
+            task_total_videos[task_key] = task_total_videos.get(task_key, 0) + 1
             task_counts.setdefault(task_key, 0)
             if task_counts[task_key] >= max_per_task:
                 continue
             task_counts[task_key] += 1
+            task_selected_videos[task_key] = task_selected_videos.get(task_key, 0) + 1
             selected.append(video)
         videos = selected
+        duplicate_task_videos = sum(
+            max(0, count - 1) for count in task_total_videos.values()
+        )
+        console_print(
+            "[SELECTIVE_TASK] max_per_task="
+            f"{max_per_task} unique_tasks={len(task_total_videos)} "
+            f"missing_task_parquet={missing_task_parquet} "
+            f"task_videos={sum(task_total_videos.values())} "
+            f"duplicate_task_videos={duplicate_task_videos} "
+            f"selected={len(videos)}"
+        )
+        for task_key, total_count in sorted(task_total_videos.items()):
+            selected_count = task_selected_videos.get(task_key, 0)
+            task_path = task_paths.get(task_key)
+            console_print(
+                "[SELECTIVE_TASK] task_parquet="
+                f"{task_path} total={total_count} selected={selected_count}"
+            )
     if num_videos and num_videos > 0:
         videos = videos[:num_videos]
     return videos
