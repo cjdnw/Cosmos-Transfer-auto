@@ -599,7 +599,10 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 video_path=job.video_path,
                 variant_idx=job.variant_idx,
             )
-            if marker_exists(step6_marker):
+            if marker_exists(step6_marker) and (
+                arm_swap_output_base_dir is not None
+                and _has_mp4_in_dir(arm_swap_output_base_dir)
+            ):
                 append_log(paths.log_path, f"[SKIP] step6 checkpoint exists: {step6_marker}")
                 console_print(f"[SKIP] step6 arm swap (checkpoint): {paths.output_dir.name}")
             else:

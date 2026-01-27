@@ -429,6 +429,20 @@ python scripts/run_batch.py ... --cleanup_logs
 - 若标记不存在，会根据 `output_video/<input>_var_x/...` 目录下的已有产物推断进度并补齐标记
 - 当本次批处理所有变体均完成后，会自动清空这批任务的标记目录
 
+### 任务分配与中断后续跑注意事项
+队列在启动时**一次性**将所有任务按 variant 分层入队：先入队所有视频的 `variant=0`，再入队 `variant=1`...。因此：
+- 如果中途手动中断，后续 variant 可能只跑到一部分（常见现象：`var3/4/5` 数量一致且明显偏小）。
+- 直接重启时，任务会重新入队，但已完成的变体会被 checkpoint / 输出产物判断为已完成而被跳过；若你只完成了 `var0`，其余变体会继续缺失。
+
+为了解决“中断后只想补齐未完成变体”的需求，新增了 `--resume_incomplete`：
+```bash
+python scripts/run_batch.py ... --variants_per_video 5 --resume_incomplete
+```
+该开关会在入队前检查输出目录：
+- Step5 的 `output_video/...` 下存在 mp4 即视为完成；
+- 若开启 Step6（arm swap），则还要求 Step6 输出目录也存在 mp4；
+仅将**缺少产物**的变体重新入队，从而实现安全续跑。
+
 ## 待完成项目
 - depth 控制信号质量不佳，需研究提升方案。
 - seg 当前使用 sam1 全自动单帧分割 + sam2 分割跟踪，可考虑改为 sam1+sam3 或 sam1+sam3+Cuite，待研究。
