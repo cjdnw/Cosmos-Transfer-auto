@@ -44,6 +44,7 @@ from .pipeline import Job, run_job
 from .utils.hashing import short_hash
 from .utils.logging_utils import console_print, format_console_line
 from .utils.paths import make_output_dir
+from .steps.postprocess import has_transfer_output_mp4
 from .utils.dataset_paths import task_parquet_for_video
 from .utils.checkpoints import (
     CHECKPOINT_DIRNAME,
@@ -392,6 +393,15 @@ def worker_loop(gpu_id: str, q: mp.Queue, cfg: GlobalConfig) -> None:
             continue
 
 
+def _has_mp4_in_dir(directory: Path) -> bool:
+    if not directory.exists():
+        return False
+    for mp4 in directory.glob("*.mp4"):
+        if mp4.is_file() and mp4.stat().st_size > 0:
+            return True
+    return False
+
+
 def main(argv: List[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="run_batch.py",
@@ -436,6 +446,14 @@ def main(argv: List[str] | None = None) -> None:
     # Repeat each video K times
     ap.add_argument("--variants_per_video", type=int, default=1,
                     help="Repeat each input video K times to generate K different outputs (default: 1)")
+    ap.add_argument(
+        "--resume_incomplete",
+        action="store_true",
+        help=(
+            "Only enqueue variants missing outputs (Step5 mp4 and, when enabled, Step6 mp4). "
+            "Useful after an interrupted run."
+        ),
+    )
 
     # Paths (all configurable via CLI)
     ap.add_argument("--work_dir", type=str, default=str(DEFAULT_WORK_DIR), help="Work/output directory")
@@ -1014,12 +1032,30 @@ def main(argv: List[str] | None = None) -> None:
     q: mp.Queue = mp.Queue()
     batch_tag = now_tag()
     base_hashes = [short_hash(str(vp.resolve()), 8) for vp in videos]
+    output_root = cfg.repos.work_dir / "output_video"
 
     job_index = 0
     for v in range(args.variants_per_video):
         for idx, vp in enumerate(videos):
             base_hash = base_hashes[idx]
             job_id = f"{batch_tag}__{idx:04d}__v{v:03d}__{base_hash}"
+            output_dir = make_output_dir(
+                output_root,
+                input_root=input_dir,
+                video_path=vp,
+                variant_idx=v,
+            )
+            arm_swap_output_dir = make_output_dir(
+                cfg.arm_swap.output_root,
+                input_root=input_dir,
+                video_path=vp,
+                variant_idx=v,
+            )
+            outputs_complete = has_transfer_output_mp4(output_dir) and (
+                not cfg.arm_swap.enable or _has_mp4_in_dir(arm_swap_output_dir)
+            )
+            if args.resume_incomplete and outputs_complete:
+                continue
             q.put(
                 {
                     "video_path": str(vp),
@@ -1046,7 +1082,6 @@ def main(argv: List[str] | None = None) -> None:
         p.join()
 
     expected_jobs = len(videos) * args.variants_per_video
-    output_root = cfg.repos.work_dir / "output_video"
     checkpoint_root = cfg.repos.work_dir / CHECKPOINT_DIRNAME
     job_checkpoint_dirs = []
     completed_jobs = 0
