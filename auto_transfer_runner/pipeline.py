@@ -87,6 +87,17 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
     step5_restore_marker = marker_path(checkpoint_dir, "step5_restore")
     step6_marker = marker_path(checkpoint_dir, "step6_arm_swap")
 
+    arm_swap_output_base_dir = (
+        make_output_dir(
+            cfg.arm_swap.output_root,
+            input_root=input_root,
+            video_path=job.video_path,
+            variant_idx=job.variant_idx,
+        )
+        if cfg.arm_swap.enable
+        else None
+    )
+
     _bootstrap_checkpoints(
         checkpoint_dir=checkpoint_dir,
         checkpoint_root=repos.work_dir / CHECKPOINT_DIRNAME,
@@ -105,6 +116,46 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         input_root=input_root,
         job=job,
     )
+
+    outputs_complete = has_transfer_output_mp4(paths.output_dir) and (
+        arm_swap_output_base_dir is None or _has_mp4_in_dir(arm_swap_output_base_dir)
+    )
+
+    if outputs_complete:
+        mark_done(step5_marker)
+        if cfg.postprocess.restore_duration:
+            mark_done(step5_restore_marker)
+        if arm_swap_output_base_dir is not None:
+            mark_done(step6_marker)
+        mark_done(job_done_marker)
+        append_log(paths.log_path, "[SKIP] outputs already exist (step5 + step6); marking job done.")
+        console_print(
+            f"[SKIP] outputs already exist: {job.video_path.name} variant={job.variant_idx}"
+        )
+        append_manifest(
+            repos.work_dir,
+            {
+                "status": "done",
+                "input_video": str(job.video_path),
+                "variant_idx": job.variant_idx,
+                "job_id": job.job_id,
+                "control_type": cfg.run.control_type,
+                "prompt_path": str(paths.prompt_path),
+                "json_path": str(paths.json_path),
+                "output_dir": str(paths.output_dir),
+                "arm_swap_output": (
+                    str(arm_swap_output_base_dir) if arm_swap_output_base_dir is not None else None
+                ),
+                "post_restore_output": (
+                    str(find_transfer_output_mp4(paths.output_dir))
+                    if cfg.postprocess.restore_duration
+                    else None
+                ),
+                "log_path": str(paths.log_path),
+                "skip_reason": "output_exists",
+            },
+        )
+        return
 
     if marker_exists(job_done_marker) and has_transfer_output_mp4(paths.output_dir):
         append_log(paths.log_path, f"[SKIP] job checkpoint done: {job_done_marker}")
@@ -707,7 +758,7 @@ def _bootstrap_checkpoints(
 
     if has_transfer_output_mp4(paths.output_dir):
         mark_done(step5_marker)
-        if cfg.postprocess.restore_duration and marker_exists(step5_restore_marker):
+        if cfg.postprocess.restore_duration:
             mark_done(step5_restore_marker)
 
     if cfg.arm_swap.enable:
@@ -738,14 +789,18 @@ def _arm_swap_output_exists(
         if arm_swap_cfg.bbox_json is None:
             return False
         return arm_swap_cfg.bbox_json.exists() and arm_swap_cfg.bbox_json.stat().st_size > 0
-    if not output_dir.exists():
+    if not has_transfer_output_mp4(output_dir):
         return False
-    mp4s = sorted([p for p in output_dir.glob("*.mp4") if p.is_file()])
-    if not mp4s:
+    return _has_mp4_in_dir(output_base_dir)
+
+
+def _has_mp4_in_dir(directory: Path) -> bool:
+    if not directory.exists():
         return False
-    output_base_dir.mkdir(parents=True, exist_ok=True)
-    expected = output_base_dir / mp4s[0].name
-    return expected.exists() and expected.stat().st_size > 0
+    for mp4 in directory.glob("*.mp4"):
+        if mp4.is_file() and mp4.stat().st_size > 0:
+            return True
+    return False
 
 
 def _cleanup_job_cache_dirs(
