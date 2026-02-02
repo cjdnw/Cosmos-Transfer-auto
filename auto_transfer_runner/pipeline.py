@@ -32,11 +32,11 @@ from .steps.postprocess import (
     has_transfer_output_mp4,
 )
 from .steps.keyframe_preflight import ProxyPreflightSettings, run_proxy_iou_preflight
-from .utils.logging_utils import append_log, console_print
+from .utils.logging_utils import append_log, classify_job_log, console_print
 from .utils.paths import PathBundle, make_job_paths, make_output_dir
 from .utils.text import sanitize_name
 from .utils.manifest import append_manifest
-from .utils.cleanup import cleanup_job_intermediates, safe_rmtree
+from .utils.cleanup import cleanup_job_intermediates, safe_rmtree, safe_unlink
 from .utils.hashing import short_hash, video_cache_key
 from .utils.checkpoints import (
     CHECKPOINT_DIRNAME,
@@ -155,6 +155,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "skip_reason": "output_exists",
             },
         )
+        classify_job_log(paths.log_path, "success")
         return
 
     if marker_exists(job_done_marker) and has_transfer_output_mp4(paths.output_dir):
@@ -181,6 +182,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                 "skip_reason": "checkpoint",
             },
         )
+        classify_job_log(paths.log_path, "success")
         return
 
     def _log_duration(step_label: str, duration_sec: float) -> None:
@@ -688,7 +690,7 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
                     delete_prompt=cfg.cleanup.delete_prompt,
                     delete_json=cfg.cleanup.delete_json,
                     delete_non_cached_control_dir=cfg.cleanup.delete_non_cached_control_dir,
-                    delete_log=cfg.cleanup.delete_log,
+                    delete_log=False,
                 ),
             )
 
@@ -722,6 +724,9 @@ def run_job(job: Job, cfg: GlobalConfig, env: Dict[str, str]) -> None:
         status = "success" if job_success else "failed"
         _log_duration(f"JOB TOTAL ({status})", job_duration)
         _cleanup_job_cache_dirs(cfg=cfg, job=job, output_dir=paths.output_dir, log_path=paths.log_path)
+        classify_job_log(paths.log_path, status)
+        if job_success and cfg.cleanup.delete_log:
+            safe_unlink(paths.log_path, log_path=None)
 
 
 def _bootstrap_checkpoints(
