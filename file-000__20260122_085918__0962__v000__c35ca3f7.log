@@ -1,0 +1,1114 @@
+##########################################################################################
+JOB_ID=20260122_085918__0962__v000__c35ca3f7
+VARIANT_IDX=0
+VIDEO=/mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+##########################################################################################
+[POST_RESTORE] ffprobe: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate -show_entries format=duration -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[POST_RESTORE] stats duration=8.5 frames=255 fps=30.0
+[STEP0 Probe Original] 耗时 0.68s
+[PREPROCESS] ffprobe fps: ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=nokey=1:noprint_wrappers=1 /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[PREPROCESS] probed fps=30.0
+
+==========================================================================================
+[2026-01-24T23:32:04+08:00] STEP1: Preprocess video (CFR/scale)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -i /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4 -vf scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30.0 -vsync cfr -r 30.0 -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/.file-000__pre_fpsorig_wauto_hauto_ka1__tmp.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+[libdav1d @ 0x557214bc8440] libdav1d 0.9.2
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomav01iso2mp41
+    encoder         : Lavf61.7.100
+  Duration: 00:00:08.50, start: 0.000000, bitrate: 3276 kb/s
+  Stream #0:0(und): Video: av1 (Main) (av01 / 0x31307661), yuv420p(tv), 848x480 [SAR 1:1 DAR 53:30], 3274 kb/s, 30 fps, 30 tbr, 15360 tbn, 15360 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+[libdav1d @ 0x557214bcbe80] libdav1d 0.9.2
+Stream mapping:
+  Stream #0:0 -> #0:0 (av1 (libdav1d) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 0x557214bf0580] using SAR=1/1
+[libx264 @ 0x557214bf0580] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x557214bf0580] profile High, level 3.1, 4:2:0, 8-bit
+[libx264 @ 0x557214bf0580] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/.file-000__pre_fpsorig_wauto_hauto_ka1__tmp.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomav01iso2mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 848x480 [SAR 1:1 DAR 53:30], q=2-31, 30 fps, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    frame=  144 fps=0.0 q=29.0 size=       0kB time=00:00:02.73 bitrate=   0.1kbits/s speed=5.27x    frame=  232 fps=228 q=29.0 size=     256kB time=00:00:05.66 bitrate= 370.1kbits/s speed=5.56x    [mp4 @ 0x557214bcc2c0] Starting second pass: moving the moov atom to the beginning of the file
+frame=  255 fps=179 q=-1.0 Lsize=     761kB time=00:00:08.40 bitrate= 742.6kbits/s speed= 5.9x    
+video:758kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.503717%
+[libx264 @ 0x557214bf0580] frame I:3     Avg QP:20.36  size: 22140
+[libx264 @ 0x557214bf0580] frame P:69    Avg QP:22.34  size:  8100
+[libx264 @ 0x557214bf0580] frame B:183   Avg QP:26.55  size:   819
+[libx264 @ 0x557214bf0580] consecutive B-frames:  1.2%  7.8%  4.7% 86.3%
+[libx264 @ 0x557214bf0580] mb I  I16..4:  9.8% 80.9%  9.3%
+[libx264 @ 0x557214bf0580] mb P  I16..4:  2.7% 11.5%  1.6%  P16..4: 30.8% 10.8%  5.4%  0.0%  0.0%    skip:37.2%
+[libx264 @ 0x557214bf0580] mb B  I16..4:  0.2%  0.5%  0.1%  B16..8: 18.7%  1.1%  0.2%  direct: 0.6%  skip:78.6%  L0:53.5% L1:41.8% BI: 4.7%
+[libx264 @ 0x557214bf0580] 8x8 transform intra:73.8% inter:80.1%
+[libx264 @ 0x557214bf0580] coded y,uvDC,uvAC intra: 59.7% 68.0% 18.4% inter: 7.2% 11.5% 0.2%
+[libx264 @ 0x557214bf0580] i16 v,h,dc,p: 14% 29% 13% 44%
+[libx264 @ 0x557214bf0580] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 18% 20% 18%  5%  7% 10%  8%  5% 10%
+[libx264 @ 0x557214bf0580] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 25% 19% 14%  4% 10% 11%  9%  4%  5%
+[libx264 @ 0x557214bf0580] i8c dc,h,v,p: 51% 23% 21%  5%
+[libx264 @ 0x557214bf0580] Weighted P-Frames: Y:13.0% UV:5.8%
+[libx264 @ 0x557214bf0580] ref P L0: 62.6% 17.5% 14.2%  5.0%  0.6%
+[libx264 @ 0x557214bf0580] ref B L0: 90.6%  7.5%  1.8%
+[libx264 @ 0x557214bf0580] ref B L1: 96.2%  3.8%
+[libx264 @ 0x557214bf0580] kb/s:729.55
+[PREPROCESS DONE] output=/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000__pre_fpsorig_wauto_hauto_ka1.mp4
+[PRE_CHUNK] ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nokey=1:noprint_wrappers=1 /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000__pre_fpsorig_wauto_hauto_ka1.mp4
+
+==========================================================================================
+[2026-01-24T23:32:06+08:00] STEP1.5 Align chunks (speed)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -i /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000__pre_fpsorig_wauto_hauto_ka1.mp4 -vf fps=10.941176 -frames:v 93 -vsync cfr -r 10.941176 -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/.file-000__pre_fpsorig_wauto_hauto_ka1__chunk_speed_force_L93_C1_n1_T255_Tt93__tmp.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000__pre_fpsorig_wauto_hauto_ka1.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Duration: 00:00:08.50, start: 0.000000, bitrate: 733 kb/s
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p, 848x480 [SAR 1:1 DAR 53:30], 730 kb/s, 30 fps, 30 tbr, 15360 tbn, 60 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 0x55b33aef75c0] using SAR=1/1
+[libx264 @ 0x55b33aef75c0] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x55b33aef75c0] profile High, level 2.2, 4:2:0, 8-bit
+[libx264 @ 0x55b33aef75c0] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=10 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/.file-000__pre_fpsorig_wauto_hauto_ka1__chunk_speed_force_L93_C1_n1_T255_Tt93__tmp.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(progressive), 848x480 [SAR 1:1 DAR 53:30], q=2-31, 10.94 fps, 1000855.00 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    [mp4 @ 0x55b33aeed140] Starting second pass: moving the moov atom to the beginning of the file
+frame=   93 fps=0.0 q=-1.0 Lsize=     617kB time=00:00:08.22 bitrate= 614.0kbits/s speed=10.7x    
+video:615kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.315583%
+[libx264 @ 0x55b33aef75c0] frame I:3     Avg QP:18.21  size: 24434
+[libx264 @ 0x55b33aef75c0] frame P:26    Avg QP:20.58  size: 13917
+[libx264 @ 0x55b33aef75c0] frame B:64    Avg QP:22.11  size:  3023
+[libx264 @ 0x55b33aef75c0] consecutive B-frames:  4.3% 10.8%  3.2% 81.7%
+[libx264 @ 0x55b33aef75c0] mb I  I16..4:  9.4% 77.7% 12.9%
+[libx264 @ 0x55b33aef75c0] mb P  I16..4:  5.0% 24.7%  4.0%  P16..4: 26.1% 14.4%  5.8%  0.0%  0.0%    skip:20.0%
+[libx264 @ 0x55b33aef75c0] mb B  I16..4:  0.7%  2.4%  0.4%  B16..8: 27.6%  5.1%  1.1%  direct: 3.6%  skip:59.2%  L0:43.2% L1:47.5% BI: 9.2%
+[libx264 @ 0x55b33aef75c0] 8x8 transform intra:73.5% inter:78.0%
+[libx264 @ 0x55b33aef75c0] coded y,uvDC,uvAC intra: 64.5% 73.8% 20.2% inter: 15.3% 23.3% 0.2%
+[libx264 @ 0x55b33aef75c0] i16 v,h,dc,p: 15% 31% 13% 41%
+[libx264 @ 0x55b33aef75c0] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 22% 16%  5%  7%  9%  8%  5% 10%
+[libx264 @ 0x55b33aef75c0] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 24% 20% 13%  4% 10% 11%  9%  4%  5%
+[libx264 @ 0x55b33aef75c0] i8c dc,h,v,p: 48% 24% 22%  6%
+[libx264 @ 0x55b33aef75c0] Weighted P-Frames: Y:19.2% UV:7.7%
+[libx264 @ 0x55b33aef75c0] ref P L0: 59.7% 22.3% 13.3%  4.4%  0.4%
+[libx264 @ 0x55b33aef75c0] ref B L0: 91.5%  7.8%  0.7%
+[libx264 @ 0x55b33aef75c0] ref B L1: 97.0%  3.0%
+[libx264 @ 0x55b33aef75c0] kb/s:591.64
+[PRE_CHUNK DONE] mode=speed policy=force T=255 T_target=93 drop=162 n=1 fps=10.941176 output=/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000__pre_fpsorig_wauto_hauto_ka1__chunk_speed_force_L93_C1_n1_T255_Tt93.mp4
+[STEP1 Preprocess] 耗时 2.77s
+[POST_RESTORE] ffprobe: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate -show_entries format=duration -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[POST_RESTORE] stats duration=8.5 frames=255 fps=30.0
+[KEYFRAME] parquet_pose_subset=zarm_pos_vel dims=28 sample_names=['position.zarm_l1_link', 'position.zarm_l2_link', 'position.zarm_l3_link', 'position.zarm_l4_link', 'position.zarm_l5_link', 'position.zarm_l6_link', 'position.zarm_l7_link', 'position.zarm_r1_link', 'position.zarm_r2_link', 'position.zarm_r3_link']
+[KEYFRAME] diffs_p10=1.125200 p50=1.765839 p90=2.561536
+[STEP1.5.5] ffprobe meta: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=width,height,avg_frame_rate,nb_read_frames -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[STEP1.5.5] ffprobe parsed fps=30 width=848 height=480 frames=255
+
+==========================================================================================
+[2026-01-24T23:32:08+08:00] STEP1.5.5: Qwen bbox
+==========================================================================================
+CWD: /mnt/data/ganrunhe/robot_arm_swap_project
+CMD: conda run -n arm_swap python -m robot_arm_swap --orig /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4 --workdir /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam --fps 30 --width 848 --qwen-prompt robotic arm --qwen-only --bbox-json /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam/qwen_boxes.json
+
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+Loading qwen3 model...
+['```json\n[{"bbox_2d": [0, 0, 641, 997], "label": "robotic arm"}]\n```']
+
+
+==========================================================================================
+[2026-01-24T23:32:50+08:00] STEP1.5.5: SAM masks
+==========================================================================================
+CWD: /mnt/data/ganrunhe/robot_arm_swap_project
+CMD: conda run -n arm_swap python -m robot_arm_swap --orig /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4 --workdir /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam --fps 30 --width 848 --sam-only --bbox-json /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam/qwen_boxes.json
+
+[SAM3VideoTracker] Loading 'facebook/sam3' on cuda (dtype=torch.bfloat16) ...
+[SAM3VideoTracker] Loaded.
+[SAM3] Auto scale check: frames=255 size=848x480 estimated=1.16 GiB free=77.90 GiB target=54.53 GiB requested_scale=1 required_scale=1
+[SAM3VideoTracker] processed frame 0
+[SAM3VideoTracker] processed frame 10
+[SAM3VideoTracker] processed frame 20
+[SAM3VideoTracker] processed frame 30
+[SAM3VideoTracker] processed frame 40
+[SAM3VideoTracker] processed frame 50
+[SAM3VideoTracker] processed frame 60
+[SAM3VideoTracker] processed frame 70
+[SAM3VideoTracker] processed frame 80
+[SAM3VideoTracker] processed frame 90
+[SAM3VideoTracker] processed frame 100
+[SAM3VideoTracker] processed frame 110
+[SAM3VideoTracker] processed frame 120
+[SAM3VideoTracker] processed frame 130
+[SAM3VideoTracker] processed frame 140
+[SAM3VideoTracker] processed frame 150
+[SAM3VideoTracker] processed frame 160
+[SAM3VideoTracker] processed frame 170
+[SAM3VideoTracker] processed frame 180
+[SAM3VideoTracker] processed frame 190
+[SAM3VideoTracker] processed frame 200
+[SAM3VideoTracker] processed frame 210
+[SAM3VideoTracker] processed frame 220
+[SAM3VideoTracker] processed frame 230
+[SAM3VideoTracker] processed frame 240
+[SAM3VideoTracker] processed frame 250
+[SAM3VideoTracker] Done. Saved to: /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam/sam3_track
+
+[STEP1.5.5] qwen_sam cache ready: /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam
+[STEP1.5.5] iter=0 proxy preflight start
+[POST_RESTORE] ffprobe: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate -show_entries format=duration -of json /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4
+[POST_RESTORE] stats duration=8.501 frames=93 fps=10.941175827539464
+[POST_RESTORE] match original frames=255 fps=30.000000
+[POST_RESTORE] pytorch speed_fps=10.942463
+
+==========================================================================================
+[2026-01-24T23:33:30+08:00] STEP1.5.5 Post-restore speed adjust (RIFE pytorch prep)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -i /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4 -vf setpts=PTS*0.999882 -r 10.942463 -vsync cfr -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Duration: 00:00:08.50, start: 0.000000, bitrate: 594 kb/s
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p, 848x480 [SAR 1:1 DAR 53:30], 592 kb/s, 10.94 fps, 10.94 tbr, 1000855.00 tbn, 21.88 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 0x55c91a66f380] using SAR=1/1
+[libx264 @ 0x55c91a66f380] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x55c91a66f380] profile High, level 2.2, 4:2:0, 8-bit
+[libx264 @ 0x55c91a66f380] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=10 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(progressive), 848x480 [SAR 1:1 DAR 53:30], q=2-31, 10.94 fps, 914582 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    [mp4 @ 0x55c91a671240] Starting second pass: moving the moov atom to the beginning of the file
+frame=   93 fps=0.0 q=-1.0 Lsize=     589kB time=00:00:08.22 bitrate= 587.1kbits/s speed=11.4x    
+video:588kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.328762%
+[libx264 @ 0x55c91a66f380] frame I:3     Avg QP:18.06  size: 24135
+[libx264 @ 0x55c91a66f380] frame P:28    Avg QP:20.17  size: 13012
+[libx264 @ 0x55c91a66f380] frame B:62    Avg QP:22.28  size:  2649
+[libx264 @ 0x55c91a66f380] consecutive B-frames:  6.5% 12.9%  3.2% 77.4%
+[libx264 @ 0x55c91a66f380] mb I  I16..4:  9.5% 77.9% 12.6%
+[libx264 @ 0x55c91a66f380] mb P  I16..4:  4.8% 24.3%  3.6%  P16..4: 27.1% 13.8%  5.4%  0.0%  0.0%    skip:21.1%
+[libx264 @ 0x55c91a66f380] mb B  I16..4:  0.5%  2.1%  0.4%  B16..8: 26.8%  4.6%  0.9%  direct: 3.1%  skip:61.6%  L0:43.3% L1:48.0% BI: 8.7%
+[libx264 @ 0x55c91a66f380] 8x8 transform intra:74.2% inter:79.0%
+[libx264 @ 0x55c91a66f380] coded y,uvDC,uvAC intra: 63.6% 74.3% 19.4% inter: 13.6% 21.7% 0.2%
+[libx264 @ 0x55c91a66f380] i16 v,h,dc,p: 16% 33% 15% 37%
+[libx264 @ 0x55c91a66f380] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 22% 16%  5%  7%  9%  8%  4%  9%
+[libx264 @ 0x55c91a66f380] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 25% 20% 12%  4% 10% 10%  9%  4%  5%
+[libx264 @ 0x55c91a66f380] i8c dc,h,v,p: 48% 24% 23%  5%
+[libx264 @ 0x55c91a66f380] Weighted P-Frames: Y:17.9% UV:7.1%
+[libx264 @ 0x55c91a66f380] ref P L0: 61.1% 22.3% 12.5%  3.8%  0.3%
+[libx264 @ 0x55c91a66f380] ref B L0: 91.7%  7.6%  0.7%
+[libx264 @ 0x55c91a66f380] ref B L1: 96.8%  3.2%
+[libx264 @ 0x55c91a66f380] kb/s:565.68
+[POST_RESTORE] ffprobe: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate -show_entries format=duration -of json /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4
+[POST_RESTORE] stats duration=8.5 frames=93 fps=10.942462999964107
+[POST_RESTORE] ffprobe dimensions: ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4
+[POST_RESTORE] dimensions width=848 height=480
+
+==========================================================================================
+[2026-01-24T23:33:31+08:00] STEP1.5.5 Post-restore RIFE pytorch extract frames
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -vsync 0 -i /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4 -vf pad=ceil(iw/32)*32:ceil(ih/32)*32:(ow-iw)/2:(oh-ih)/2 /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/%08d.png
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Duration: 00:00:08.50, start: 0.000000, bitrate: 568 kb/s
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p, 848x480 [SAR 1:1 DAR 53:30], 566 kb/s, 10.94 fps, 10.94 tbr, 914582 tbn, 21.88 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> png (native))
+Press [q] to stop, [?] for help
+Output #0, image2, to '/mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/%08d.png':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: png, rgb24(pc, gbr/unknown/unknown, progressive), 864x480 [SAR 1:1 DAR 9:5], q=2-31, 200 kb/s, 10.94 fps, 10.94 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 png
+frame=    1 fps=0.0 q=0.0 size=N/A time=00:00:00.00 bitrate=N/A speed=   0x    frame=   93 fps=0.0 q=-0.0 Lsize=N/A time=00:00:08.49 bitrate=N/A speed=51.1x    
+video:42737kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: unknown
+[POST_RESTORE] ffprobe dimensions: ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[POST_RESTORE] dimensions width=848 height=480
+
+==========================================================================================
+[2026-01-24T23:33:31+08:00] STEP1.5.5 Post-restore RIFE (pytorch) guided interpolation
+==========================================================================================
+CWD: /mnt/data/ganrunhe/Practical-RIFE
+CMD: conda run -n rife python3 /mnt/data/ganrunhe/Practical-RIFE/guided_interpolation_cli.py --imgs /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000001.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000002.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000003.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000004.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000005.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000006.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000007.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000008.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000009.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000010.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000011.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000012.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000013.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000014.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000015.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000016.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000017.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000018.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000019.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000020.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000021.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000022.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000023.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000024.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000025.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000026.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000027.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000028.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000029.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000030.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000031.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000032.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000033.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000034.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000035.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000036.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000037.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000038.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000039.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000040.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000041.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000042.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000043.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000044.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000045.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000046.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000047.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000048.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000049.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000050.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000051.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000052.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000053.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000054.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000055.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000056.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000057.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000058.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000059.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000060.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000061.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000062.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000063.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000064.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000065.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000066.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000067.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000068.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000069.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000070.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000071.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000072.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000073.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000074.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000075.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000076.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000077.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000078.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000079.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000080.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000081.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000082.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000083.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000084.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000085.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000086.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000087.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000088.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000089.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000090.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000091.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000092.png /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/input_frames/00000093.png --output /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/output_frames/ --model /mnt/data/ganrunhe/Practical-RIFE/train_log --scale 1.0 --frame_map 0 3 6 8 11 14 17 19 22 25 28 30 33 36 39 41 44 47 50 52 55 58 61 63 66 69 72 75 77 80 83 86 88 91 94 97 99 102 105 108 110 113 116 119 121 124 127 130 133 135 138 141 144 146 149 152 155 157 160 163 166 168 171 174 177 179 182 185 188 190 193 196 199 202 204 207 210 213 215 218 221 224 226 229 232 235 237 240 243 246 248 251 254 --segment_frames 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 --time_steps_json [[0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666]]
+
+Loaded v3.x HD model.
+
+
+==========================================================================================
+[2026-01-24T23:33:43+08:00] STEP1.5.5 Post-restore RIFE pytorch encode
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -framerate 30.0 -i /mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/output_frames/%08d.png -vf crop=848:480:(in_w-848)/2:(in_h-480)/2 -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, image2, from '/mnt/data/ganrunhe/auto_transfer/rife_cache/proxy_preflight_9d6ba14a__pytorch/output_frames/%08d.png':
+  Duration: 00:00:08.50, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: png, rgb24(pc), 864x480, 30 fps, 30 tbr, 30 tbn, 30 tbc
+Stream mapping:
+  Stream #0:0 -> #0:0 (png (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[swscaler @ 0x55f0ac3208c0] Warning: data is not aligned! This can lead to a speed loss
+[libx264 @ 0x55f0ac175680] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x55f0ac175680] profile High, level 3.1, 4:2:0, 8-bit
+[libx264 @ 0x55f0ac175680] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4':
+  Metadata:
+    encoder         : Lavf58.76.100
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 848x480, q=2-31, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    frame=  105 fps=0.0 q=29.0 size=       0kB time=00:00:01.43 bitrate=   0.3kbits/s speed=2.77x    frame=  195 fps=191 q=29.0 size=     256kB time=00:00:04.43 bitrate= 473.1kbits/s speed=4.35x    [mp4 @ 0x55f0ac174bc0] Starting second pass: moving the moov atom to the beginning of the file
+frame=  255 fps=153 q=-1.0 Lsize=     734kB time=00:00:08.40 bitrate= 715.9kbits/s speed=5.04x    
+video:730kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.496132%
+[libx264 @ 0x55f0ac175680] frame I:3     Avg QP:21.32  size: 17468
+[libx264 @ 0x55f0ac175680] frame P:86    Avg QP:22.27  size:  6021
+[libx264 @ 0x55f0ac175680] frame B:166   Avg QP:25.09  size:  1067
+[libx264 @ 0x55f0ac175680] consecutive B-frames:  5.9% 12.5% 28.2% 53.3%
+[libx264 @ 0x55f0ac175680] mb I  I16..4: 11.0% 76.8% 12.2%
+[libx264 @ 0x55f0ac175680] mb P  I16..4:  2.7%  9.6%  1.4%  P16..4: 30.7% 10.1%  4.4%  0.0%  0.0%    skip:41.2%
+[libx264 @ 0x55f0ac175680] mb B  I16..4:  0.3%  0.8%  0.1%  B16..8: 23.1%  1.9%  0.3%  direct: 0.8%  skip:72.6%  L0:38.9% L1:56.4% BI: 4.7%
+[libx264 @ 0x55f0ac175680] 8x8 transform intra:70.3% inter:80.4%
+[libx264 @ 0x55f0ac175680] coded y,uvDC,uvAC intra: 53.2% 64.0% 10.6% inter: 7.7% 10.0% 0.0%
+[libx264 @ 0x55f0ac175680] i16 v,h,dc,p: 15% 32% 14% 39%
+[libx264 @ 0x55f0ac175680] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 21% 19%  5%  7%  9%  8%  4%  9%
+[libx264 @ 0x55f0ac175680] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 25% 18% 15%  4% 10% 11%  9%  4%  4%
+[libx264 @ 0x55f0ac175680] i8c dc,h,v,p: 53% 22% 20%  5%
+[libx264 @ 0x55f0ac175680] Weighted P-Frames: Y:10.5% UV:4.7%
+[libx264 @ 0x55f0ac175680] ref P L0: 64.6% 18.8% 12.3%  3.9%  0.4%
+[libx264 @ 0x55f0ac175680] ref B L0: 85.1% 12.6%  2.3%
+[libx264 @ 0x55f0ac175680] ref B L1: 94.5%  5.5%
+[libx264 @ 0x55f0ac175680] kb/s:703.34
+[CLEANUP] deleted file: /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/.proxy_restore__post_restore_speed.mp4
+[POST_RESTORE DONE] mode=rife target_duration=8.500 current_duration=8.501 ratio=0.999882 target_frames=255 output=/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4
+[STEP1.5.5] ffprobe: ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate -of json /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4
+[STEP1.5.5] ffprobe parsed fps=30 width=848
+
+==========================================================================================
+[2026-01-24T23:33:45+08:00] STEP1.5.5: SAM mask generation
+==========================================================================================
+CWD: /mnt/data/ganrunhe/robot_arm_swap_project
+CMD: conda run -n arm_swap python -m robot_arm_swap --orig /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_restore.mp4 --workdir /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_sam_workdir_d3360ad5 --fps 30 --width 848 --sam-only --bbox-json /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam/qwen_boxes.json
+
+[SAM3VideoTracker] Loading 'facebook/sam3' on cuda (dtype=torch.bfloat16) ...
+[SAM3VideoTracker] Loaded.
+[SAM3] Auto scale check: frames=255 size=848x480 estimated=1.16 GiB free=77.90 GiB target=54.53 GiB requested_scale=1 required_scale=1
+[SAM3VideoTracker] processed frame 0
+[SAM3VideoTracker] processed frame 10
+[SAM3VideoTracker] processed frame 20
+[SAM3VideoTracker] processed frame 30
+[SAM3VideoTracker] processed frame 40
+[SAM3VideoTracker] processed frame 50
+[SAM3VideoTracker] processed frame 60
+[SAM3VideoTracker] processed frame 70
+[SAM3VideoTracker] processed frame 80
+[SAM3VideoTracker] processed frame 90
+[SAM3VideoTracker] processed frame 100
+[SAM3VideoTracker] processed frame 110
+[SAM3VideoTracker] processed frame 120
+[SAM3VideoTracker] processed frame 130
+[SAM3VideoTracker] processed frame 140
+[SAM3VideoTracker] processed frame 150
+[SAM3VideoTracker] processed frame 160
+[SAM3VideoTracker] processed frame 170
+[SAM3VideoTracker] processed frame 180
+[SAM3VideoTracker] processed frame 190
+[SAM3VideoTracker] processed frame 200
+[SAM3VideoTracker] processed frame 210
+[SAM3VideoTracker] processed frame 220
+[SAM3VideoTracker] processed frame 230
+[SAM3VideoTracker] processed frame 240
+[SAM3VideoTracker] processed frame 250
+[SAM3VideoTracker] Done. Saved to: /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/proxy_preflight/proxy_sam_workdir_d3360ad5/sam3_track
+
+[STEP1.5.5] iter=0 bad_frames=1
+[STEP1.5.5] iter=0 bad_frame_indices=[136]
+[STEP1.5.5] Insertion candidates: bad_frame=136 -> insert self
+
+==========================================================================================
+[2026-01-24T23:34:39+08:00] STEP1.5.5 Keyframe extract (proxy iou)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -i /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4 -vf scale=trunc(iw/2)*2:trunc(ih/2)*2,select='eq(n\,0)+eq(n\,3)+eq(n\,6)+eq(n\,8)+eq(n\,11)+eq(n\,14)+eq(n\,17)+eq(n\,19)+eq(n\,22)+eq(n\,25)+eq(n\,28)+eq(n\,30)+eq(n\,33)+eq(n\,36)+eq(n\,39)+eq(n\,41)+eq(n\,44)+eq(n\,47)+eq(n\,50)+eq(n\,52)+eq(n\,55)+eq(n\,58)+eq(n\,61)+eq(n\,63)+eq(n\,66)+eq(n\,69)+eq(n\,72)+eq(n\,75)+eq(n\,77)+eq(n\,80)+eq(n\,83)+eq(n\,86)+eq(n\,88)+eq(n\,91)+eq(n\,94)+eq(n\,97)+eq(n\,99)+eq(n\,102)+eq(n\,105)+eq(n\,108)+eq(n\,110)+eq(n\,113)+eq(n\,116)+eq(n\,119)+eq(n\,121)+eq(n\,124)+eq(n\,130)+eq(n\,133)+eq(n\,135)+eq(n\,136)+eq(n\,138)+eq(n\,141)+eq(n\,144)+eq(n\,146)+eq(n\,149)+eq(n\,152)+eq(n\,155)+eq(n\,157)+eq(n\,160)+eq(n\,163)+eq(n\,166)+eq(n\,168)+eq(n\,171)+eq(n\,174)+eq(n\,177)+eq(n\,179)+eq(n\,182)+eq(n\,185)+eq(n\,188)+eq(n\,190)+eq(n\,193)+eq(n\,196)+eq(n\,199)+eq(n\,202)+eq(n\,204)+eq(n\,207)+eq(n\,210)+eq(n\,213)+eq(n\,215)+eq(n\,218)+eq(n\,221)+eq(n\,224)+eq(n\,226)+eq(n\,229)+eq(n\,232)+eq(n\,235)+eq(n\,237)+eq(n\,240)+eq(n\,243)+eq(n\,246)+eq(n\,248)+eq(n\,251)+eq(n\,254)',setpts=N/(10.941176470588236*TB) -vsync cfr -r 10.941176470588236 -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/keyframes_opt.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+[libdav1d @ 0x56304f96d440] libdav1d 0.9.2
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomav01iso2mp41
+    encoder         : Lavf61.7.100
+  Duration: 00:00:08.50, start: 0.000000, bitrate: 3276 kb/s
+  Stream #0:0(und): Video: av1 (Main) (av01 / 0x31307661), yuv420p(tv), 848x480 [SAR 1:1 DAR 53:30], 3274 kb/s, 30 fps, 30 tbr, 15360 tbn, 15360 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+[libdav1d @ 0x56304f970e80] libdav1d 0.9.2
+Stream mapping:
+  Stream #0:0 -> #0:0 (av1 (libdav1d) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 0x56304f995800] using SAR=1/1
+[libx264 @ 0x56304f995800] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x56304f995800] profile High, level 2.2, 4:2:0, 8-bit
+[libx264 @ 0x56304f995800] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=10 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/keyframes_opt.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomav01iso2mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 848x480 [SAR 1:1 DAR 53:30], q=2-31, 10.94 fps, 11904 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    [mp4 @ 0x56304f971740] Starting second pass: moving the moov atom to the beginning of the file
+frame=   93 fps=0.0 q=-1.0 Lsize=     700kB time=00:00:08.22 bitrate= 697.2kbits/s speed=10.7x    
+video:698kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.275838%
+[libx264 @ 0x56304f995800] frame I:3     Avg QP:18.55  size: 26566
+[libx264 @ 0x56304f995800] frame P:25    Avg QP:20.83  size: 16783
+[libx264 @ 0x56304f995800] frame B:65    Avg QP:22.83  size:  3307
+[libx264 @ 0x56304f995800] consecutive B-frames:  4.3%  4.3%  9.7% 81.7%
+[libx264 @ 0x56304f995800] mb I  I16..4:  8.2% 78.8% 13.0%
+[libx264 @ 0x56304f995800] mb P  I16..4:  4.8% 28.1%  4.2%  P16..4: 27.1% 15.6%  6.7%  0.0%  0.0%    skip:13.5%
+[libx264 @ 0x56304f995800] mb B  I16..4:  0.6%  2.5%  0.4%  B16..8: 23.1%  5.0%  1.2%  direct: 4.6%  skip:62.6%  L0:44.8% L1:42.0% BI:13.3%
+[libx264 @ 0x56304f995800] 8x8 transform intra:75.6% inter:77.5%
+[libx264 @ 0x56304f995800] coded y,uvDC,uvAC intra: 68.1% 75.2% 26.1% inter: 17.8% 25.8% 0.4%
+[libx264 @ 0x56304f995800] i16 v,h,dc,p: 13% 29% 11% 47%
+[libx264 @ 0x56304f995800] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 17% 21% 16%  5%  8% 10%  8%  5% 10%
+[libx264 @ 0x56304f995800] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 24% 21% 13%  4% 10% 11%  9%  4%  5%
+[libx264 @ 0x56304f995800] i8c dc,h,v,p: 49% 24% 21%  6%
+[libx264 @ 0x56304f995800] Weighted P-Frames: Y:28.0% UV:4.0%
+[libx264 @ 0x56304f995800] ref P L0: 58.4% 20.6% 13.6%  6.6%  0.8%
+[libx264 @ 0x56304f995800] ref B L0: 88.0% 10.5%  1.5%
+[libx264 @ 0x56304f995800] ref B L1: 96.7%  3.3%
+[libx264 @ 0x56304f995800] kb/s:672.21
+[STEP1.5.5 Proxy IoU Preflight (uniform)] 耗时 152.75s
+[WARN] Conda env not found: qwen3vl. Falling back to qwen25vl.
+[PROMPT CACHE MISS] /mnt/data/ganrunhe/auto_transfer/prompt_cache/00433fe2665d/base.txt
+
+==========================================================================================
+[2026-01-24T23:34:42+08:00] STEP2.1: Generate base prompt (step1_base)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: conda run -n qwen25vl python robot_video_to_prompt.py step1_base --video /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4 --fps 4.0 --out /mnt/data/ganrunhe/auto_transfer/prompt_cache/00433fe2665d/base.txt --size 32B --variant instruct --model_type Qwen3
+
+/mnt/data/ganrunhe/envs/qwen25vl/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+
+Loading checkpoint shards:   0%|          | 0/14 [00:00<?, ?it/s]
+Loading checkpoint shards:   7%|▋         | 1/14 [00:00<00:09,  1.38it/s]
+Loading checkpoint shards:  14%|█▍        | 2/14 [00:01<00:08,  1.43it/s]
+Loading checkpoint shards:  21%|██▏       | 3/14 [00:02<00:07,  1.42it/s]
+Loading checkpoint shards:  29%|██▊       | 4/14 [00:02<00:07,  1.43it/s]
+Loading checkpoint shards:  36%|███▌      | 5/14 [00:03<00:06,  1.43it/s]
+Loading checkpoint shards:  43%|████▎     | 6/14 [00:04<00:05,  1.43it/s]
+Loading checkpoint shards:  50%|█████     | 7/14 [00:04<00:04,  1.44it/s]
+Loading checkpoint shards:  57%|█████▋    | 8/14 [00:05<00:04,  1.42it/s]
+Loading checkpoint shards:  64%|██████▍   | 9/14 [00:06<00:03,  1.42it/s]
+Loading checkpoint shards:  71%|███████▏  | 10/14 [00:07<00:02,  1.42it/s]
+Loading checkpoint shards:  79%|███████▊  | 11/14 [00:07<00:02,  1.40it/s]
+Loading checkpoint shards:  86%|████████▌ | 12/14 [00:08<00:01,  1.40it/s]
+Loading checkpoint shards:  93%|█████████▎| 13/14 [00:09<00:00,  1.42it/s]
+Loading checkpoint shards: 100%|██████████| 14/14 [00:09<00:00,  1.54it/s]
+Loading checkpoint shards: 100%|██████████| 14/14 [00:09<00:00,  1.45it/s]
+qwen-vl-utils using decord to read video.
+video_reader_backend decord error, use torchvision as default, msg: [15:35:10] /github/workspace/src/video/video_reader.cc:151: Check failed: st_nb >= 0 (-1128613112 vs. 0) ERROR cannot find video stream with wanted index: -1
+Asked to sample `fps` frames per second but no video metadata was provided which is required when sampling with `fps`. Defaulting to `fps=24`. Please provide `video_metadata` for more accurate results.
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+[INFO] Loading model: Qwen/Qwen3-VL-32B-Instruct
+[INFO] Step 1.5: post-processing base prompt
+[INFO] Wrote: /mnt/data/ganrunhe/auto_transfer/prompt_cache/00433fe2665d/base.txt
+
+[PROMPT CACHE GENERATED] /mnt/data/ganrunhe/auto_transfer/prompt_cache/00433fe2665d/base.txt
+[PROMPT CACHE MISS] bracket/repl for base=007fd677b360dab5
+
+==========================================================================================
+[2026-01-24T23:35:27+08:00] STEP2.2+3: Bracket + replacements (step23)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: conda run -n qwen25vl python robot_video_to_prompt.py step23 --base_in /mnt/data/ganrunhe/auto_transfer/prompt_cache/00433fe2665d/base.txt --out_bracket /mnt/data/ganrunhe/auto_transfer/prompt_cache_bracket/007fd677b360dab5.txt --out_repl_json /mnt/data/ganrunhe/auto_transfer/prompt_cache_bracket/007fd677b360dab5__tmp_repl_k64.json --replacements_per_term 64 --size 32B --variant instruct --model_type Qwen3
+
+/mnt/data/ganrunhe/envs/qwen25vl/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+
+Loading checkpoint shards:   0%|          | 0/14 [00:00<?, ?it/s]
+Loading checkpoint shards:   7%|▋         | 1/14 [00:00<00:09,  1.34it/s]
+Loading checkpoint shards:  14%|█▍        | 2/14 [00:01<00:08,  1.38it/s]
+Loading checkpoint shards:  21%|██▏       | 3/14 [00:02<00:07,  1.39it/s]
+Loading checkpoint shards:  29%|██▊       | 4/14 [00:02<00:07,  1.43it/s]
+Loading checkpoint shards:  36%|███▌      | 5/14 [00:03<00:06,  1.42it/s]
+Loading checkpoint shards:  43%|████▎     | 6/14 [00:04<00:05,  1.43it/s]
+Loading checkpoint shards:  50%|█████     | 7/14 [00:04<00:04,  1.45it/s]
+Loading checkpoint shards:  57%|█████▋    | 8/14 [00:05<00:04,  1.44it/s]
+Loading checkpoint shards:  64%|██████▍   | 9/14 [00:06<00:03,  1.45it/s]
+Loading checkpoint shards:  71%|███████▏  | 10/14 [00:07<00:02,  1.43it/s]
+Loading checkpoint shards:  79%|███████▊  | 11/14 [00:07<00:02,  1.44it/s]
+Loading checkpoint shards:  86%|████████▌ | 12/14 [00:08<00:01,  1.44it/s]
+Loading checkpoint shards:  93%|█████████▎| 13/14 [00:09<00:00,  1.45it/s]
+Loading checkpoint shards: 100%|██████████| 14/14 [00:09<00:00,  1.49it/s]
+Loading checkpoint shards: 100%|██████████| 14/14 [00:09<00:00,  1.44it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+[INFO] Loading model: Qwen/Qwen3-VL-32B-Instruct
+[INFO] Wrote: /mnt/data/ganrunhe/auto_transfer/prompt_cache_bracket/007fd677b360dab5.txt /mnt/data/ganrunhe/auto_transfer/prompt_cache_bracket/007fd677b360dab5__tmp_repl_k64.json
+
+[PROMPT CACHE GENERATED] repl=/mnt/data/ganrunhe/auto_transfer/prompt_cache_replacements/347f54608252f06b__k64.json
+[PROMPT CACHE GENERATED] bracket=/mnt/data/ganrunhe/auto_transfer/prompt_cache_bracket/007fd677b360dab5.txt
+
+==========================================================================================
+[2026-01-24T23:36:50+08:00] STEP2.4: Apply replacements (step3_apply)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: conda run -n qwen25vl python robot_video_to_prompt.py step3_apply --bracket_in /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt_bracket.txt --repl_json /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt_replacements.json --seed 799132830 --min_replace_terms 1 --max_replace_terms 3 --replace_all_terms --out /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt.txt
+
+/mnt/data/ganrunhe/envs/qwen25vl/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+
+[INFO] Wrote: /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt.txt
+
+[STEP2 DONE] prompt=/mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt.txt
+[CLEANUP] deleted file: /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt_bracket.txt
+[CLEANUP] deleted file: /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt_replacements.json
+[STEP2 Prompt] 耗时 135.70s
+
+==========================================================================================
+[2026-01-24T23:36:56+08:00] STEP3: Generate control (depth)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/Video-Depth-Anything
+CMD: conda run -n depthanything python run.py --input_video /mnt/data/ganrunhe/auto_transfer/prepro_video/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/keyframes_opt.mp4 --output_dir /mnt/data/ganrunhe/auto_transfer/control_cache/depth/419de4ad5608 --encoder vitl --grayscale
+
+/mnt/data/ganrunhe/envs/depthanything/lib/python3.10/site-packages/transformers/utils/hub.py:124: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+
+  0%|          | 0/5 [00:00<?, ?it/s]
+ 20%|██        | 1/5 [00:01<00:06,  1.70s/it]
+ 40%|████      | 2/5 [00:02<00:04,  1.39s/it]
+ 60%|██████    | 3/5 [00:04<00:02,  1.28s/it]
+ 80%|████████  | 4/5 [00:05<00:01,  1.23s/it]
+100%|██████████| 5/5 [00:06<00:00,  1.20s/it]
+100%|██████████| 5/5 [00:06<00:00,  1.26s/it]
+/mnt/data/ganrunhe/envs/depthanything/lib/python3.10/site-packages/imageio_ffmpeg/_utils.py:5: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_filename
+
+[CACHE GENERATED] depth control: /mnt/data/ganrunhe/auto_transfer/control_cache/depth/419de4ad5608/keyframes_opt_vis.mp4
+[STEP3 Control] 耗时 18.71s
+[STEP4 JSON] 耗时 0.00s
+[STEP4] resolution=720
+[STEP4] Wrote json: /mnt/data/ganrunhe/auto_transfer/json/file-000__20260122_085918__0962__v000__c35ca3f7__depth.json
+[STEP5] resolution=720
+
+==========================================================================================
+[2026-01-24T23:37:14+08:00] STEP5: Transfer2.5 inference
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos-transfer2.5
+CMD: /mnt/data/ganrunhe/cosmos-transfer2.5/.venv/bin/python examples/inference.py -i /mnt/data/ganrunhe/auto_transfer/json/file-000__20260122_085918__0962__v000__c35ca3f7__depth.json -o /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000 --disable_guardrails
+
+[01-24 15:37:16|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:171:path] Downloading checkpoint nvidia/Cosmos-Transfer2.5-2B/general/edge(ecd0ba00-d598-4f94-aa09-e8627899c431)
+[01-24 15:37:16|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:96:_download] Downloading checkpoint file from Hugging Face with {'repo_id': 'nvidia/Cosmos-Transfer2.5-2B', 'repo_type': 'model', 'revision': 'bd963eabcfc2d61dc4ea365cacf41d45ac480aa5', 'filename': 'general/edge/ecd0ba00-d598-4f94-aa09-e8627899c431_ema_bf16.pt'}
+[01-24 15:37:16|INFO|packages/cosmos-oss/cosmos_oss/init.py:96:_init_log_files] Log saved to /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/console.log
+[01-24 15:37:16|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:171:path] Downloading checkpoint nvidia/Cosmos-Guardrail1(9c7b7da4-2d95-45bb-9cb8-2eed954e9736)
+[01-24 15:37:16|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:131:_download] Downloading checkpoint from Hugging Face with {'repo_id': 'nvidia/Cosmos-Guardrail1', 'repo_type': 'model', 'revision': 'd6d4bfa899a71454a700907664f3e88f503950cf', 'allow_patterns': ['*']}
+Fetching 102 files:   0%|          | 0/102 [00:00<?, ?it/s]Fetching 102 files: 100%|██████████| 102/102 [00:00<00:00, 6110.13it/s]
+[01-24 15:37:28|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:171:path] Downloading checkpoint nvidia/Cosmos-Transfer2.5-2B/general/depth(0f214f66-ae98-43cf-ab25-d65d09a7e68f)
+[01-24 15:37:28|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:96:_download] Downloading checkpoint file from Hugging Face with {'repo_id': 'nvidia/Cosmos-Transfer2.5-2B', 'repo_type': 'model', 'revision': 'bd963eabcfc2d61dc4ea365cacf41d45ac480aa5', 'filename': 'general/depth/0f214f66-ae98-43cf-ab25-d65d09a7e68f_ema_bf16.pt'}
+[01-24 15:37:29|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:171:path] Downloading checkpoint Wan2.1/vae(685afcaa-4de2-42fe-b7b9-69f7a2dee4d8)
+[01-24 15:37:29|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:96:_download] Downloading checkpoint file from Hugging Face with {'repo_id': 'nvidia/Cosmos-Predict2.5-2B', 'repo_type': 'model', 'revision': '6787e176dce74a101d922174a95dba29fa5f0c55', 'filename': 'tokenizer.pth'}
+[01-24 15:37:31|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:171:path] Downloading checkpoint Qwen/Qwen2.5-VL-7B-Instruct(7219c6c7-f878-4137-bbdb-76842ea85e70)
+[01-24 15:37:31|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:131:_download] Downloading checkpoint from Hugging Face with {'repo_id': 'nvidia/Cosmos-Reason1-7B', 'repo_type': 'model', 'revision': '3210bec0495fdc7a8d3dbb8d58da5711eab4b423', 'allow_patterns': ['*']}
+Fetching 13 files:   0%|          | 0/13 [00:00<?, ?it/s]Fetching 13 files: 100%|██████████| 13/13 [00:00<00:00, 14551.90it/s]
+[01-24 15:37:36|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:171:path] Downloading checkpoint nvidia/Cosmos-Reason1.1-7B(cb3e3ffa-7b08-4c34-822d-61c7aa31a14f)
+[01-24 15:37:36|INFO|cosmos_transfer2/_src/imaginaire/utils/checkpoint_db.py:131:_download] Downloading checkpoint from Hugging Face with {'repo_id': 'nvidia/Cosmos-Reason1-7B', 'repo_type': 'model', 'revision': '3210bec0495fdc7a8d3dbb8d58da5711eab4b423', 'allow_patterns': ['*']}
+Fetching 13 files:   0%|          | 0/13 [00:00<?, ?it/s]Fetching 13 files: 100%|██████████| 13/13 [00:00<00:00, 12724.84it/s]
+[01-24 15:37:59|INFO|cosmos_transfer2/inference.py:103:__init__] Found 1 hint keys across all samples
+[01-24 15:37:59|INFO|cosmos_transfer2/inference.py:113:__init__] Saved config to /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/config.yaml
+[01-24 15:37:59|INFO|cosmos_transfer2/inference.py:120:generate] Generating 1 samples: ['file-000']
+[01-24 15:37:59|INFO|cosmos_transfer2/inference.py:124:generate] [1/1] Processing sample file-000
+[01-24 15:37:59|INFO|cosmos_transfer2/inference.py:155:_generate_sample] Saved arguments to /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.json
+[01-24 15:37:59|WARNING|cosmos_transfer2/inference.py:189:_generate_sample] Guardrail checks on prompt are disabled
+[01-24 15:37:59|INFO|cosmos_transfer2/inference.py:192:_generate_sample] Processing the following paths: {'depth': '/mnt/data/ganrunhe/auto_transfer/control_cache/depth/419de4ad5608/keyframes_opt_vis.mp4', 'depth_mask': None, 'depth_mask_prompt': None}
+Generating samples:   0%|          | 0/35 [00:00<?, ?it/s]Generating samples:   3%|▎         | 1/35 [00:22<12:37, 22.27s/it]Generating samples:   6%|▌         | 2/35 [00:44<12:15, 22.29s/it]Generating samples:   9%|▊         | 3/35 [01:06<11:53, 22.30s/it]Generating samples:  11%|█▏        | 4/35 [01:29<11:30, 22.28s/it]Generating samples:  14%|█▍        | 5/35 [01:51<11:07, 22.26s/it]Generating samples:  17%|█▋        | 6/35 [02:13<10:45, 22.25s/it]Generating samples:  20%|██        | 7/35 [02:35<10:23, 22.26s/it]Generating samples:  23%|██▎       | 8/35 [02:58<10:01, 22.28s/it]Generating samples:  26%|██▌       | 9/35 [03:20<09:39, 22.29s/it]Generating samples:  29%|██▊       | 10/35 [03:42<09:17, 22.30s/it]Generating samples:  31%|███▏      | 11/35 [04:05<08:55, 22.31s/it]Generating samples:  34%|███▍      | 12/35 [04:27<08:33, 22.31s/it]Generating samples:  37%|███▋      | 13/35 [04:49<08:10, 22.32s/it]Generating samples:  40%|████      | 14/35 [05:12<07:48, 22.32s/it]Generating samples:  43%|████▎     | 15/35 [05:34<07:26, 22.32s/it]Generating samples:  46%|████▌     | 16/35 [05:56<07:04, 22.32s/it]Generating samples:  49%|████▊     | 17/35 [06:19<06:41, 22.32s/it]Generating samples:  51%|█████▏    | 18/35 [06:41<06:19, 22.32s/it]Generating samples:  54%|█████▍    | 19/35 [07:03<05:57, 22.31s/it]Generating samples:  57%|█████▋    | 20/35 [07:26<05:34, 22.31s/it]Generating samples:  60%|██████    | 21/35 [07:48<05:12, 22.31s/it]Generating samples:  63%|██████▎   | 22/35 [08:10<04:50, 22.31s/it]Generating samples:  66%|██████▌   | 23/35 [08:32<04:27, 22.31s/it]Generating samples:  69%|██████▊   | 24/35 [08:55<04:05, 22.31s/it]Generating samples:  71%|███████▏  | 25/35 [09:17<03:43, 22.32s/it]Generating samples:  74%|███████▍  | 26/35 [09:39<03:20, 22.32s/it]Generating samples:  77%|███████▋  | 27/35 [10:02<02:58, 22.32s/it]Generating samples:  80%|████████  | 28/35 [10:24<02:36, 22.32s/it]Generating samples:  83%|████████▎ | 29/35 [10:46<02:13, 22.32s/it]Generating samples:  86%|████████▌ | 30/35 [11:09<01:51, 22.32s/it]Generating samples:  89%|████████▊ | 31/35 [11:31<01:29, 22.32s/it]Generating samples:  91%|█████████▏| 32/35 [11:53<01:06, 22.32s/it]Generating samples:  94%|█████████▍| 33/35 [12:16<00:44, 22.31s/it]Generating samples:  97%|█████████▋| 34/35 [12:38<00:22, 22.31s/it]Generating samples: 100%|██████████| 35/35 [13:00<00:00, 22.30s/it]Generating samples: 100%|██████████| 35/35 [13:00<00:00, 22.31s/it]
+[01-24 15:51:36|INFO|cosmos_transfer2/inference.py:241:_generate_sample] depth control video saved to /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000_control_depth.mp4
+[01-24 15:51:36|WARNING|cosmos_transfer2/inference.py:269:_generate_sample] Guardrail checks on video are disabled
+[01-24 15:51:37|SUCCESS|cosmos_transfer2/inference.py:277:_generate_sample] Generated video saved to /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4
+[STEP5 Inference] 耗时 865.53s
+[POST_RESTORE] ffprobe: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate -show_entries format=duration -of json /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4
+[POST_RESTORE] stats duration=9.3 frames=93 fps=10.0
+[POST_RESTORE] match original frames=255 fps=30.000000
+[POST_RESTORE] pytorch speed_fps=10.941176
+
+==========================================================================================
+[2026-01-24T23:51:40+08:00] STEP5.5 Post-restore speed adjust (RIFE pytorch prep)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -i /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4 -vf setpts=PTS*0.913978 -r 10.941176 -vsync cfr -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf61.1.100
+  Duration: 00:00:09.30, start: 0.000000, bitrate: 453 kb/s
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p, 848x480, 451 kb/s, 10 fps, 10 tbr, 10240 tbn, 20 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc61.3.100 libx264
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 0x5636ba2739c0] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x5636ba2739c0] profile High, level 2.2, 4:2:0, 8-bit
+[libx264 @ 0x5636ba2739c0] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=10 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(progressive), 848x480, q=2-31, 10.94 fps, 1000855.00 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    [mp4 @ 0x5636ba274e40] Starting second pass: moving the moov atom to the beginning of the file
+frame=   93 fps=0.0 q=-1.0 Lsize=     559kB time=00:00:08.22 bitrate= 557.0kbits/s speed=10.5x    
+video:557kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.344959%
+[libx264 @ 0x5636ba2739c0] frame I:2     Avg QP:19.33  size: 22046
+[libx264 @ 0x5636ba2739c0] frame P:26    Avg QP:20.46  size: 11850
+[libx264 @ 0x5636ba2739c0] frame B:65    Avg QP:22.42  size:  3352
+[libx264 @ 0x5636ba2739c0] consecutive B-frames:  2.2% 12.9%  3.2% 81.7%
+[libx264 @ 0x5636ba2739c0] mb I  I16..4: 16.6% 66.2% 17.3%
+[libx264 @ 0x5636ba2739c0] mb P  I16..4:  9.2% 19.5%  3.9%  P16..4: 38.0% 14.5%  5.1%  0.0%  0.0%    skip: 9.8%
+[libx264 @ 0x5636ba2739c0] mb B  I16..4:  0.8%  1.7%  0.2%  B16..8: 37.6%  6.0%  0.8%  direct: 5.1%  skip:47.9%  L0:38.3% L1:56.2% BI: 5.5%
+[libx264 @ 0x5636ba2739c0] 8x8 transform intra:61.2% inter:80.8%
+[libx264 @ 0x5636ba2739c0] coded y,uvDC,uvAC intra: 47.4% 80.9% 32.0% inter: 16.4% 31.7% 1.8%
+[libx264 @ 0x5636ba2739c0] i16 v,h,dc,p: 10% 26%  7% 57%
+[libx264 @ 0x5636ba2739c0] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 25% 18%  4%  7%  6%  9%  4%  7%
+[libx264 @ 0x5636ba2739c0] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 24% 15%  4% 10%  9% 10%  3%  6%
+[libx264 @ 0x5636ba2739c0] i8c dc,h,v,p: 43% 28% 18% 11%
+[libx264 @ 0x5636ba2739c0] Weighted P-Frames: Y:19.2% UV:0.0%
+[libx264 @ 0x5636ba2739c0] ref P L0: 60.3% 18.1% 15.1%  5.4%  1.0%
+[libx264 @ 0x5636ba2739c0] ref B L0: 88.6%  9.4%  2.0%
+[libx264 @ 0x5636ba2739c0] ref B L1: 94.9%  5.1%
+[libx264 @ 0x5636ba2739c0] kb/s:536.57
+[POST_RESTORE] ffprobe: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate -show_entries format=duration -of json /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4
+[POST_RESTORE] stats duration=8.501 frames=93 fps=10.941175827539464
+[POST_RESTORE] ffprobe dimensions: ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4
+[POST_RESTORE] dimensions width=848 height=480
+
+==========================================================================================
+[2026-01-24T23:51:41+08:00] STEP5.5 Post-restore RIFE pytorch extract frames
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -vsync 0 -i /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4 -vf pad=ceil(iw/32)*32:ceil(ih/32)*32:(ow-iw)/2:(oh-ih)/2 /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/%08d.png
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Duration: 00:00:08.50, start: 0.000000, bitrate: 539 kb/s
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p, 848x480, 537 kb/s, 10.94 fps, 10.94 tbr, 1000855.00 tbn, 21.88 tbc (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> png (native))
+Press [q] to stop, [?] for help
+Output #0, image2, to '/mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/%08d.png':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.76.100
+  Stream #0:0(und): Video: png, rgb24(pc, gbr/unknown/unknown, progressive), 864x480, q=2-31, 200 kb/s, 10.94 fps, 10.94 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc58.134.100 png
+frame=    1 fps=0.0 q=0.0 size=N/A time=00:00:00.00 bitrate=N/A speed=   0x    frame=   93 fps=0.0 q=-0.0 Lsize=N/A time=00:00:08.50 bitrate=N/A speed=50.4x    
+video:42977kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: unknown
+[POST_RESTORE] ffprobe dimensions: ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[POST_RESTORE] dimensions width=848 height=480
+
+==========================================================================================
+[2026-01-24T23:51:41+08:00] STEP5.5 Post-restore RIFE (pytorch) guided interpolation
+==========================================================================================
+CWD: /mnt/data/ganrunhe/Practical-RIFE
+CMD: conda run -n rife python3 /mnt/data/ganrunhe/Practical-RIFE/guided_interpolation_cli.py --imgs /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000001.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000002.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000003.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000004.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000005.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000006.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000007.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000008.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000009.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000010.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000011.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000012.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000013.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000014.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000015.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000016.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000017.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000018.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000019.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000020.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000021.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000022.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000023.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000024.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000025.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000026.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000027.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000028.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000029.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000030.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000031.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000032.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000033.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000034.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000035.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000036.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000037.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000038.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000039.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000040.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000041.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000042.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000043.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000044.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000045.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000046.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000047.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000048.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000049.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000050.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000051.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000052.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000053.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000054.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000055.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000056.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000057.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000058.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000059.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000060.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000061.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000062.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000063.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000064.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000065.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000066.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000067.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000068.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000069.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000070.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000071.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000072.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000073.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000074.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000075.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000076.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000077.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000078.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000079.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000080.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000081.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000082.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000083.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000084.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000085.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000086.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000087.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000088.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000089.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000090.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000091.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000092.png /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/input_frames/00000093.png --output /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/output_frames/ --model /mnt/data/ganrunhe/Practical-RIFE/train_log --scale 1.0 --frame_map 0 3 6 8 11 14 17 19 22 25 28 30 33 36 39 41 44 47 50 52 55 58 61 63 66 69 72 75 77 80 83 86 88 91 94 97 99 102 105 108 110 113 116 119 121 124 130 133 135 136 138 141 144 146 149 152 155 157 160 163 166 168 171 174 177 179 182 185 188 190 193 196 199 202 204 207 210 213 215 218 221 224 226 229 232 235 237 240 243 246 248 251 254 --segment_frames 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 7 4 3 2 3 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 4 3 4 4 --time_steps_json [[0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334], [0.3333333333333333, 0.6666666666666666], [0.5], [], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666], [0.5], [0.3333333333333333, 0.6666666666666666], [0.3333333333333333, 0.6666666666666666]]
+
+Loaded v3.x HD model.
+
+
+==========================================================================================
+[2026-01-24T23:51:53+08:00] STEP5.5 Post-restore RIFE pytorch encode
+==========================================================================================
+CWD: /mnt/data/ganrunhe/cosmos_transfer_auto
+CMD: ffmpeg -y -framerate 30.0 -i /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/output_frames/%08d.png -vf crop=848:480:(in_w-848)/2:(in_h-480)/2 -c:v libx264 -pix_fmt yuv420p -movflags +faststart /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4
+
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+  built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 70.100 / 56. 70.100
+  libavcodec     58.134.100 / 58.134.100
+  libavformat    58. 76.100 / 58. 76.100
+  libavdevice    58. 13.100 / 58. 13.100
+  libavfilter     7.110.100 /  7.110.100
+  libswscale      5.  9.100 /  5.  9.100
+  libswresample   3.  9.100 /  3.  9.100
+  libpostproc    55.  9.100 / 55.  9.100
+Input #0, image2, from '/mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch/output_frames/%08d.png':
+  Duration: 00:00:08.50, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: png, rgb24(pc), 864x480, 30 fps, 30 tbr, 30 tbn, 30 tbc
+Stream mapping:
+  Stream #0:0 -> #0:0 (png (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[swscaler @ 0x5654f173b480] Warning: data is not aligned! This can lead to a speed loss
+[libx264 @ 0x5654f1602900] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2 AVX512
+[libx264 @ 0x5654f1602900] profile High, level 3.1, 4:2:0, 8-bit
+[libx264 @ 0x5654f1602900] 264 - core 163 r3060 5db6aa6 - H.264/MPEG-4 AVC codec - Copyleft 2003-2021 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=15 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4':
+  Metadata:
+    encoder         : Lavf58.76.100
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 848x480, q=2-31, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc58.134.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=    1 fps=0.0 q=0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    frame=   93 fps=0.0 q=29.0 size=       0kB time=00:00:01.03 bitrate=   0.4kbits/s speed=   2x    frame=  188 fps=184 q=29.0 size=     256kB time=00:00:04.20 bitrate= 499.4kbits/s speed= 4.1x    [mp4 @ 0x5654f1601a00] Starting second pass: moving the moov atom to the beginning of the file
+frame=  255 fps=161 q=-1.0 Lsize=     683kB time=00:00:08.40 bitrate= 666.0kbits/s speed= 5.3x    
+video:679kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.550271%
+[libx264 @ 0x5654f1602900] frame I:2     Avg QP:22.26  size: 18070
+[libx264 @ 0x5654f1602900] frame P:77    Avg QP:22.99  size:  5876
+[libx264 @ 0x5654f1602900] frame B:176   Avg QP:24.70  size:  1172
+[libx264 @ 0x5654f1602900] consecutive B-frames:  5.5%  3.9% 10.6% 80.0%
+[libx264 @ 0x5654f1602900] mb I  I16..4: 21.2% 63.9% 14.9%
+[libx264 @ 0x5654f1602900] mb P  I16..4:  5.4%  8.2%  1.1%  P16..4: 42.6% 10.1%  4.4%  0.0%  0.0%    skip:28.2%
+[libx264 @ 0x5654f1602900] mb B  I16..4:  0.4%  0.7%  0.1%  B16..8: 28.1%  1.7%  0.2%  direct: 1.1%  skip:67.8%  L0:40.8% L1:55.5% BI: 3.7%
+[libx264 @ 0x5654f1602900] 8x8 transform intra:57.4% inter:85.4%
+[libx264 @ 0x5654f1602900] coded y,uvDC,uvAC intra: 36.4% 75.3% 23.6% inter: 7.3% 15.4% 0.6%
+[libx264 @ 0x5654f1602900] i16 v,h,dc,p: 13% 27%  8% 51%
+[libx264 @ 0x5654f1602900] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 18% 23% 24%  4%  6%  6%  9%  3%  6%
+[libx264 @ 0x5654f1602900] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 18% 24% 17%  4% 10%  8% 10%  3%  5%
+[libx264 @ 0x5654f1602900] i8c dc,h,v,p: 47% 26% 17% 10%
+[libx264 @ 0x5654f1602900] Weighted P-Frames: Y:6.5% UV:1.3%
+[libx264 @ 0x5654f1602900] ref P L0: 63.0% 15.9% 14.7%  5.8%  0.5%
+[libx264 @ 0x5654f1602900] ref B L0: 87.3%  9.8%  2.9%
+[libx264 @ 0x5654f1602900] ref B L1: 95.6%  4.4%
+[libx264 @ 0x5654f1602900] kb/s:653.92
+[CLEANUP] deleted file: /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/.file-000__post_restore_speed.mp4
+[POST_RESTORE DONE] mode=rife target_duration=8.500 current_duration=9.300 ratio=0.913978 target_frames=255 output=/mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4
+[STEP5.5 Post-restore] 耗时 15.15s
+[DONE] output_dir=/mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000
+[STEP6] ffprobe meta: ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=width,height,avg_frame_rate,nb_read_frames -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[STEP6] ffprobe parsed fps=30 width=848 height=480 frames=255
+[STEP6] qwen_sam cache hit: /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d/qwen_sam
+[STEP6] ffprobe: ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate -of json /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4
+[STEP6] ffprobe parsed fps=30 width=848
+
+==========================================================================================
+[2026-01-24T23:51:56+08:00] STEP6: Robot arm swap (swap-only)
+==========================================================================================
+CWD: /mnt/data/ganrunhe/robot_arm_swap_project
+CMD: conda run -n arm_swap python -m robot_arm_swap --orig /mnt/data/ganrunhe/bottle_data_selected_rife_step35/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000.mp4 --skin /mnt/data/ganrunhe/auto_transfer/output_video/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4 --workdir /mnt/data/ganrunhe/auto_transfer/qwen_sam_cache/file-000.mp4__00433fe2665d --fps 30 --width 848 --swap-only --arm-mask-dir /mnt/data/ganrunhe/auto_transfer/rife_sam_cache/file-000.mp4__00433fe2665d --erode 2 --feather 3 --dilate 0 --out /mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4 --no-workdir-write
+
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc650300] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc650300] Failed to get pixel format.
+[av1 @ 0xc650300] Missing Sequence Header.
+[av1 @ 0xc652a80] Your platform doesn't suppport hardware accelerated AV1 decoding.
+[av1 @ 0xc652a80] Failed to get pixel format.
+
+[STEP6 Arm Swap] 耗时 10.40s
+[DONE] arm_swap_output=/mnt/data/ganrunhe/auto_transfer/output_video_mask_arm/bottle_data_selected_rife_step35_var_1/20251230_3/7A/ch-dojo__kuavo_4pro_wheel_task_saoma-20251230_095346/videos/observation.images.cam_l/chunk-000/file-000/file-000.mp4
+[CLEANUP] deleted file: /mnt/data/ganrunhe/auto_transfer/prompt/file-000__20260122_085918__0962__v000__c35ca3f7__prompt.txt
+[CLEANUP] deleted file: /mnt/data/ganrunhe/auto_transfer/json/file-000__20260122_085918__0962__v000__c35ca3f7__depth.json
+[CLEANUP] 耗时 0.00s
+[JOB TOTAL (success)] 耗时 1202.46s
+[CLEANUP] deleted dir: /mnt/data/ganrunhe/auto_transfer/rife_cache/file-000_3dd0ba22__pytorch
