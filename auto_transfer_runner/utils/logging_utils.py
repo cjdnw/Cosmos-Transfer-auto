@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import shutil
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -52,3 +53,16 @@ def log_section(log_path: Path, title: str) -> None:
     append_log(log_path, f"[{ts}] {title}")
     append_log(log_path, "=" * 90 + "\n")
     console_print(title)
+
+
+def classify_job_log(log_path: Path, status: str) -> Path | None:
+    """Copy a job log into logs/success or logs/fail for easier inspection."""
+    if not log_path.exists():
+        return None
+    normalized = status.lower()
+    status_dir = "success" if normalized in {"success", "done"} else "fail"
+    target_dir = log_path.parent / status_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / log_path.name
+    shutil.copy2(log_path, target_path)
+    return target_path
