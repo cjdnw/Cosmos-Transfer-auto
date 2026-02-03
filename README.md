@@ -29,6 +29,295 @@
 - `auto_transfer_runner/utils/`：通用工具（日志、锁、指纹、路径等）
 
 ## 快速开始
+### 例 0：默认值展开版命令
+> 说明：以下把所有 CLI 参数全部写出，便于“默认值”一览与复制。`none`/空字符串会被解析为 `None`。路径统一用 `<input_dir>`/`<output_dir>` 占位符。
+```bash
+python scripts/run_batch.py \
+  --input_dir <input_dir> \
+  --num_videos 0 \
+  # --shuffle \
+  --shuffle_seed none \
+  --selection_file none \
+  --selective_task 0 \
+  --gpus 0,1,2,3,4,5,6,7 \
+  --console \
+  --variants_per_video 5 \
+  # --resume_incomplete \
+  --work_dir <output_dir> \
+  --autoprompt_root /workspace/Cosmos-Transfer-auto \
+  --depth_root /mnt/data/ganrunhe/Video-Depth-Anything \
+  --seg_root /mnt/data/ganrunhe/AutoSeg-SAM2 \
+  --cv_root /workspace/Cosmos-Transfer-auto \
+  --transfer_root /mnt/data/ganrunhe/cosmos-transfer2.5 \
+  --hf_cache /mnt/data/ganrunhe/hf_cache \
+  --control_type depth \
+  --qwen_env qwen3vl \
+  --prompt_fps 4.0 \
+  --prompt_size 32B \
+  --prompt_variant instruct \
+  --prompt_model_type Qwen3 \
+  # --reuse_prompt \
+  # --sim2real_only \
+  --min_terms 1 \
+  --max_terms 3 \
+  --replace_all_terms \
+  --replacements_per_term 64 \
+  # --interactive_replace \
+  --depth_env depthanything \
+  --depth_encoder vitl \
+  # --no_depth_grayscale \
+  --seg_env autoseg \
+  --seg_level large \
+  # --seg_use_other_level \
+  --seg_detect_stride 10 \
+  # --seg_save_intermediate \
+  # --seg_save_npy \
+  # --seg_enable_highlight \
+  # --seg_disable_overlay \
+  --seg_overlay_style mask \
+  --cv_env sam \
+  --blur_sigma 10.0 \
+  --edge_low 80 \
+  --edge_high 160 \
+  --pre_width none \
+  --pre_height none \
+  # --pre_no_keep_aspect \
+  --pre_chunk_mode none \
+  --pre_chunk_policy down \
+  --pre_chunk_clip_where tail \
+  --pre_chunk_max_adjust 40 \
+  --pre_chunk_force_chunks 1 \
+  --keyframe_sampling uniform \
+  --keyframe_target_frames none \
+  --keyframe_smooth_win 5 \
+  --keyframe_max_gap 8 \
+  --parquet_pose_subset zarm_pos_vel \
+  --proxy_preflight \
+  --proxy_iou_threshold 0.94 \
+  --proxy_iou_high_threshold 0.96 \
+  --proxy_motion_low_quantile 0.25 \
+  --proxy_max_iters 3 \
+  --proxy_restore_mode rife \
+  --proxy_rife_backend none \
+  --proxy_preflight_cache_csv \
+  --proxy_removal_strategy ranked \
+  --proxy_removal_buckets 6 \
+  --post_restore_duration \
+  --post_restore_mode rife \
+  --rife_bin /mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan \
+  --rife_model /mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6 \
+  --rife_backend pytorch \
+  --rife_pytorch_repo /mnt/data/ganrunhe/Practical-RIFE \
+  --rife_pytorch_model_dir none \
+  --rife_pytorch_env rife \
+  --rife_scale 1.0 \
+  # --rife_keep_audio \
+  --rife_time_steps_mode sam_zarm_hybrid \
+  --rife_time_steps_cache none \
+  --rife_sam_mask_dir none \
+  # --rife_time_steps_force_sam \
+  # --rife_sam_generate \
+  --rife_sam_bbox_json none \
+  # --rife_sam_keep_workdir \
+  --rife_pose_subset zarm_pos \
+  # --rife_time_steps_debug \
+  --seed 2025 \
+  --num_conditional_frames 1 \
+  --resolution 720 \
+  --sigma_max none \
+  --num_video_frames_per_chunk 93 \
+  # --show_control_condition \
+  # --show_input \
+  # --disable_keep_input_resolution \
+  --image_context_path none \
+  --guidance 3.0 \
+  --num_steps 35 \
+  --control_weight 1.0 \
+  --disable_guardrails \
+  --depth_control_weight none \
+  --edge_control_weight none \
+  --seg_control_weight none \
+  --vis_control_weight none \
+  # --force_infer \
+  --enable_arm_swap \
+  --arm_swap_no_workdir_write \
+  # --arm_swap_workdir_write \
+  --arm_swap_prompt "robotic arm" \
+  --arm_swap_erode 2 \
+  --arm_swap_feather 3 \
+  --arm_swap_dilate 0 \
+  --arm_swap_split \
+  # --arm_swap_single \
+  # --arm_swap_qwen_only \
+  # --arm_swap_sam_only \
+  --arm_swap_bbox_json none \
+  # --arm_swap_keep_bbox_json \
+  # --no_cache_control \
+  # --force_regen_control \
+  --fingerprint_mode md5 \
+  --lock_timeout_sec 21600 \
+  --stale_lock_sec 10800 \
+  # --no_cleanup \
+  # --keep_prompt \
+  # --keep_json \
+  # --keep_control_dir \
+  # --cleanup_logs
+```
+
+#### 例 0 参数说明（逐项）
+基础输入与批量控制：
+- `--input_dir`：输入视频根目录（递归查找 mp4）。
+- `--num_videos`：最多处理多少个视频；0 表示全部。
+- `--shuffle`：是否打乱视频顺序。
+- `--shuffle_seed`：打乱时的随机种子，便于复现。
+- `--selection_file`：可选清单文件路径；存在时复用选择结果。
+- `--selective_task`：按 tasks.parquet 分组抽样，每个任务最多 N 个。
+- `--gpus`：GPU 列表，逗号分隔。
+- `--console`：是否在终端打印简要进度。
+- `--variants_per_video`：每个视频生成多少个变体。
+- `--resume_incomplete`：只补齐未完成变体。
+
+路径与仓库：
+- `--work_dir`：工作/输出根目录。
+- `--autoprompt_root`：AutoPrompt 代码根目录。
+- `--depth_root`：Video-Depth-Anything 根目录。
+- `--seg_root`：AutoSeg-SAM2 根目录。
+- `--cv_root`：包含 gen_controls_cv_mp4.py 的路径。
+- `--transfer_root`：Cosmos-Transfer2.5 根目录。
+- `--hf_cache`：HuggingFace 缓存目录。
+
+控制类型：
+- `--control_type`：控制信号类型（depth/edge/blur/seg/combo）。
+
+Step2 Prompt：
+- `--qwen_env`：Prompt 生成用的 conda 环境。
+- `--prompt_fps`：robot_video_to_prompt.py 的 FPS 参数。
+- `--prompt_size`：模型 size 参数（如 32B）。
+- `--prompt_variant`：模型 variant 参数（如 instruct）。
+- `--prompt_model_type`：模型族（Qwen3 或 Qwen2.5）。
+- `--reuse_prompt`：复用已有 prompt 文件。
+- `--sim2real_only`：只跑 Step1 base prompt。
+- `--min_terms`：替换的最少词数。
+- `--max_terms`：替换的最多词数。
+- `--replace_all_terms`：替换所有可替换词。
+- `--replacements_per_term`：每个词生成多少替换候选。
+- `--interactive_replace`：交互式选择替换项。
+
+Step3 Depth：
+- `--depth_env`：Depth 模型 conda 环境。
+- `--depth_encoder`：Depth 编码器（如 vitl）。
+- `--no_depth_grayscale`：关闭深度灰度输出。
+
+Step3 Seg：
+- `--seg_env`：Seg 模型 conda 环境。
+- `--seg_level`：Seg 级别（small/middle/large）。
+- `--seg_use_other_level`：启用 AutoSeg 的 use_other_level。
+- `--seg_detect_stride`：检测 stride。
+- `--seg_save_intermediate`：保留中间结果。
+- `--seg_save_npy`：保存 npy 结果。
+- `--seg_enable_highlight`：启用高亮可视化。
+- `--seg_disable_overlay`：禁用 overlay 可视化。
+- `--seg_overlay_style`：overlay 样式。
+
+Step3 Edge/Blur：
+- `--cv_env`：edge/blur 生成环境。
+- `--blur_sigma`：Gaussian blur sigma。
+- `--edge_low`：Canny low 阈值。
+- `--edge_high`：Canny high 阈值。
+
+Step0 预处理：
+- `--pre_width`：预处理输出宽度（可为 none）。
+- `--pre_height`：预处理输出高度（可为 none）。
+- `--pre_no_keep_aspect`：不保持宽高比。
+- `--pre_chunk_mode`：chunk 对齐模式（none/clip/speed）。
+- `--pre_chunk_policy`：对齐策略（down/up）。
+- `--pre_chunk_clip_where`：clip 模式裁剪位置。
+- `--pre_chunk_max_adjust`：过大偏差时跳过对齐。
+- `--pre_chunk_force_chunks`：强制 chunk 数。
+- `--keyframe_sampling`：关键帧采样方式。
+- `--keyframe_target_frames`：目标关键帧数。
+- `--keyframe_smooth_win`：运动平滑窗口。
+- `--keyframe_max_gap`：最大帧间隔。
+- `--parquet_pose_subset`：parquet pose 子集。
+- `--proxy_preflight`：启用 Proxy IoU 预飞行。
+- `--proxy_iou_threshold`：坏帧 IoU 阈值。
+- `--proxy_iou_high_threshold`：高 IoU 删除阈值。
+- `--proxy_motion_low_quantile`：低运动分位阈值。
+- `--proxy_max_iters`：预飞行最大迭代次数。
+- `--proxy_restore_mode`：Proxy 恢复模式。
+- `--proxy_rife_backend`：Proxy 恢复使用的 RIFE 后端（可为 none）。
+- `--proxy_preflight_cache_csv`：缓存 IoU CSV。
+- `--proxy_removal_strategy`：删除策略（ranked/bucketed）。
+- `--proxy_removal_buckets`：bucketed 分桶数。
+
+Step5.5 时长恢复：
+- `--post_restore_duration`：输出恢复到原始时长。
+- `--post_restore_mode`：恢复模式（speed/minterpolate/rife）。
+- `--rife_bin`：RIFE 二进制路径。
+- `--rife_model`：RIFE 模型目录。
+- `--rife_backend`：RIFE 后端（ncnn_vulkan/pytorch）。
+- `--rife_pytorch_repo`：Practical-RIFE 仓库路径。
+- `--rife_pytorch_model_dir`：Practical-RIFE 权重目录（可为 none）。
+- `--rife_pytorch_env`：Practical-RIFE conda 环境。
+- `--rife_scale`：RIFE scale。
+- `--rife_keep_audio`：保留音频。
+- `--rife_time_steps_mode`：guided time steps 模式。
+- `--rife_time_steps_cache`：time steps 缓存路径（可为 none）。
+- `--rife_sam_mask_dir`：SAM mask 目录（可为 none）。
+- `--rife_time_steps_force_sam`：强制 SAM time steps。
+- `--rife_sam_generate`：缺失时生成 SAM mask。
+- `--rife_sam_bbox_json`：SAM bbox json（可为 none）。
+- `--rife_sam_keep_workdir`：保留 SAM 工作目录。
+- `--rife_pose_subset`：guided time steps 的 pose 子集。
+- `--rife_time_steps_debug`：输出调试信息。
+
+Step4/5 推理：
+- `--seed`：随机种子。
+- `--num_conditional_frames`：条件帧数量。
+- `--resolution`：Transfer2.5 bucket 分辨率 key。
+- `--sigma_max`：sigma_max（可为 none）。
+- `--num_video_frames_per_chunk`：每 chunk 帧数。
+- `--show_control_condition`：可视化控制条件。
+- `--show_input`：可视化输入。
+- `--disable_keep_input_resolution`：不保持输入分辨率。
+- `--image_context_path`：image context 路径（可为 none）。
+- `--guidance`：guidance 值。
+- `--num_steps`：推理步数。
+- `--control_weight`：控制权重。
+- `--disable_guardrails`：禁用 guardrails。
+- `--depth_control_weight`：depth 权重覆盖（可为 none）。
+- `--edge_control_weight`：edge 权重覆盖（可为 none）。
+- `--seg_control_weight`：seg 权重覆盖（可为 none）。
+- `--vis_control_weight`：vis 权重覆盖（可为 none）。
+- `--force_infer`：强制推理（忽略已有输出）。
+
+Step6 机械臂替换：
+- `--enable_arm_swap`：启用机械臂替换。
+- `--arm_swap_no_workdir_write`：内存模式，避免落盘。
+- `--arm_swap_workdir_write`：启用落盘工作目录。
+- `--arm_swap_prompt`：Qwen prompt。
+- `--arm_swap_erode`：mask 腐蚀大小。
+- `--arm_swap_feather`：mask feather 大小。
+- `--arm_swap_dilate`：mask 膨胀大小。
+- `--arm_swap_split`：分两步运行。
+- `--arm_swap_single`：单进程运行（关闭 split）。
+- `--arm_swap_qwen_only`：只跑 Qwen 生成 bbox。
+- `--arm_swap_sam_only`：只跑 SAM（需 bbox json）。
+- `--arm_swap_bbox_json`：bbox json 路径（可为 none）。
+- `--arm_swap_keep_bbox_json`：保留 bbox json。
+
+缓存与清理：
+- `--no_cache_control`：禁用控制缓存。
+- `--force_regen_control`：强制重建控制。
+- `--fingerprint_mode`：指纹模式（path/stat/md5）。
+- `--lock_timeout_sec`：锁等待超时（秒）。
+- `--stale_lock_sec`：锁过期时间（秒）。
+- `--no_cleanup`：禁用清理。
+- `--keep_prompt`：保留 prompt 文件。
+- `--keep_json`：保留 json spec。
+- `--keep_control_dir`：保留非缓存控制目录。
+- `--cleanup_logs`：清理日志。
+
 ### 例 1：单卡跑全部
 ```bash
 python scripts/run_batch.py \
@@ -64,14 +353,14 @@ python scripts/run_batch.py \
 - `--keyframe_smooth_win N`：运动分数平滑窗口（默认 0）。
 - `--keyframe_max_gap N`：最大帧间隔约束（默认 2026）。
 - `--parquet_pose_subset {zarm_pos,zarm_pos_vel,zarm_pos_vel_hand,full}`：parquet_motion 的姿态维度子集（默认 `zarm_pos_vel`，可过滤非机械臂维度）。
-- `--proxy_preflight`：启用 Step1.5.5 Proxy IoU 预飞行（默认关闭）。
-- `--proxy_iou_threshold`：IoU 判定坏帧阈值（默认 0.90）。
-- `--proxy_iou_high_threshold`：删除候选所需的高 IoU 门槛（默认 0.98）。
+- `--proxy_preflight`：启用 Step1.5.5 Proxy IoU 预飞行（默认开启）。
+- `--proxy_iou_threshold`：IoU 判定坏帧阈值（默认 0.94）。
+- `--proxy_iou_high_threshold`：删除候选所需的高 IoU 门槛（默认 0.96）。
 - `--proxy_motion_low_quantile`：低运动分位阈值（默认 0.25）。
 - `--proxy_max_iters`：预飞行最大迭代次数（默认 3）。
 - `--proxy_restore_mode {speed,minterpolate,rife}`：Proxy 恢复模式（默认 `rife`）。
 - `--proxy_rife_backend {ncnn_vulkan,pytorch}`：Proxy 恢复使用的 RIFE 后端（默认沿用 `--rife_backend`）。
-- `--proxy_preflight_cache_csv`：缓存每轮 IoU 结果到预处理 MP4 根目录下的 CSV，并输出对应的 IoU 曲线 PNG（默认关闭）。
+- `--proxy_preflight_cache_csv`：缓存每轮 IoU 结果到预处理 MP4 根目录下的 CSV，并输出对应的 IoU 曲线 PNG（默认开启）。
 - `--proxy_removal_strategy {ranked,bucketed}`：删除策略（`ranked` 为高 IoU + 低运动优先；`bucketed` 为按时间分桶后在桶内优先删除，默认 `ranked`）。
 - `--proxy_removal_buckets`：`bucketed` 删除策略下的分桶数量（默认 6）。
 
@@ -154,7 +443,7 @@ python scripts/run_batch.py \
 - `--post_restore_mode {speed,minterpolate,rife}`：speed=变速回拉；minterpolate=插值回拉（更平滑但更慢）；rife=使用 RIFE 进行补帧（需安装 rife-ncnn-vulkan）。
   - `--rife_bin`：RIFE 可执行文件路径（默认 `rife-ncnn-vulkan`，需在 PATH）。
   - `--rife_model`：RIFE 模型目录（可选）。
-  - `--rife_backend {ncnn_vulkan,pytorch}`：RIFE 后端选择（默认 ncnn_vulkan）。
+  - `--rife_backend {ncnn_vulkan,pytorch}`：RIFE 后端选择（默认 pytorch）。
   - `--rife_pytorch_repo`：Practical-RIFE 仓库路径（pytorch 后端必填，默认 `/mnt/data/ganrunhe/Practical-RIFE`）。
   - `--rife_pytorch_model_dir`：Practical-RIFE 权重目录（默认 `<repo>/train_log`）。
   - `--rife_pytorch_env`：Practical-RIFE conda 环境（默认 rife）。
