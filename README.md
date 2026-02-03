@@ -29,6 +29,14 @@
 - `auto_transfer_runner/utils/`：通用工具（日志、锁、指纹、路径等）
 
 ## 快速开始
+最简调用（仅需输入目录、GPU、控制类型）：
+```bash
+python scripts/run_batch.py \
+  --input_dir <input_dir> \
+  --gpus 0 \
+  --control_type depth
+```
+
 ### 例 0：默认值展开版命令
 > 说明：以下把所有 CLI 参数全部写出，便于“默认值”一览与复制。`none`/空字符串会被解析为 `None`。路径统一用 `<input_dir>`/`<output_dir>` 占位符。
 ```bash
