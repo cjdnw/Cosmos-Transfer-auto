@@ -1,0 +1,4 @@
+python stitch_multiview.py \
+  --videos /mnt/data/ganrunhe/real_data/input_video/Robo_real_L.mp4  /mnt/data/ganrunhe/real_data/input_video/Robo_real.mp4  /mnt/data/ganrunhe/real_data/input_video/Robo_real_R.mp4\
+  --depths /mnt/data/ganrunhe/real_data/Robo_real_gray/Robo_real_L_vis.mp4 /mnt/data/ganrunhe/real_data/Robo_real_gray/Robo_real_vis.mp4 /mnt/data/ganrunhe/real_data/Robo_real_gray/Robo_real_R_vis.mp4 \
+  --outdir /mnt/data/ganrunhe/real_data/outputs_multiview_depth \
