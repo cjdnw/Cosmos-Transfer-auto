@@ -45,7 +45,7 @@ class PromptConfig:
     sim2real_only: bool = False
     min_replace_terms: int = 1
     max_replace_terms: int = 3
-    replace_all_terms: bool = False
+    replace_all_terms: bool = True
     replacements_per_term: int = 64
     interactive_replace: bool = False
 
@@ -54,7 +54,7 @@ class PromptConfig:
 class DepthConfig:
     """Step3: depth control generation config."""
     conda_env: str = "depthanything"
-    encoder: str = "vitb"
+    encoder: str = "vitl"
     grayscale: bool = True
 
 
@@ -91,20 +91,20 @@ class PreprocessConfig:
     pre_chunk_policy: str = "down"
     pre_chunk_clip_where: str = "tail"
     pre_chunk_max_adjust: int = 40
-    pre_chunk_force_chunks: int | None = None
+    pre_chunk_force_chunks: int | None = 1
     keyframe_sampling: str = "uniform"  # uniform | parquet_motion
     keyframe_target_frames: int | None = None
     keyframe_smooth_win: int = 5
     keyframe_max_gap: int = 8
     parquet_pose_subset: str = "zarm_pos_vel"
-    proxy_preflight_enable: bool = False
-    proxy_iou_threshold: float = 0.9
-    proxy_iou_high_threshold: float = 0.98
+    proxy_preflight_enable: bool = True
+    proxy_iou_threshold: float = 0.94
+    proxy_iou_high_threshold: float = 0.96
     proxy_motion_low_quantile: float = 0.25
     proxy_max_iters: int = 3
     proxy_restore_mode: str = "rife"
     proxy_rife_backend: str | None = None
-    proxy_preflight_cache_csv: bool = False
+    proxy_preflight_cache_csv: bool = True
     proxy_removal_strategy: str = "ranked"
     proxy_removal_buckets: int = 6
 
@@ -112,11 +112,11 @@ class PreprocessConfig:
 @dataclass(frozen=True)
 class PostprocessConfig:
     """Postprocess config (restore duration after Transfer)."""
-    restore_duration: bool = False
-    restore_mode: str = "speed"  # speed | minterpolate | rife
+    restore_duration: bool = True
+    restore_mode: str = "rife"  # speed | minterpolate | rife
     rife_bin: str = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan"
     rife_model: str | None = "/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6"
-    rife_backend: str = "ncnn_vulkan"  # ncnn_vulkan | pytorch
+    rife_backend: str = "pytorch"  # ncnn_vulkan | pytorch
     rife_pytorch_repo: str | None = "/mnt/data/ganrunhe/Practical-RIFE"
     rife_pytorch_model_dir: str | None = None
     rife_pytorch_env: str = "rife"
@@ -160,14 +160,14 @@ class TransferConfig:
     edge_control_weight: float = 1.0
     seg_control_weight: float = 1.0
     vis_control_weight: float = 1.0
-    disable_guardrails: bool = False
+    disable_guardrails: bool = True
     skip_if_output_exists: bool = True
 
 
 @dataclass(frozen=True)
 class ArmSwapConfig:
     """Step6: robot arm swap config (qwen3vl + sam3)."""
-    enable: bool = False
+    enable: bool = True
     project_root: Path = DEFAULT_ARM_SWAP_ROOT
     conda_env: str = "arm_swap"
     output_root: Path = DEFAULT_ARM_SWAP_OUTPUT_ROOT
