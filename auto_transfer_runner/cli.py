@@ -65,6 +65,26 @@ RESOLUTION_CHOICES = [
     "256",
 ]
 
+def _none_or_str(value: str) -> str | None:
+    value = value.strip()
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return value
+
+
+def _none_or_int(value: str) -> int | None:
+    value = value.strip()
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return int(value)
+
+
+def _none_or_float(value: str) -> float | None:
+    value = value.strip()
+    if value.lower() in {"none", "null", ""}:
+        return None
+    return float(value)
+
 
 def now_tag() -> str:
     return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -424,10 +444,10 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--input_dir", required=True, help="Directory that contains source .mp4 files (recursive)")
     ap.add_argument("--num_videos", type=int, default=0, help="How many unique input videos to process; 0 = all")
     ap.add_argument("--shuffle", action="store_true", help="Shuffle videos before selecting the first N")
-    ap.add_argument("--shuffle_seed", type=int, default=None, help="Seed for shuffle to keep selection deterministic")
+    ap.add_argument("--shuffle_seed", type=_none_or_int, default=None, help="Seed for shuffle to keep selection deterministic")
     ap.add_argument(
         "--selection_file",
-        type=str,
+        type=_none_or_str,
         default=None,
         help="Optional JSON file to persist/reuse selected videos (default: <work_dir>/selection_<hash>.json)",
     )
@@ -440,12 +460,12 @@ def main(argv: List[str] | None = None) -> None:
         metavar="N",
         help="Select videos by tasks.parquet content; keep at most N videos per task (default: 3)",
     )
-    ap.add_argument("--gpus", type=str, default="", help="GPU list, e.g. 0,1,2,3; empty = 0")
-    ap.add_argument("--console", action="store_true", help="Print high-level progress to console (stdout)")
+    ap.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7", help="GPU list, e.g. 0,1,2,3; empty = 0")
+    ap.add_argument("--console", action="store_true", default=True, help="Print high-level progress to console (stdout)")
 
     # Repeat each video K times
-    ap.add_argument("--variants_per_video", type=int, default=1,
-                    help="Repeat each input video K times to generate K different outputs (default: 1)")
+    ap.add_argument("--variants_per_video", type=int, default=5,
+                    help="Repeat each input video K times to generate K different outputs (default: 5)")
     ap.add_argument(
         "--resume_incomplete",
         action="store_true",
@@ -501,13 +521,14 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument(
         "--replace_all_terms",
         action="store_true",
+        default=PROMPT_DEFAULTS.replace_all_terms,
         help="Replace all bracketed terms (ignore --min_terms/--max_terms limits)",
     )
     ap.add_argument(
         "--replacements_per_term",
         type=int,
         default=PROMPT_DEFAULTS.replacements_per_term,
-        help="How many alternative descriptors to generate for each bracketed term (default: 6)",
+        help="How many alternative descriptors to generate for each bracketed term (default: 64)",
     )
     ap.add_argument(
         "--interactive_replace",
@@ -540,9 +561,9 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--edge_high", type=int, default=CV_DEFAULTS.canny_high, help="Canny high threshold for edge control")
 
     # Step0 (preprocess)
-    ap.add_argument("--pre_width", type=int, default=PREPROCESS_DEFAULTS.width,
+    ap.add_argument("--pre_width", type=_none_or_int, default=PREPROCESS_DEFAULTS.width,
                     help="Preprocess output width (default: keep original)")
-    ap.add_argument("--pre_height", type=int, default=PREPROCESS_DEFAULTS.height,
+    ap.add_argument("--pre_height", type=_none_or_int, default=PREPROCESS_DEFAULTS.height,
                     help="Preprocess output height (default: keep original)")
     ap.add_argument("--pre_no_keep_aspect", action="store_true",
                     help="Disable aspect-ratio preservation in preprocessing (default: keep aspect)")
@@ -588,7 +609,7 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--keyframe_target_frames",
-        type=int,
+        type=_none_or_int,
         default=PREPROCESS_DEFAULTS.keyframe_target_frames,
         help="Target keyframe count when keyframe_sampling is enabled (default: num_video_frames_per_chunk)",
     )
@@ -615,19 +636,19 @@ def main(argv: List[str] | None = None) -> None:
         "--proxy_preflight",
         action="store_true",
         default=PREPROCESS_DEFAULTS.proxy_preflight_enable,
-        help="Enable STEP1.5.5 proxy IoU preflight for keyframe reallocation (default: off)",
+        help="Enable STEP1.5.5 proxy IoU preflight for keyframe reallocation (default: on)",
     )
     ap.add_argument(
         "--proxy_iou_threshold",
         type=float,
         default=PREPROCESS_DEFAULTS.proxy_iou_threshold,
-        help="IoU threshold for proxy preflight bad frames (default: 0.90)",
+        help="IoU threshold for proxy preflight bad frames (default: 0.94)",
     )
     ap.add_argument(
         "--proxy_iou_high_threshold",
         type=float,
         default=PREPROCESS_DEFAULTS.proxy_iou_high_threshold,
-        help="High IoU threshold for removal candidates (default: 0.98)",
+        help="High IoU threshold for removal candidates (default: 0.96)",
     )
     ap.add_argument(
         "--proxy_motion_low_quantile",
@@ -650,16 +671,16 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--proxy_rife_backend",
-        type=str,
+        type=_none_or_str,
         default=PREPROCESS_DEFAULTS.proxy_rife_backend,
-        choices=["ncnn_vulkan", "pytorch"],
+        choices=["ncnn_vulkan", "pytorch", None],
         help="Override RIFE backend for proxy preflight (default: use --rife_backend)",
     )
     ap.add_argument(
         "--proxy_preflight_cache_csv",
         action="store_true",
         default=PREPROCESS_DEFAULTS.proxy_preflight_cache_csv,
-        help="Cache proxy preflight IoU results per iteration to CSV in prepro mp4 root (default: off)",
+        help="Cache proxy preflight IoU results per iteration to CSV in prepro mp4 root (default: on)",
     )
     ap.add_argument(
         "--proxy_removal_strategy",
@@ -679,6 +700,7 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument(
         "--post_restore_duration",
         action="store_true",
+        default=POSTPROCESS_DEFAULTS.restore_duration,
         help="Restore Transfer output to original duration",
     )
     ap.add_argument(
@@ -705,7 +727,7 @@ def main(argv: List[str] | None = None) -> None:
         type=str,
         default=POSTPROCESS_DEFAULTS.rife_backend,
         choices=["ncnn_vulkan", "pytorch"],
-        help="RIFE backend: ncnn_vulkan (default) or pytorch (inference_video.py)",
+        help="RIFE backend: ncnn_vulkan or pytorch (default: pytorch)",
     )
     ap.add_argument(
         "--rife_pytorch_repo",
@@ -715,7 +737,7 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--rife_pytorch_model_dir",
-        type=str,
+        type=_none_or_str,
         default=POSTPROCESS_DEFAULTS.rife_pytorch_model_dir,
         help="Practical-RIFE model dir (default: <rife_pytorch_repo>/train_log)",
     )
@@ -745,13 +767,13 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--rife_time_steps_cache",
-        type=str,
+        type=_none_or_str,
         default=POSTPROCESS_DEFAULTS.rife_time_steps_cache,
         help="Cache path for guided time_steps (default: <work_dir>/rife_cache/time_steps.json)",
     )
     ap.add_argument(
         "--rife_sam_mask_dir",
-        type=str,
+        type=_none_or_str,
         default=POSTPROCESS_DEFAULTS.rife_sam_mask_dir,
         help="SAM mask directory for guided time_steps (default: <work_dir>/rife_sam_cache)",
     )
@@ -767,7 +789,7 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--rife_sam_bbox_json",
-        type=str,
+        type=_none_or_str,
         default=POSTPROCESS_DEFAULTS.rife_sam_bbox_json,
         help="BBox json path for SAM mask generation (from Qwen)",
     )
@@ -802,7 +824,7 @@ def main(argv: List[str] | None = None) -> None:
             f"(choices: {', '.join(RESOLUTION_CHOICES)}; default: 720)"
         ),
     )
-    ap.add_argument("--sigma_max", type=float, default=TRANSFER_DEFAULTS.sigma_max,
+    ap.add_argument("--sigma_max", type=_none_or_float, default=TRANSFER_DEFAULTS.sigma_max,
                     help="sigma_max in json spec (default: None)")
     ap.add_argument("--num_video_frames_per_chunk", type=int, default=TRANSFER_DEFAULTS.num_video_frames_per_chunk,
                     help="num_video_frames_per_chunk in json spec (default: 93)")
@@ -811,7 +833,7 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--show_input", action="store_true", help="Set show_input=true in json spec (default: false)")
     ap.add_argument("--disable_keep_input_resolution", action="store_true",
                     help="Set keep_input_resolution=false in json spec (default: true)")
-    ap.add_argument("--image_context_path", type=str, default=TRANSFER_DEFAULTS.image_context_path,
+    ap.add_argument("--image_context_path", type=_none_or_str, default=TRANSFER_DEFAULTS.image_context_path,
                     help="image_context_path in json spec (default: null)")
     ap.add_argument("--guidance", type=float, default=TRANSFER_DEFAULTS.guidance, help="guidance value in json spec")
     ap.add_argument("--num_steps", type=int, default=TRANSFER_DEFAULTS.num_steps, help="num_steps in json spec (default: 35)")
@@ -819,36 +841,37 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument(
         "--disable_guardrails",
         action="store_true",
+        default=TRANSFER_DEFAULTS.disable_guardrails,
         help="Pass --disable_guardrails to Cosmos-Transfer2.5 inference",
     )
     ap.add_argument(
         "--depth_control_weight",
-        type=float,
+        type=_none_or_float,
         default=None,
         help="depth control_weight override (default: --control_weight)",
     )
     ap.add_argument(
         "--edge_control_weight",
-        type=float,
+        type=_none_or_float,
         default=None,
         help="edge control_weight override (default: --control_weight)",
     )
     ap.add_argument(
         "--seg_control_weight",
-        type=float,
+        type=_none_or_float,
         default=None,
         help="seg control_weight override (default: --control_weight)",
     )
     ap.add_argument(
         "--vis_control_weight",
-        type=float,
+        type=_none_or_float,
         default=None,
         help="vis(blur) control_weight override (default: --control_weight)",
     )
     ap.add_argument("--force_infer", action="store_true", help="Force inference even if output directory is not empty")
 
     # Step6: robot arm swap (qwen3vl + sam3)
-    ap.add_argument("--enable_arm_swap", action="store_true",
+    ap.add_argument("--enable_arm_swap", action="store_true", default=ARM_SWAP_DEFAULTS.enable,
                     help="Enable robot arm swap after transfer (qwen3vl + sam3)")
     ap.add_argument(
         "--arm_swap_no_workdir_write",
@@ -894,7 +917,7 @@ def main(argv: List[str] | None = None) -> None:
     )
     ap.add_argument(
         "--arm_swap_bbox_json",
-        type=str,
+        type=_none_or_str,
         default=None,
         help="Path to bbox JSON for arm swap (output for Qwen-only or input for SAM-only)",
     )
