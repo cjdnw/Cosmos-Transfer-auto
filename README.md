@@ -172,159 +172,159 @@ python scripts/run_batch.py \
   # --cleanup_logs
 ```
 
-#### 例 0 参数说明（逐项）
+#### 例 0 参数说明（逐项，含默认值）
 基础输入与批量控制：
-- `--input_dir`：输入视频根目录（递归查找 mp4）。
-- `--num_videos`：最多处理多少个视频；0 表示全部。
-- `--shuffle`：是否打乱视频顺序。
-- `--shuffle_seed`：打乱时的随机种子，便于复现。
-- `--selection_file`：可选清单文件路径；存在时复用选择结果。
-- `--selective_task`：按 tasks.parquet 分组抽样，每个任务最多 N 个。
-- `--gpus`：GPU 列表，逗号分隔。
-- `--console`：是否在终端打印简要进度。
-- `--variants_per_video`：每个视频生成多少个变体。
-- `--resume_incomplete`：只补齐未完成变体。
+- `--input_dir`（默认：必填）：输入视频根目录（递归查找 mp4）。
+- `--num_videos`（默认：0）：最多处理多少个视频；0 表示全部。
+- `--shuffle`（默认：关闭）：是否打乱视频顺序（关闭时按路径排序）。
+- `--shuffle_seed`（默认：none）：打乱时的随机种子，便于复现。
+- `--selection_file`（默认：none）：可选清单文件路径；存在时复用选择结果。
+- `--selective_task`（默认：0）：按 tasks.parquet 分组抽样，每个任务最多 N 个。
+- `--gpus`（默认：`0,1,2,3,4,5,6,7`）：GPU 列表，逗号分隔。
+- **`--console`**（默认：开启）：在终端打印简要进度。
+- `--variants_per_video`（默认：5）：每个视频生成多少个变体。
+- `--resume_incomplete`（默认：关闭）：只补齐未完成变体。
 
 路径与仓库：
-- `--work_dir`：工作/输出根目录。
-- `--autoprompt_root`：AutoPrompt 代码根目录。
-- `--depth_root`：Video-Depth-Anything 根目录。
-- `--seg_root`：AutoSeg-SAM2 根目录。
-- `--cv_root`：包含 gen_controls_cv_mp4.py 的路径。
-- `--transfer_root`：Cosmos-Transfer2.5 根目录。
-- `--hf_cache`：HuggingFace 缓存目录。
+- `--work_dir`（默认：`/mnt/data/ganrunhe/auto_transfer`）：工作/输出根目录。
+- `--autoprompt_root`（默认：仓库根目录）：AutoPrompt 代码根目录。
+- `--depth_root`（默认：`/mnt/data/ganrunhe/Video-Depth-Anything`）：Video-Depth-Anything 根目录。
+- `--seg_root`（默认：`/mnt/data/ganrunhe/AutoSeg-SAM2`）：AutoSeg-SAM2 根目录。
+- `--cv_root`（默认：仓库根目录）：包含 gen_controls_cv_mp4.py 的路径。
+- `--transfer_root`（默认：`/mnt/data/ganrunhe/cosmos-transfer2.5`）：Cosmos-Transfer2.5 根目录。
+- `--hf_cache`（默认：`/mnt/data/ganrunhe/hf_cache`）：HuggingFace 缓存目录。
 
 控制类型：
-- `--control_type`：控制信号类型（depth/edge/blur/seg/combo）。
+- `--control_type`（默认：`depth`）：控制信号类型（depth/edge/blur/seg/combo）。
 
 Step2 Prompt：
-- `--qwen_env`：Prompt 生成用的 conda 环境。
-- `--prompt_fps`：robot_video_to_prompt.py 的 FPS 参数。
-- `--prompt_size`：模型 size 参数（如 32B）。
-- `--prompt_variant`：模型 variant 参数（如 instruct）。
-- `--prompt_model_type`：模型族（Qwen3 或 Qwen2.5）。
-- `--reuse_prompt`：复用已有 prompt 文件。
-- `--sim2real_only`：只跑 Step1 base prompt。
-- `--min_terms`：替换的最少词数。
-- `--max_terms`：替换的最多词数。
-- `--replace_all_terms`：替换所有可替换词。
-- `--replacements_per_term`：每个词生成多少替换候选。
-- `--interactive_replace`：交互式选择替换项。
+- `--qwen_env`（默认：`qwen3vl`）：Prompt 生成用的 conda 环境。
+- `--prompt_fps`（默认：4.0）：robot_video_to_prompt.py 的 FPS 参数。
+- `--prompt_size`（默认：`32B`）：模型 size 参数（如 32B）。
+- `--prompt_variant`（默认：`instruct`）：模型 variant 参数（如 instruct）。
+- `--prompt_model_type`（默认：`Qwen3`）：模型族（Qwen3 或 Qwen2.5）。
+- `--reuse_prompt`（默认：关闭）：复用已有 prompt 文件。
+- `--sim2real_only`（默认：关闭）：只跑 Step1 base prompt。
+- `--min_terms`（默认：1）：替换的最少词数。
+- `--max_terms`（默认：3）：替换的最多词数。
+- **`--replace_all_terms`**（默认：开启）：替换所有可替换词。
+- `--replacements_per_term`（默认：64）：每个词生成多少替换候选。
+- `--interactive_replace`（默认：关闭）：交互式选择替换项。
 
 Step3 Depth：
-- `--depth_env`：Depth 模型 conda 环境。
-- `--depth_encoder`：Depth 编码器（如 vitl）。
-- `--no_depth_grayscale`：关闭深度灰度输出。
+- `--depth_env`（默认：`depthanything`）：Depth 模型 conda 环境。
+- `--depth_encoder`（默认：`vitl`）：Depth 编码器（如 vitl）。
+- `--no_depth_grayscale`（默认：关闭）：关闭深度灰度输出。
 
 Step3 Seg：
-- `--seg_env`：Seg 模型 conda 环境。
-- `--seg_level`：Seg 级别（small/middle/large）。
-- `--seg_use_other_level`：启用 AutoSeg 的 use_other_level。
-- `--seg_detect_stride`：检测 stride。
-- `--seg_save_intermediate`：保留中间结果。
-- `--seg_save_npy`：保存 npy 结果。
-- `--seg_enable_highlight`：启用高亮可视化。
-- `--seg_disable_overlay`：禁用 overlay 可视化。
-- `--seg_overlay_style`：overlay 样式。
+- `--seg_env`（默认：`autoseg`）：Seg 模型 conda 环境。
+- `--seg_level`（默认：`large`）：Seg 级别（small/middle/large）。
+- `--seg_use_other_level`（默认：关闭）：启用 AutoSeg 的 use_other_level。
+- `--seg_detect_stride`（默认：10）：检测 stride。
+- `--seg_save_intermediate`（默认：关闭）：保留中间结果。
+- `--seg_save_npy`（默认：关闭）：保存 npy 结果。
+- `--seg_enable_highlight`（默认：关闭）：启用高亮可视化。
+- `--seg_disable_overlay`（默认：关闭）：禁用 overlay 可视化。
+- `--seg_overlay_style`（默认：`mask`）：overlay 样式。
 
 Step3 Edge/Blur：
-- `--cv_env`：edge/blur 生成环境。
-- `--blur_sigma`：Gaussian blur sigma。
-- `--edge_low`：Canny low 阈值。
-- `--edge_high`：Canny high 阈值。
+- `--cv_env`（默认：`sam`）：edge/blur 生成环境。
+- `--blur_sigma`（默认：10.0）：Gaussian blur sigma。
+- `--edge_low`（默认：80）：Canny low 阈值。
+- `--edge_high`（默认：160）：Canny high 阈值。
 
 Step0 预处理：
-- `--pre_width`：预处理输出宽度（可为 none）。
-- `--pre_height`：预处理输出高度（可为 none）。
-- `--pre_no_keep_aspect`：不保持宽高比。
-- `--pre_chunk_mode`：chunk 对齐模式（none/clip/speed）。
-- `--pre_chunk_policy`：对齐策略（down/up）。
-- `--pre_chunk_clip_where`：clip 模式裁剪位置。
-- `--pre_chunk_max_adjust`：过大偏差时跳过对齐。
-- `--pre_chunk_force_chunks`：强制 chunk 数。
-- `--keyframe_sampling`：关键帧采样方式。
-- `--keyframe_target_frames`：目标关键帧数。
-- `--keyframe_smooth_win`：运动平滑窗口。
-- `--keyframe_max_gap`：最大帧间隔。
-- `--parquet_pose_subset`：parquet pose 子集。
-- `--proxy_preflight`：启用 Proxy IoU 预飞行。
-- `--proxy_iou_threshold`：坏帧 IoU 阈值。
-- `--proxy_iou_high_threshold`：高 IoU 删除阈值。
-- `--proxy_motion_low_quantile`：低运动分位阈值。
-- `--proxy_max_iters`：预飞行最大迭代次数。
-- `--proxy_restore_mode`：Proxy 恢复模式。
-- `--proxy_rife_backend`：Proxy 恢复使用的 RIFE 后端（可为 none）。
-- `--proxy_preflight_cache_csv`：缓存 IoU CSV。
-- `--proxy_removal_strategy`：删除策略（ranked/bucketed）。
-- `--proxy_removal_buckets`：bucketed 分桶数。
+- `--pre_width`（默认：none）：预处理输出宽度（可为 none）。
+- `--pre_height`（默认：none）：预处理输出高度（可为 none）。
+- `--pre_no_keep_aspect`（默认：关闭）：不保持宽高比。
+- `--pre_chunk_mode`（默认：`none`）：chunk 对齐模式（none/clip/speed）。
+- `--pre_chunk_policy`（默认：`down`）：对齐策略（down/up）。
+- `--pre_chunk_clip_where`（默认：`tail`）：clip 模式裁剪位置。
+- `--pre_chunk_max_adjust`（默认：40）：过大偏差时跳过对齐。
+- `--pre_chunk_force_chunks`（默认：1）：强制 chunk 数。
+- `--keyframe_sampling`（默认：`uniform`）：关键帧采样方式。
+- `--keyframe_target_frames`（默认：none）：目标关键帧数。
+- `--keyframe_smooth_win`（默认：5）：运动平滑窗口。
+- `--keyframe_max_gap`（默认：8）：最大帧间隔。
+- `--parquet_pose_subset`（默认：`zarm_pos_vel`）：parquet pose 子集。
+- **`--proxy_preflight`**（默认：开启）：启用 Proxy IoU 预飞行。
+- `--proxy_iou_threshold`（默认：0.94）：坏帧 IoU 阈值。
+- `--proxy_iou_high_threshold`（默认：0.96）：高 IoU 删除阈值。
+- `--proxy_motion_low_quantile`（默认：0.25）：低运动分位阈值。
+- `--proxy_max_iters`（默认：3）：预飞行最大迭代次数。
+- `--proxy_restore_mode`（默认：`rife`）：Proxy 恢复模式。
+- `--proxy_rife_backend`（默认：none）：Proxy 恢复使用的 RIFE 后端（可为 none）。
+- **`--proxy_preflight_cache_csv`**（默认：开启）：缓存 IoU CSV。
+- `--proxy_removal_strategy`（默认：`ranked`）：删除策略（ranked/bucketed）。
+- `--proxy_removal_buckets`（默认：6）：bucketed 分桶数。
 
 Step5.5 时长恢复：
-- `--post_restore_duration`：输出恢复到原始时长。
-- `--post_restore_mode`：恢复模式（speed/minterpolate/rife）。
-- `--rife_bin`：RIFE 二进制路径。
-- `--rife_model`：RIFE 模型目录。
-- `--rife_backend`：RIFE 后端（ncnn_vulkan/pytorch）。
-- `--rife_pytorch_repo`：Practical-RIFE 仓库路径。
-- `--rife_pytorch_model_dir`：Practical-RIFE 权重目录（可为 none）。
-- `--rife_pytorch_env`：Practical-RIFE conda 环境。
-- `--rife_scale`：RIFE scale。
-- `--rife_keep_audio`：保留音频。
-- `--rife_time_steps_mode`：guided time steps 模式。
-- `--rife_time_steps_cache`：time steps 缓存路径（可为 none）。
-- `--rife_sam_mask_dir`：SAM mask 目录（可为 none）。
-- `--rife_time_steps_force_sam`：强制 SAM time steps。
-- `--rife_sam_generate`：缺失时生成 SAM mask。
-- `--rife_sam_bbox_json`：SAM bbox json（可为 none）。
-- `--rife_sam_keep_workdir`：保留 SAM 工作目录。
-- `--rife_pose_subset`：guided time steps 的 pose 子集。
-- `--rife_time_steps_debug`：输出调试信息。
+- **`--post_restore_duration`**（默认：开启）：输出恢复到原始时长。
+- `--post_restore_mode`（默认：`rife`）：恢复模式（speed/minterpolate/rife）。
+- `--rife_bin`（默认：`/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-ncnn-vulkan`）：RIFE 二进制路径。
+- `--rife_model`（默认：`/mnt/data/ganrunhe/rife/rife-ncnn-vulkan-20221029-ubuntu/rife-v4.6`）：RIFE 模型目录。
+- `--rife_backend`（默认：`pytorch`）：RIFE 后端（ncnn_vulkan/pytorch）。
+- `--rife_pytorch_repo`（默认：`/mnt/data/ganrunhe/Practical-RIFE`）：Practical-RIFE 仓库路径。
+- `--rife_pytorch_model_dir`（默认：none）：Practical-RIFE 权重目录（可为 none）。
+- `--rife_pytorch_env`（默认：`rife`）：Practical-RIFE conda 环境。
+- `--rife_scale`（默认：1.0）：RIFE scale。
+- `--rife_keep_audio`（默认：关闭）：保留音频。
+- `--rife_time_steps_mode`（默认：`sam_zarm_hybrid`）：guided time steps 模式。
+- `--rife_time_steps_cache`（默认：none）：time steps 缓存路径（可为 none）。
+- `--rife_sam_mask_dir`（默认：none）：SAM mask 目录（可为 none）。
+- `--rife_time_steps_force_sam`（默认：关闭）：强制 SAM time steps。
+- `--rife_sam_generate`（默认：关闭）：缺失时生成 SAM mask。
+- `--rife_sam_bbox_json`（默认：none）：SAM bbox json（可为 none）。
+- `--rife_sam_keep_workdir`（默认：关闭）：保留 SAM 工作目录。
+- `--rife_pose_subset`（默认：`zarm_pos`）：guided time steps 的 pose 子集。
+- `--rife_time_steps_debug`（默认：关闭）：输出调试信息。
 
 Step4/5 推理：
-- `--seed`：随机种子。
-- `--num_conditional_frames`：条件帧数量。
-- `--resolution`：Transfer2.5 bucket 分辨率 key。
-- `--sigma_max`：sigma_max（可为 none）。
-- `--num_video_frames_per_chunk`：每 chunk 帧数。
-- `--show_control_condition`：可视化控制条件。
-- `--show_input`：可视化输入。
-- `--disable_keep_input_resolution`：不保持输入分辨率。
-- `--image_context_path`：image context 路径（可为 none）。
-- `--guidance`：guidance 值。
-- `--num_steps`：推理步数。
-- `--control_weight`：控制权重。
-- `--disable_guardrails`：禁用 guardrails。
-- `--depth_control_weight`：depth 权重覆盖（可为 none）。
-- `--edge_control_weight`：edge 权重覆盖（可为 none）。
-- `--seg_control_weight`：seg 权重覆盖（可为 none）。
-- `--vis_control_weight`：vis 权重覆盖（可为 none）。
-- `--force_infer`：强制推理（忽略已有输出）。
+- `--seed`（默认：2025）：随机种子。
+- `--num_conditional_frames`（默认：1）：条件帧数量。
+- `--resolution`（默认：`720`）：Transfer2.5 bucket 分辨率 key。
+- `--sigma_max`（默认：none）：sigma_max（可为 none）。
+- `--num_video_frames_per_chunk`（默认：93）：每 chunk 帧数。
+- `--show_control_condition`（默认：关闭）：可视化控制条件。
+- `--show_input`（默认：关闭）：可视化输入。
+- `--disable_keep_input_resolution`（默认：关闭）：不保持输入分辨率。
+- `--image_context_path`（默认：none）：image context 路径（可为 none）。
+- `--guidance`（默认：3.0）：guidance 值。
+- `--num_steps`（默认：35）：推理步数。
+- `--control_weight`（默认：1.0）：控制权重。
+- **`--disable_guardrails`**（默认：开启）：禁用 guardrails。
+- `--depth_control_weight`（默认：none）：depth 权重覆盖（可为 none）。
+- `--edge_control_weight`（默认：none）：edge 权重覆盖（可为 none）。
+- `--seg_control_weight`（默认：none）：seg 权重覆盖（可为 none）。
+- `--vis_control_weight`（默认：none）：vis 权重覆盖（可为 none）。
+- `--force_infer`（默认：关闭）：强制推理（忽略已有输出）。
 
 Step6 机械臂替换：
-- `--enable_arm_swap`：启用机械臂替换。
-- `--arm_swap_no_workdir_write`：内存模式，避免落盘。
-- `--arm_swap_workdir_write`：启用落盘工作目录。
-- `--arm_swap_prompt`：Qwen prompt。
-- `--arm_swap_erode`：mask 腐蚀大小。
-- `--arm_swap_feather`：mask feather 大小。
-- `--arm_swap_dilate`：mask 膨胀大小。
-- `--arm_swap_split`：分两步运行。
-- `--arm_swap_single`：单进程运行（关闭 split）。
-- `--arm_swap_qwen_only`：只跑 Qwen 生成 bbox。
-- `--arm_swap_sam_only`：只跑 SAM（需 bbox json）。
-- `--arm_swap_bbox_json`：bbox json 路径（可为 none）。
-- `--arm_swap_keep_bbox_json`：保留 bbox json。
+- **`--enable_arm_swap`**（默认：开启）：启用机械臂替换。
+- **`--arm_swap_no_workdir_write`**（默认：开启）：内存模式，避免落盘。
+- `--arm_swap_workdir_write`（默认：关闭）：启用落盘工作目录。
+- `--arm_swap_prompt`（默认：`robotic arm`）：Qwen prompt。
+- `--arm_swap_erode`（默认：2）：mask 腐蚀大小。
+- `--arm_swap_feather`（默认：3）：mask feather 大小。
+- `--arm_swap_dilate`（默认：0）：mask 膨胀大小。
+- **`--arm_swap_split`**（默认：开启）：分两步运行。
+- `--arm_swap_single`（默认：关闭）：单进程运行（关闭 split）。
+- `--arm_swap_qwen_only`（默认：关闭）：只跑 Qwen 生成 bbox。
+- `--arm_swap_sam_only`（默认：关闭）：只跑 SAM（需 bbox json）。
+- `--arm_swap_bbox_json`（默认：none）：bbox json 路径（可为 none）。
+- `--arm_swap_keep_bbox_json`（默认：关闭）：保留 bbox json。
 
 缓存与清理：
-- `--no_cache_control`：禁用控制缓存。
-- `--force_regen_control`：强制重建控制。
-- `--fingerprint_mode`：指纹模式（path/stat/md5）。
-- `--lock_timeout_sec`：锁等待超时（秒）。
-- `--stale_lock_sec`：锁过期时间（秒）。
-- `--no_cleanup`：禁用清理。
-- `--keep_prompt`：保留 prompt 文件。
-- `--keep_json`：保留 json spec。
-- `--keep_control_dir`：保留非缓存控制目录。
-- `--cleanup_logs`：清理日志。
+- `--no_cache_control`（默认：关闭）：禁用控制缓存。
+- `--force_regen_control`（默认：关闭）：强制重建控制。
+- `--fingerprint_mode`（默认：`md5`）：指纹模式（path/stat/md5）。
+- `--lock_timeout_sec`（默认：21600）：锁等待超时（秒）。
+- `--stale_lock_sec`（默认：10800）：锁过期时间（秒）。
+- `--no_cleanup`（默认：关闭）：禁用清理。
+- `--keep_prompt`（默认：关闭）：保留 prompt 文件。
+- `--keep_json`（默认：关闭）：保留 json spec。
+- `--keep_control_dir`（默认：关闭）：保留非缓存控制目录。
+- `--cleanup_logs`（默认：关闭）：清理日志。
 
 ### 例 1：单卡跑全部
 ```bash
