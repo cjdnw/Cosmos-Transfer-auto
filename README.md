@@ -16,10 +16,13 @@
   - `autoseg`：用于 `AutoSeg-SAM2`（seg 控制信号）
   - `sam`：用于 `gen_controls_cv_mp4.py`（edge/blur 控制信号）
 - 若指定的 `--qwen_env` 不存在，运行时会自动回退到 `qwen25vl` 并在日志中打印警告。
+- 自行git 安装Cosmos-Transfer2.5
 - Cosmos-Transfer2.5 使用 `uv` 创建的 `.venv`：`<transfer_root>/.venv/bin/python`
 - 推理子进程会自动设置 HuggingFace 缓存变量：`HF_HOME`, `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`
 - 可选：安装 `rife-ncnn-vulkan` 或 Practical-RIFE（PyTorch/CUDA）以启用 `--post_restore_mode rife`（RIFE 补帧）
 - 本仓库自身依赖（用于 base 环境运行）见 `requirements.txt`：`numpy`、`pyarrow`、`pillow`。
+- 本工程所依赖的其他工程都总结与Additionalproj中，根据每个工程的readme.md的默认安装方式安装即可
+- 修改 auto_transfer_runner/config.py中 RepoPaths 对应的路径（或通过CLI修改）
 
 ## 工程结构
 - `scripts/run_batch.py`：主入口（命令行运行）
