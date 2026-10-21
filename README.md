@@ -1,3 +1,5 @@
+**[English](README.en.md) | 简体中文**
+
 # Cosmos-Transfer2.5 全自动批处理工程
 
 面向 Cosmos-Transfer2.5 的批处理流水线，将原本手动执行的 **Step2~Step5** 串成可批量、多卡并行的自动化流程，并针对 **depth/seg/edge/blur 控制信号** 做缓存复用（同一输入视频仅生成一次控制信号）。
