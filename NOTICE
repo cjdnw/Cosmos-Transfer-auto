@@ -1,0 +1,14 @@
+Cosmos-Transfer-auto
+Copyright (c) 2025 Runhe Gan
+
+The original code in this repository is released under the MIT License
+(see the LICENSE file).
+
+Third-party components bundled under Additional_proj/ — including
+AutoSeg (SAM 2 based), Video-Depth-Anything, rife_for_transfer2p5, and
+robot-arm-swap — are the work of their respective authors and remain
+under their own licenses, which are included in their directories.
+The MIT License above does not apply to those components.
+
+This project also builds on NVIDIA Cosmos-Transfer2.5, which must be
+obtained separately and is subject to NVIDIA's own terms.
