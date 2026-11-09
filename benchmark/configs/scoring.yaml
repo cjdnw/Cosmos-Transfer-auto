@@ -1,0 +1,26 @@
+# Training-free quality score.
+# Weights are HYPOTHESES ONLY — not tuned on a real test set.
+# Do not iteratively retune wc/wt/wn against held-out real test performance.
+
+mode: weighted_sum  # weighted_sum | uniform | multiplicative | hard_gate_then_weighted
+
+weights:
+  # Default heuristic (hypotheses only; sum to 1.0):
+  control: 0.45   # w_c
+  temporal: 0.35  # w_t
+  novelty: 0.20   # w_n
+
+# All sub-scores mapped to [0,1], higher = better.
+normalization:
+  # Fit ONLY on train/dev candidate pool; freeze before any test evaluation.
+  method: minmax  # minmax | zscore_clip
+  clip_z: 3.0
+  eps: 1.0e-8
+  # Missing sub-scores: exclude from weighted sum and renormalize remaining weights.
+  missing_policy: renormalize
+
+hard_gate:
+  # Applied before weighted score when mode includes hard_gate.
+  min_control: 0.15
+  min_temporal: 0.15
+  # novelty is not hard-gated by default (diversity handled in selection stage).

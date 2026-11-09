@@ -1,0 +1,50 @@
+# Metrics configuration for training-free quality assessment.
+# All control metrics compare RE-EXTRACTED attributes from generated video
+# against the original control signals (Proxy), never control vs itself.
+
+control:
+  segmentation:
+    enabled: true
+    # Proxy: AutoSeg-SAM2 / similar pseudo-labels are NOT ground truth.
+    reference_tag: Proxy
+    # Classes with fewer than this many pixels in the reference are ignored.
+    min_pixels_per_class: 1
+    # Optional ROI mask path pattern (null = full frame).
+    roi_mask: null
+  edge:
+    enabled: true
+    reference_tag: Proxy
+    # Binarization threshold if maps are continuous [0,1] or [0,255].
+    binary_threshold: 0.5
+  depth:
+    enabled: true
+    reference_tag: Proxy
+    # Scale-invariant RMSE; invalid depth values (<=0 or NaN) are masked.
+    invalid_as_nan: true
+  blur:
+    enabled: false
+    reference_tag: Proxy
+
+temporal:
+  warping_error:
+    enabled: true
+    # Prefer Farneback optical flow when OpenCV is available; else frame-diff fallback.
+    flow_backend: auto  # auto | farneback | frame_diff
+    # Occlusion / large-flow mask: discard pixels with flow magnitude > this (px).
+    max_flow_mag: 40.0
+  flickering:
+    enabled: true
+    # Mean absolute frame-to-frame difference on luminance, mapped to [0,1] consistency.
+  temporal_lpips:
+    enabled: false  # optional; requires torch + lpips → MISSING_DEP if absent
+
+diversity:
+  encoder: pixel_pca  # pixel_pca (CPU smoke) | dinov2 (optional extras)
+  dinov2:
+    model_name: dinov2_vits14
+    # If torch/timm/DINOv2 unavailable → status MISSING_DEP, use pixel_pca fallback when allow_fallback=true
+    allow_fallback: true
+  feature_dim: 64
+  near_duplicate_cosine_threshold: 0.98
+  # Novelty is constrained by distance to a real-train feature pool when available.
+  # Distance alone is NOT utility; outliers are not automatically high-value.

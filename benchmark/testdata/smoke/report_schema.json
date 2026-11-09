@@ -1,0 +1,12 @@
+{
+  "required_keys": [
+    "synthetic",
+    "manifest_meta",
+    "scores_summary",
+    "selection",
+    "baselines",
+    "proxy_note",
+    "weights_hypothesis_only"
+  ],
+  "note": "See report.json after smoke; artifacts/ is gitignored."
+}

@@ -1,0 +1,14 @@
+# Core (CPU smoke)
+numpy
+pyyaml
+pillow
+opencv-python-headless
+
+# Dev
+pytest
+
+# Optional extras (Pilot / GPU) — install separately; absence → MISSING_DEP
+# torch
+# torchvision
+# timm
+# lpips
