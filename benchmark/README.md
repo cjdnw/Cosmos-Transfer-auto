@@ -50,10 +50,15 @@ Device order when `diversity.dinov2.device` is `auto`:
 2. else `torch_directml` (`privateuseone:0`) when that package is installed (AMD Windows boxes)
 3. else CPU
 
-Forwards run in **float32**. Autocast is left off. DirectML often has no
-`scaled_dot_product_attention` kernel, so that device uses a float32 matmul
-attention for the forward only. If DirectML placement fails under `auto`, the
-loader falls back to CPU and records `device_note`.
+Forwards run in **float32**. Autocast is left off. CUDA and CPU use
+`torch.inference_mode`. DirectML uses `torch.no_grad`: its `privateuseone`
+kernels call `set_version_counter`, which raises
+`Cannot set version_counter for inference tensor` on inference-mode tensors.
+DirectML also has no `scaled_dot_product_attention` kernel, so that device uses
+a float32 matmul attention for the forward only. If the DirectML forward still
+fails, the loader skips to CPU and records `device_note` (this is a device
+skip, not a missing checkpoint). `diversity.encoder` stays `pixel_pca` unless
+you opt into `dinov2`.
 
 Weight load order (first success wins):
 

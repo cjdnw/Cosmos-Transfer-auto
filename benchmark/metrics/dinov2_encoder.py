@@ -12,8 +12,13 @@ Weight load order (first success wins):
 
 Device order for ``device: auto``: CUDA, else ``torch_directml``
 (``privateuseone``), else CPU. Forwards stay in float32. Autocast is not used.
-DirectML often has no ``scaled_dot_product_attention`` kernel, so that device
-uses an explicit float32 matmul attention during the forward only.
+CUDA and CPU forwards use ``torch.inference_mode``. DirectML uses
+``torch.no_grad`` instead: ``privateuseone`` kernels call
+``set_version_counter``, which raises
+``Cannot set version_counter for inference tensor`` on inference-mode tensors.
+DirectML also has no ``scaled_dot_product_attention`` kernel, so that device
+uses an explicit float32 matmul attention during the forward only. If that
+forward still fails, the loader skips to CPU and records ``device_note``.
 
 Checkpoints cache under ``benchmark/artifacts/weights/dinov2`` (gitignored)
 unless ``BENCHMARK_DINOV2_CACHE`` or ``cache_dir`` is set.
@@ -54,6 +59,13 @@ class Dinov2LoadError(RuntimeError):
         super().__init__(message)
         self.reason = reason
         self.attempts = attempts or []
+
+
+class DirectMLForwardError(RuntimeError):
+    """DirectML was selected, the ViT forward failed, and CPU was not usable either."""
+
+
+_VERSION_COUNTER_ERROR = "Cannot set version_counter for inference tensor"
 
 
 def default_cache_dir() -> Path:
@@ -153,6 +165,36 @@ def sdpa_for_device(kind: str) -> Iterator[None]:
         yield
     finally:
         F.scaled_dot_product_attention = original
+
+
+@contextmanager
+def forward_context(kind: str) -> Iterator[None]:
+    """Disabled-grad forward. DirectML must not enter ``inference_mode``.
+
+    ``torch.inference_mode`` marks every new tensor as an inference tensor.
+    DirectML's privateuseone kernels then call ``TensorImpl::set_version_counter``
+    and raise ``Cannot set version_counter for inference tensor``.
+    ``torch.no_grad`` leaves version counters intact, so the same in-place
+    updates succeed. CUDA and CPU keep ``inference_mode``.
+    """
+    import torch
+
+    grad_ctx = torch.no_grad() if kind == "directml" else torch.inference_mode()
+    with grad_ctx:
+        with sdpa_for_device(kind):
+            yield
+
+
+def directml_failure_message(exc: BaseException) -> str:
+    """Explain a DirectML skip without treating it as a missing checkpoint."""
+    return (
+        "DirectML forward failed on privateuseone "
+        f"({type(exc).__name__}: {exc}). "
+        "ViT forwards on DirectML use torch.no_grad in float32 and a matmul "
+        "attention path. torch.inference_mode is avoided because privateuseone "
+        f"raises '{_VERSION_COUNTER_ERROR}' on inference tensors. "
+        "The run continues on CPU when that device is available."
+    )
 
 
 def resolve_torch_device(preference: str = "auto"):
@@ -287,8 +329,15 @@ def _load_timm(model_name: str, cache_dir: Path) -> Tuple[Any, Dict[str, Any]]:
     return model, {"source": "timm", "timm_name": timm_name}
 
 
+def _prefer_out_of_place_(model: Any) -> None:
+    """DirectML inplace kernels are the ones that bump version counters."""
+    for module in model.modules():
+        if getattr(module, "inplace", None) is True:
+            module.inplace = False
+
+
 def _place_model(model: Any, preference: str, image_size: int) -> Tuple[Any, Any, str, Optional[str]]:
-    """Move to the requested device. ``auto`` + DirectML failure falls back to CPU."""
+    """Move to the requested device. A failed DirectML forward skips to CPU."""
     import torch
 
     device, kind = resolve_torch_device(preference)
@@ -296,25 +345,27 @@ def _place_model(model: Any, preference: str, image_size: int) -> Tuple[Any, Any
     try:
         model = model.float().to(device)
         if kind == "directml":
+            _prefer_out_of_place_(model)
             _probe_forward(model, device, kind, image_size)
         return model, device, kind, note
     except Exception as exc:
-        pref = (preference or "auto").strip().lower()
-        if kind == "directml" and pref in {"auto", "gpu", ""}:
+        if kind != "directml":
+            raise
+        message = directml_failure_message(exc)
+        try:
             cpu = torch.device("cpu")
             model = model.float().to(cpu)
-            note = f"DirectML forward failed ({exc}); using CPU"
-            return model, cpu, "cpu", note
-        raise
+        except Exception as cpu_exc:
+            raise DirectMLForwardError(f"{message} CPU skip also failed: {cpu_exc}") from cpu_exc
+        return model, cpu, "cpu", message
 
 
 def _probe_forward(model: Any, device: Any, kind: str, image_size: int) -> None:
     import torch
 
     dummy = torch.zeros(1, 3, image_size, image_size, dtype=torch.float32, device=device)
-    with torch.inference_mode():
-        with sdpa_for_device(kind):
-            model(dummy)
+    with forward_context(kind):
+        model(dummy)
 
 
 class FrozenDinov2:
@@ -337,9 +388,8 @@ class FrozenDinov2:
         frames = rgb[idx]
         batch = _preprocess_rgb(frames, int(self.info["image_size"]))
         batch = batch.to(device=self.device, dtype=torch.float32)
-        with torch.inference_mode():
-            with sdpa_for_device(self.kind):
-                out = self.model(batch)
+        with forward_context(self.kind):
+            out = self.model(batch)
         emb = _as_frame_matrix(out)
         emb = emb / (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-8)
         video = emb.mean(axis=0)
@@ -397,6 +447,13 @@ def load_dinov2_encoder(cfg: Optional[Dict[str, Any]] = None) -> FrozenDinov2:
     model = _freeze(model)
     try:
         model, device, kind, device_note = _place_model(model, preference, image_size)
+    except DirectMLForwardError as exc:
+        attempts.append({"source": "directml", "error": str(exc)})
+        raise Dinov2LoadError(
+            str(exc),
+            reason="DIRECTML_FORWARD_FAILED",
+            attempts=attempts,
+        ) from exc
     except Exception as exc:
         attempts.append({"source": source_info.get("source", "device"), "error": f"{type(exc).__name__}: {exc}"})
         summary = "; ".join(f"{a['source']}: {a['error']}" for a in attempts)
@@ -416,6 +473,7 @@ def load_dinov2_encoder(cfg: Optional[Dict[str, Any]] = None) -> FrozenDinov2:
         "embed_dim": int(embed_dim) if embed_dim is not None else None,
         "dtype": "float32",
         "autocast": False,
+        "grad_mode": "no_grad" if kind == "directml" else "inference_mode",
         "frozen": True,
         "failed_sources": attempts,
         **source_info,

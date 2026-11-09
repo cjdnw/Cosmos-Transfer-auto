@@ -49,6 +49,9 @@ diversity:
     allow_fallback: true
     # auto: CUDA if available, else torch_directml (privateuseone) if installed, else CPU.
     # Forwards are float32. Autocast is not used. DirectML attention is a float32 matmul.
+    # DirectML uses torch.no_grad, not inference_mode: privateuseone raises
+    # "Cannot set version_counter for inference tensor" on inference tensors.
+    # If that forward still fails, the loader skips to CPU and sets device_note.
     device: auto
     # null → benchmark/artifacts/weights/dinov2 (gitignored). Env BENCHMARK_DINOV2_CACHE overrides.
     cache_dir: null

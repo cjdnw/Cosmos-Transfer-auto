@@ -139,6 +139,7 @@ def test_real_dinov2_encode_when_weights_available():
     assert enc.detail["device"] == "cpu"
     assert enc.detail["frozen"] is True
     assert enc.detail["autocast"] is False
+    assert enc.detail["grad_mode"] == "inference_mode"
     rgb_a = np.zeros((3, 32, 40, 3), dtype=np.uint8)
     rgb_b = np.random.RandomState(0).randint(0, 255, size=(3, 32, 40, 3), dtype=np.uint8)
     feat_a = enc.encode(rgb_a)
@@ -151,3 +152,61 @@ def test_real_dinov2_encode_when_weights_available():
     assert np.allclose(feat_a, feat_a2)
     assert not np.allclose(feat_a, feat_b)
     assert all(not p.requires_grad for p in enc._dino.model.parameters())
+
+
+def test_directml_context_avoids_inference_tensors_and_patches_attention():
+    """privateuseone rejects inference tensors; the DirectML context must not make them.
+
+    CPU PyTorch may allow some in-place ops on inference tensors. DirectML still
+    hits c10 ``TensorImpl::set_version_counter`` and raises
+    'Cannot set version_counter for inference tensor'. This VM has no AMD GPU,
+    so the test checks the context contract on CPU storage.
+    """
+    torch = pytest.importorskip("torch")
+    import torch.nn.functional as F
+
+    from benchmark.metrics.dinov2_encoder import (
+        directml_scaled_dot_product_attention,
+        forward_context,
+    )
+
+    class _InplaceResidual(torch.nn.Module):
+        def forward(self, x):
+            y = x * 1
+            y.add_(1)
+            return y
+
+    layer = _InplaceResidual()
+    x = torch.zeros(2, 4)
+    with forward_context("directml"):
+        assert F.scaled_dot_product_attention is directml_scaled_dot_product_attention
+        made = torch.ones(1)
+        assert made.is_inference() is False
+        out = layer(x)
+    assert F.scaled_dot_product_attention is not directml_scaled_dot_product_attention
+    assert torch.equal(out, torch.ones_like(x))
+    with forward_context("cpu"):
+        assert torch.ones(1).is_inference() is True
+
+
+def test_directml_version_counter_failure_skips_to_cpu(monkeypatch):
+    torch = pytest.importorskip("torch")
+    from benchmark.metrics import dinov2_encoder as mod
+
+    def _resolve(_preference: str = "auto"):
+        return torch.device("cpu"), "directml"
+
+    def _boom(_model, _device, _kind, _image_size):
+        raise RuntimeError("Cannot set version_counter for inference tensor")
+
+    monkeypatch.setattr(mod, "resolve_torch_device", _resolve)
+    monkeypatch.setattr(mod, "_probe_forward", _boom)
+    model = torch.nn.Linear(4, 4)
+    for preference in ("auto", "directml"):
+        _placed, device, kind, note = mod._place_model(model, preference, 14)
+        assert kind == "cpu"
+        assert device.type == "cpu"
+        assert note is not None
+        assert "Cannot set version_counter for inference tensor" in note
+        assert "no_grad" in note
+        assert "CPU" in note
