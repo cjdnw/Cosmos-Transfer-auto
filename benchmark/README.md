@@ -34,7 +34,50 @@ python benchmark/scripts/run_smoke.py
 python -m pytest benchmark/tests -q
 ```
 
+The default encoder is `pixel_pca`, so this path does not download weights.
+
 Artifacts land in `benchmark/artifacts/smoke/` (gitignored), including `report.json`.
+The report records `encoder.backend` (`pixel_pca` or `dinov2`).
+
+## DINOv2 diversity features
+
+Frozen encoder only — nothing in this package trains DINOv2 or a quality network.
+Control metrics stay **Proxy**, not ground truth. Smoke numbers stay **synthetic**.
+
+Device order when `diversity.dinov2.device` is `auto`:
+
+1. CUDA, if `torch.cuda.is_available()`
+2. else `torch_directml` (`privateuseone:0`) when that package is installed (AMD Windows boxes)
+3. else CPU
+
+Forwards run in **float32**. Autocast is left off. DirectML often has no
+`scaled_dot_product_attention` kernel, so that device uses a float32 matmul
+attention for the forward only. If DirectML placement fails under `auto`, the
+loader falls back to CPU and records `device_note`.
+
+Weight load order (first success wins):
+
+1. `torch.hub` `facebookresearch/dinov2` at the revision in `configs/metrics.yaml`,
+   official `dinov2_*_pretrain.pth`
+2. `torchvision`, only when that install exports the DINOv2 builder
+   (torchvision 0.29.2 does not)
+3. `timm` equivalent `vit_*_patch14_dinov2.lvd142m` if timm is installed
+
+Checkpoints cache under `benchmark/artifacts/weights/dinov2/` (gitignored).
+Override with `diversity.dinov2.cache_dir` or the env var `BENCHMARK_DINOV2_CACHE`.
+
+```bash
+pip install torch   # CPU or CUDA build; on AMD Windows use torch-directml instead
+# configs/metrics.yaml: diversity.encoder: dinov2
+python benchmark/scripts/run_smoke.py --encoder dinov2
+```
+
+If torch is missing the status is `MISSING_DEP`. If torch is present but the
+download or load fails, the status is `MISSING_WEIGHTS`. With
+`dinov2.allow_fallback: true` (the default) the run continues on `pixel_pca`.
+Set `allow_fallback: false` to make a missing encoder a hard failure.
+DINOv2 video vectors are the mean of L2-normalized frame CLS tokens (native
+width 384 for `dinov2_vits14`). `feature_dim` applies to `pixel_pca` only.
 
 Fixtures live under `benchmark/testdata/smoke/` and are labeled **SYNTHETIC**.
 
@@ -95,7 +138,6 @@ Facility Location is a stub in this PR (falls back to greedy).
 ## Not implemented yet (by design for this PR)
 
 - Full Pilot / multi-seed downstream E0–E6 on real Cosmos videos
-- DINOv2 feature extraction (returns `MISSING_DEP` / pixel_pca fallback)
 - Temporal LPIPS
 - Facility Location (full)
 - Claiming downstream gains or tuned weights

@@ -6,7 +6,8 @@
     "selection",
     "baselines",
     "proxy_note",
-    "weights_hypothesis_only"
+    "weights_hypothesis_only",
+    "encoder"
   ],
   "note": "See report.json after smoke; artifacts/ is gitignored."
 }

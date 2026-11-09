@@ -120,8 +120,16 @@ def main() -> None:
         default=ROOT / "benchmark" / "configs" / "metrics.yaml",
     )
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument(
+        "--encoder",
+        choices=["pixel_pca", "dinov2"],
+        default=None,
+        help="Override diversity.encoder from the metrics config.",
+    )
     args = p.parse_args()
     cfg = load_yaml(args.metrics_config)
+    if args.encoder:
+        cfg.setdefault("diversity", {})["encoder"] = args.encoder
     result = run_metrics(args.manifest, cfg)
     # features are numpy — drop from JSON dump
     features = result.pop("features", None)
@@ -129,7 +137,11 @@ def main() -> None:
     args.out.write_text(json.dumps(result, indent=2), encoding="utf-8")
     if features is not None:
         np.save(args.out.with_suffix(".features.npy"), features)
-    print(f"Wrote {args.out} (scored={result['n_scored']})")
+    enc = result.get("encoder") or {}
+    print(
+        f"Wrote {args.out} (scored={result['n_scored']} "
+        f"encoder={enc.get('backend')} status={enc.get('status')})"
+    )
 
 
 if __name__ == "__main__":

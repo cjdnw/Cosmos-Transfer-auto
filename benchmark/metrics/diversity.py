@@ -27,23 +27,29 @@ def _rgb_to_feature_matrix(rgb: np.ndarray, max_frames: int = 8) -> np.ndarray:
 
 
 class FeatureEncoder:
-    """Configurable feature encoder with DINOv2 optional path and pixel_pca fallback."""
+    """Configurable feature encoder with a frozen DINOv2 path and pixel_pca fallback."""
 
     def __init__(self, cfg: Optional[Dict[str, Any]] = None):
         cfg = cfg or {}
         self.requested = cfg.get("encoder", "pixel_pca")
         self.feature_dim = int(cfg.get("feature_dim", 64))
-        self.allow_fallback = bool(cfg.get("dinov2", {}).get("allow_fallback", True))
+        dino_cfg = cfg.get("dinov2") or {}
+        self.allow_fallback = bool(dino_cfg.get("allow_fallback", True))
         self.backend = "pixel_pca"
         self.status = "ok"
         self.detail: Dict[str, Any] = {}
         self._pca_components: Optional[np.ndarray] = None
         self._pca_mean: Optional[np.ndarray] = None
+        self._dino = None
+
+        if self.requested not in ("pixel_pca", "dinov2"):
+            self.detail["warning"] = f"unknown encoder {self.requested!r}; using pixel_pca"
+            self.requested = "pixel_pca"
 
         if self.requested == "dinov2":
-            ok = self._try_init_dinov2(cfg.get("dinov2", {}))
+            ok = self._try_init_dinov2(dino_cfg)
             if not ok:
-                self.status = "MISSING_DEP"
+                self.status = str(self.detail.get("reason") or "MISSING_DEP")
                 self.detail["need"] = "torch + dinov2 weights"
                 if self.allow_fallback:
                     self.backend = "pixel_pca"
@@ -52,18 +58,29 @@ class FeatureEncoder:
                     self.backend = "unavailable"
 
     def _try_init_dinov2(self, dino_cfg: Dict[str, Any]) -> bool:
+        from .dinov2_encoder import Dinov2LoadError, load_dinov2_encoder
+
         try:
-            import torch  # noqa: F401
-        except ImportError:
+            self._dino = load_dinov2_encoder(dino_cfg)
+        except Dinov2LoadError as exc:
+            self.detail["reason"] = exc.reason
+            self.detail["error"] = str(exc)
+            self.detail["attempts"] = exc.attempts
             return False
-        # Real DINOv2 load deferred; mark unavailable without crashing.
-        # Pilot machines with GPU/weights can implement encode_dinov2 here.
-        self.detail["note"] = "DINOv2 hook present but weights not bundled; using fallback"
-        return False
+        self.backend = "dinov2"
+        self.status = "ok"
+        self.detail.update(self._dino.info)
+        return True
 
     def fit_pca(self, rgb_list: Sequence[np.ndarray]) -> None:
-        """Fit a simple PCA on stacked smoke features (train/dev pool only)."""
-        mats = [ _rgb_to_feature_matrix(rgb) for rgb in rgb_list ]
+        """Fit a simple PCA on stacked pixel features (train/dev pool only).
+
+        DINOv2 keeps its native embedding. A PCA fit on a handful of videos would
+        collapse that space, so this is a no-op unless the active backend is pixel_pca.
+        """
+        if self.backend != "pixel_pca":
+            return
+        mats = [_rgb_to_feature_matrix(rgb) for rgb in rgb_list]
         X = np.stack(mats, axis=0)
         mean = X.mean(axis=0, keepdims=True)
         Xc = X - mean
@@ -79,7 +96,13 @@ class FeatureEncoder:
 
     def encode(self, rgb: np.ndarray) -> np.ndarray:
         if self.backend == "unavailable":
-            raise RuntimeError("MISSING_DEP: feature encoder unavailable")
+            raise RuntimeError(
+                f"{self.status}: feature encoder unavailable ({self.detail.get('error', '')})"
+            )
+        if self.backend == "dinov2":
+            if self._dino is None:
+                raise RuntimeError("MISSING_WEIGHTS: DINOv2 encoder was not initialized")
+            return self._dino.encode_video(rgb)
         vec = _rgb_to_feature_matrix(rgb)
         if self._pca_components is None:
             # Unfitted: deterministic hash-like projection via fixed RNG

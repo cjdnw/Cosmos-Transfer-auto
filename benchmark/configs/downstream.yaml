@@ -4,7 +4,8 @@
 backbone:
   name: dinov2_vits14
   frozen: true
-  # MISSING_DEP if torch unavailable.
+  # The loader in benchmark/downstream/frozen_encoder.py downloads official weights
+  # when torch is installed. Training below is still not executed by smoke.
 
 head:
   type: linear_segmentation  # or classification / localization depending on labels

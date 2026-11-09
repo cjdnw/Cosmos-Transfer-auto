@@ -39,12 +39,26 @@ temporal:
     enabled: false  # optional; requires torch + lpips → MISSING_DEP if absent
 
 diversity:
-  encoder: pixel_pca  # pixel_pca (CPU smoke) | dinov2 (optional extras)
+  # pixel_pca keeps the default smoke offline. Set dinov2 (or pass --encoder dinov2)
+  # to load frozen official weights. No training.
+  encoder: pixel_pca  # pixel_pca | dinov2
   dinov2:
-    model_name: dinov2_vits14
-    # If torch/timm/DINOv2 unavailable → status MISSING_DEP, use pixel_pca fallback when allow_fallback=true
+    model_name: dinov2_vits14  # ViT-S/14 LVD-142M. Also vitb14 / vitl14 / vitg14
+    # Missing torch → MISSING_DEP. Torch present but download/load failed → MISSING_WEIGHTS.
+    # allow_fallback keeps smoke on pixel_pca instead of aborting.
     allow_fallback: true
-  feature_dim: 64
+    # auto: CUDA if available, else torch_directml (privateuseone) if installed, else CPU.
+    # Forwards are float32. Autocast is not used. DirectML attention is a float32 matmul.
+    device: auto
+    # null → benchmark/artifacts/weights/dinov2 (gitignored). Env BENCHMARK_DINOV2_CACHE overrides.
+    cache_dir: null
+    image_size: 224  # rounded up to a multiple of patch 14; checkpoint native size is 518
+    max_frames: 8
+    # First success wins. torchvision 0.29 has no DINOv2 builder; timm is optional.
+    sources: [torch.hub, torchvision, timm]
+    hub_repo: facebookresearch/dinov2
+    hub_revision: 7764ea0f912e53c92e82eb78a2a1631e92725fc8
+  feature_dim: 64  # pixel_pca width only; dinov2 returns native width (384 for vits14)
   near_duplicate_cosine_threshold: 0.98
   # Novelty is constrained by distance to a real-train feature pool when available.
   # Distance alone is NOT utility; outliers are not automatically high-value.

@@ -50,6 +50,12 @@ def main() -> int:
     )
     parser.add_argument("--regen-fixtures", action="store_true", default=True)
     parser.add_argument("--no-regen-fixtures", action="store_false", dest="regen_fixtures")
+    parser.add_argument(
+        "--encoder",
+        choices=["pixel_pca", "dinov2"],
+        default=None,
+        help="Override diversity.encoder from metrics.yaml (dinov2 downloads frozen weights once).",
+    )
     args = parser.parse_args()
 
     artifacts = Path(args.artifacts)
@@ -80,6 +86,8 @@ def main() -> int:
 
     # 2) Metrics
     metrics_cfg = load_yaml(ROOT / "benchmark" / "configs" / "metrics.yaml")
+    if args.encoder:
+        metrics_cfg.setdefault("diversity", {})["encoder"] = args.encoder
     scoring_cfg = load_yaml(ROOT / "benchmark" / "configs" / "scoring.yaml")
     selection_cfg = load_yaml(ROOT / "benchmark" / "configs" / "selection.yaml")
 
@@ -189,9 +197,13 @@ def main() -> int:
             "scores": str(artifacts / "scores.json"),
             "histogram_csv": str(hist_path),
         },
+        "encoder_note": (
+            "dinov2 is a frozen official (or timm-equivalent) ViT. "
+            "pixel_pca is the offline fallback when torch or weights are missing. "
+            "Smoke numbers are synthetic, not Cosmos results."
+        ),
         "not_implemented_yet": [
             "Full Pilot / multi-seed downstream on real Cosmos outputs",
-            "DINOv2 features (MISSING_DEP without torch+weights; pixel_pca used)",
             "Facility Location (stub → greedy fallback)",
             "Temporal LPIPS",
             "Real GT control fidelity",
@@ -210,6 +222,7 @@ def main() -> int:
             "baselines",
             "proxy_note",
             "weights_hypothesis_only",
+            "encoder",
         ],
         "note": "See report.json after smoke; artifacts/ is gitignored.",
     }
@@ -219,10 +232,18 @@ def main() -> int:
     schema_path = ROOT / "benchmark" / "testdata" / "smoke" / "report_schema.json"
     schema_path.write_text(json.dumps(schema, indent=2), encoding="utf-8")
 
+    enc = metrics_out.get("encoder") or {}
+    enc_detail = enc.get("detail") or {}
     print("=" * 60)
     print("SMOKE OK (SYNTHETIC)")
     print(f"  work_dir:   {work_dir}")
     print(f"  scored:     {len(scored)}")
+    print(
+        "  encoder:    "
+        f"{enc.get('backend')} status={enc.get('status')} "
+        f"model={enc_detail.get('model_name')} device={enc_detail.get('device')} "
+        f"source={enc_detail.get('source')}"
+    )
     print(f"  selected:   {[s['uid'] for s in selected]}")
     print(f"  report:     {report_path}")
     print("=" * 60)
