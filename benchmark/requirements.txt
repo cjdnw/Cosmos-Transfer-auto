@@ -1,0 +1,20 @@
+# Core (CPU smoke)
+numpy
+pyyaml
+pillow
+opencv-python-headless
+
+# Dev
+pytest
+
+# Optional DINOv2 diversity encoder (frozen; not trained here).
+#   pip install torch
+# Official weights: torch.hub facebookresearch/dinov2 (see configs/metrics.yaml hub_revision).
+# torchvision is only used when that install exports dinov2_* (0.29.2 does not).
+# timm is an optional third source (vit_*_patch14_dinov2.lvd142m).
+# AMD Windows without CUDA: pip install torch-directml
+#   device order is CUDA, else privateuseone, else CPU; float32, no autocast.
+# torch
+# torchvision
+# timm
+# lpips

@@ -1,0 +1,67 @@
+# Metrics configuration for training-free quality assessment.
+# All control metrics compare RE-EXTRACTED attributes from generated video
+# against the original control signals (Proxy), never control vs itself.
+
+control:
+  segmentation:
+    enabled: true
+    # Proxy: AutoSeg-SAM2 / similar pseudo-labels are NOT ground truth.
+    reference_tag: Proxy
+    # Classes with fewer than this many pixels in the reference are ignored.
+    min_pixels_per_class: 1
+    # Optional ROI mask path pattern (null = full frame).
+    roi_mask: null
+  edge:
+    enabled: true
+    reference_tag: Proxy
+    # Binarization threshold if maps are continuous [0,1] or [0,255].
+    binary_threshold: 0.5
+  depth:
+    enabled: true
+    reference_tag: Proxy
+    # Scale-invariant RMSE; invalid depth values (<=0 or NaN) are masked.
+    invalid_as_nan: true
+  blur:
+    enabled: false
+    reference_tag: Proxy
+
+temporal:
+  warping_error:
+    enabled: true
+    # Prefer Farneback optical flow when OpenCV is available; else frame-diff fallback.
+    flow_backend: auto  # auto | farneback | frame_diff
+    # Occlusion / large-flow mask: discard pixels with flow magnitude > this (px).
+    max_flow_mag: 40.0
+  flickering:
+    enabled: true
+    # Mean absolute frame-to-frame difference on luminance, mapped to [0,1] consistency.
+  temporal_lpips:
+    enabled: false  # optional; requires torch + lpips → MISSING_DEP if absent
+
+diversity:
+  # pixel_pca keeps the default smoke offline. Set dinov2 (or pass --encoder dinov2)
+  # to load frozen official weights. No training.
+  encoder: pixel_pca  # pixel_pca | dinov2
+  dinov2:
+    model_name: dinov2_vits14  # ViT-S/14 LVD-142M. Also vitb14 / vitl14 / vitg14
+    # Missing torch → MISSING_DEP. Torch present but download/load failed → MISSING_WEIGHTS.
+    # allow_fallback keeps smoke on pixel_pca instead of aborting.
+    allow_fallback: true
+    # auto: CUDA if available, else torch_directml (privateuseone) if installed, else CPU.
+    # Forwards are float32. Autocast is not used. DirectML attention is a float32 matmul.
+    # DirectML uses torch.no_grad, not inference_mode: privateuseone raises
+    # "Cannot set version_counter for inference tensor" on inference tensors.
+    # If that forward still fails, the loader skips to CPU and sets device_note.
+    device: auto
+    # null → benchmark/artifacts/weights/dinov2 (gitignored). Env BENCHMARK_DINOV2_CACHE overrides.
+    cache_dir: null
+    image_size: 224  # rounded up to a multiple of patch 14; checkpoint native size is 518
+    max_frames: 8
+    # First success wins. torchvision 0.29 has no DINOv2 builder; timm is optional.
+    sources: [torch.hub, torchvision, timm]
+    hub_repo: facebookresearch/dinov2
+    hub_revision: 7764ea0f912e53c92e82eb78a2a1631e92725fc8
+  feature_dim: 64  # pixel_pca width only; dinov2 returns native width (384 for vits14)
+  near_duplicate_cosine_threshold: 0.98
+  # Novelty is constrained by distance to a real-train feature pool when available.
+  # Distance alone is NOT utility; outliers are not automatically high-value.

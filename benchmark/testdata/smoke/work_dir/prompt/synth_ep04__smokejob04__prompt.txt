@@ -1,0 +1,1 @@
+SYNTHETIC prompt for synth_ep04 quality=low

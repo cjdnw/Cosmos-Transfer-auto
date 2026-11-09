@@ -1,0 +1,29 @@
+# Two-stage selection: Quality Gate → Diversity-aware pick of K videos.
+
+quality_gate:
+  # Drop samples that clearly fail; thresholds are YAML-configurable heuristics.
+  min_control: 0.20
+  min_temporal: 0.20
+  min_quality: 0.25
+  # Near-duplicate rejection uses diversity pairwise cosine similarity.
+  reject_near_duplicates: true
+  near_duplicate_cosine_threshold: 0.98
+
+selection:
+  k: 4
+  strategy: quality_gate_greedy_diversity
+  # Strategies:
+  #   random
+  #   topk_quality
+  #   diversity_only
+  #   quality_gate_greedy_diversity
+  #   facility_location  (stub in this PR)
+  #   combined_score_diversity
+  lambda_quality: 0.6  # F(S) = λ MeanQuality(S) + (1-λ) Coverage(S)
+  seed: 0
+
+# Fixed-K budget for fair E2–E5 comparisons (Pilot+). Smoke uses small k above.
+budget_grid:
+  - 2
+  - 4
+  - 8

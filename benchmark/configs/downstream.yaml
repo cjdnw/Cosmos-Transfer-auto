@@ -1,0 +1,35 @@
+# Downstream validation (Pilot+). Smoke does NOT require GPU training.
+# This PR ships stubs only — full runs need torch + frozen DINOv2 + labels.
+
+backbone:
+  name: dinov2_vits14
+  frozen: true
+  # The loader in benchmark/downstream/frozen_encoder.py downloads official weights
+  # when torch is installed. Training below is still not executed by smoke.
+
+head:
+  type: linear_segmentation  # or classification / localization depending on labels
+  num_classes: null  # set from data
+
+train:
+  steps: 1000
+  batch_size: 8
+  real_synthetic_ratio: 1.0  # equal mix when synthetic present
+  optimizer: adamw
+  lr: 1.0e-3
+  seed: 0
+  # Match optimization steps across E0–E6; do not confuse data-volume with budget.
+
+eval:
+  split: real_test_only
+  # Episode/Scene grouped splits; all variants of one source stay in one split.
+
+experiments:
+  # IDs from the research brief; not executed in smoke.
+  - E0_real_only
+  - E1_real_classical_aug
+  - E2_real_random_cosmos
+  - E3_real_topk_quality
+  - E4_real_topk_diversity
+  - E5_real_combined_selection
+  - E6_real_unfiltered_cosmos
